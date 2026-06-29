@@ -891,7 +891,55 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   /* Ocultar app hasta que auth resuelva */
   aside, main { visibility: hidden; }
   body.auth-ready aside, body.auth-ready main { visibility: visible; }
+
+  /* ── Franja de usuario (esquina superior derecha) ── */
+  #userBadge {
+    display: none;
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 9999;
+    background: linear-gradient(135deg, rgba(10,20,40,.97), rgba(6,14,28,.97));
+    border-bottom-left-radius: 12px;
+    border: 1px solid rgba(90,159,240,.25);
+    border-top: none;
+    border-right: none;
+    padding: 7px 14px 7px 16px;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    box-shadow: -2px 3px 12px rgba(0,0,0,.45);
+    backdrop-filter: blur(6px);
+  }
+  body.auth-ready #userBadge { display: flex; }
+  #userBadge .ub-icon { font-size: 16px; flex-shrink: 0; }
+  #userBadge .ub-info { display: flex; flex-direction: column; gap: 1px; }
+  #userBadge .ub-name { font-size: 12px; font-weight: 600; color: #e8f0fe; font-family: var(--font); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #userBadge .ub-role { font-size: 10px; color: rgba(180,200,240,.65); font-family: var(--font); text-transform: uppercase; letter-spacing: .04em; }
+  #userBadge .ub-logout {
+    background: rgba(255,80,80,.12);
+    border: 1px solid rgba(255,80,80,.22);
+    color: #ff8888;
+    font-size: 10px;
+    font-family: var(--font);
+    padding: 4px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+    white-space: nowrap;
+  }
+  #userBadge .ub-logout:hover { background: rgba(255,80,80,.25); color: #ffaaaa; }
 </style>
+
+<!-- ── FRANJA DE USUARIO (esquina superior derecha) ── -->
+<div id="userBadge">
+  <span class="ub-icon">👤</span>
+  <div class="ub-info">
+    <span class="ub-name" id="ubName">—</span>
+    <span class="ub-role" id="ubRole">—</span>
+  </div>
+  <button class="ub-logout" onclick="logout()">🔐 Cerrar sesión</button>
+</div>
 
 <!-- ═══════════════ SPLASH SCREEN ═══════════════ -->
 <!-- ── LOGIN ── -->
@@ -9414,6 +9462,21 @@ function enterDashboard(){
     hideNavItems();
   }
 
+  // Llenar franja de usuario
+  var ubName = document.getElementById('ubName');
+  var ubRole = document.getElementById('ubRole');
+  if(ubName){
+    var displayName = _miNombre || (_currentUser && _currentUser.email) || '—';
+    ubName.textContent = displayName;
+  }
+  if(ubRole){
+    var roleLabel = _userRole === 'admin' ? 'Administrador'
+                  : _userRole === 'jefe'  ? 'Jefe'
+                  : _userRole === 'proyectista' ? 'Proyectista'
+                  : (_userRole || '—');
+    ubRole.textContent = roleLabel;
+  }
+
   // Mostrar app
   document.body.classList.add('auth-ready');
 
@@ -9464,6 +9527,11 @@ async function logout(){
   _currentUser=null; _userRole=null; _miNombre=null;
   sessionStorage.removeItem('c3ntro_role');
   sessionStorage.removeItem('c3ntro_nombre');
+  // Limpiar franja de usuario
+  var ubName = document.getElementById('ubName');
+  var ubRole = document.getElementById('ubRole');
+  if(ubName) ubName.textContent='—';
+  if(ubRole) ubRole.textContent='—';
   // Restaurar goView original
   if(_origGoView){ window.goView=_origGoView; _origGoView=null; }
   // Mostrar login
