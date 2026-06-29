@@ -900,7 +900,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
     <!-- Logo -->
     <div style="text-align:center;margin-bottom:32px">
       <div style="font-family:'DM Sans',sans-serif;font-size:26px;font-weight:700;color:#c8d8f0;letter-spacing:.22em;text-transform:uppercase;margin-bottom:6px">C3NTRO</div>
-      <div style="font-size:11px;color:#7ab8f5;letter-spacing:.2em;text-transform:uppercase">Coordinación de Ingeniería</div>
+      <div style="font-size:11px;color:#7ab8f5;letter-spacing:.2em;text-transform:uppercase">Ingeniería</div>
     </div>
     <!-- Card -->
     <div style="background:#070d1a;border:1px solid #1a2d4a;border-radius:14px;padding:28px 28px 24px">
@@ -908,14 +908,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <!-- Email -->
       <div style="margin-bottom:14px">
         <label style="font-size:11px;color:#7ab8f5;letter-spacing:.05em;display:block;margin-bottom:6px">CORREO</label>
-        <input id="loginEmail" type="email" placeholder="tu@c3ntro.com"
+        <input id="loginEmail" type="email" placeholder="tu@c3ntro.com" autocomplete="email"
           style="width:100%;background:#0d1628;border:1px solid #1a2d4a;border-radius:8px;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;color:#c8d8f0;outline:none;box-sizing:border-box;"
           onkeydown="if(event.key==='Enter')loginSubmit()">
       </div>
       <!-- Password -->
       <div style="margin-bottom:20px">
         <label style="font-size:11px;color:#7ab8f5;letter-spacing:.05em;display:block;margin-bottom:6px">CONTRASEÑA</label>
-        <input id="loginPassword" type="password" placeholder="••••••••"
+        <input id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password"
           style="width:100%;background:#0d1628;border:1px solid #1a2d4a;border-radius:8px;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;color:#c8d8f0;outline:none;box-sizing:border-box;"
           onkeydown="if(event.key==='Enter')loginSubmit()">
       </div>
