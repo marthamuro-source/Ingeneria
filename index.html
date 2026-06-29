@@ -12042,8 +12042,9 @@ function supaStartRealtime(){
 
 // Actividades — guardar (se llama desde paSave existente)
 async function supaSyncActividad(a){
-  if(!SUPA_ONLINE) return;
-  await supaUpsert('actividades',{
+  if(!SUPA_ONLINE){ console.warn('⚠️ supaSyncActividad: sin conexión Supabase'); return; }
+  if(!a || !a.id){ console.warn('⚠️ supaSyncActividad: actividad sin id', a); return; }
+  const payload = {
     id:a.id, tipo:a.tipo||'Proyecto', proyecto:a.proyecto||null,
     folio:a.folio||null, actividad:a.actividad||null,
     responsable:a.responsable||null, propietario:a.propietario||null,
@@ -12053,7 +12054,19 @@ async function supaSyncActividad(a){
     fecha_real:a.fechaReal||null, num_bobina:a.numBobina||null,
     juegos:a.juegos||null, planos_juego:a.planosJuego||null,
     updated_at:new Date().toISOString(),
-  });
+  };
+  try{
+    const {error} = await _supa.from('actividades').upsert(payload, {onConflict:'id'});
+    if(error){
+      console.error('❌ Error guardando actividad en Supabase:', error.message, error);
+      supaIndicator(false);
+    } else {
+      console.log('✅ Actividad guardada en Supabase:', a.id, 'estatus:', a.estatus);
+    }
+  }catch(e){
+    console.error('❌ supaSyncActividad exception:', e);
+    supaIndicator(false);
+  }
 }
 
 async function supaSyncDeleteActividad(id){
