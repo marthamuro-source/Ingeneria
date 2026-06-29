@@ -903,43 +903,48 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
     border-bottom: 1px solid rgba(90,159,240,.2);
     align-items: center;
     justify-content: space-between;
-    padding: 0 18px 0 20px;
+    padding: 0 14px 0 0;
     box-shadow: 0 2px 12px rgba(0,0,0,.5);
   }
   body.auth-ready #userTopbar { display: flex; }
-  /* empujar todo el contenido 38px hacia abajo */
   body.auth-ready { padding-top: 38px; }
   body.auth-ready .shell { height: calc(100vh - 38px); }
 
-  #userTopbar .ut-left { display: flex; align-items: center; gap: 8px; }
-  #userTopbar .ut-logo { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: rgba(90,159,240,.7); font-family: var(--font); }
-  #userTopbar .ut-sep { width: 1px; height: 18px; background: rgba(90,159,240,.2); }
-  #userTopbar .ut-right { display: flex; align-items: center; gap: 10px; }
-  #userTopbar .ut-icon { font-size: 14px; }
-  #userTopbar .ut-info { display: flex; flex-direction: column; gap: 0px; align-items: flex-end; }
-  #userTopbar .ut-name { font-size: 11px; font-weight: 600; color: #dde8ff; font-family: var(--font); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #userTopbar .ut-role { font-size: 9px; color: rgba(160,185,230,.5); font-family: var(--font); text-transform: uppercase; letter-spacing: .05em; }
-  #userTopbar .ut-logout {
-    background: rgba(255,70,70,.1);
-    border: 1px solid rgba(255,70,70,.2);
-    color: #ff8888;
-    font-size: 10px;
-    font-family: var(--font);
-    padding: 4px 10px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background .15s, color .15s;
-    white-space: nowrap;
-    display: flex; align-items: center; gap: 4px;
-  }
-  #userTopbar .ut-logout:hover { background: rgba(255,70,70,.22); color: #ffaaaa; }
+  /* Spacer igual al ancho del sidebar para alinear botones */
+  #userTopbar .ut-sidebar-spacer { width: 234px; flex-shrink: 0; }
 
-  /* ── User menu dropdown ── */
+  #userTopbar .ut-left { display: flex; align-items: center; gap: 8px; }
+  #userTopbar .ut-sep { width: 1px; height: 18px; background: rgba(90,159,240,.2); margin: 0 4px; }
+  #userTopbar .ut-right { display: flex; align-items: center; gap: 6px; }
+
+  /* Botón de notificaciones */
+  #userTopbar .ut-notif-btn {
+    position: relative;
+    background: none; border: none;
+    cursor: pointer; padding: 4px 6px;
+    border-radius: 6px;
+    transition: background .15s;
+    display: flex; align-items: center;
+  }
+  #userTopbar .ut-notif-btn:hover { background: rgba(90,159,240,.1); }
+  #userTopbar .ut-notif-icon { font-size: 16px; line-height: 1; }
+  #userTopbar .ut-notif-btn .notif-badge {
+    position: absolute; top: 0; right: 0;
+    background: #ff4444; color: #fff;
+    font-size: 8px; font-weight: 700;
+    min-width: 14px; height: 14px;
+    border-radius: 7px; padding: 0 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font);
+  }
+
+  /* User menu (solo icono + chevron) */
+  #userTopbar .ut-icon { font-size: 16px; line-height: 1; }
   #userTopbar .ut-user-menu {
     position: relative;
-    display: flex; align-items: center; gap: 8px;
+    display: flex; align-items: center; gap: 4px;
     cursor: pointer;
-    padding: 4px 10px;
+    padding: 4px 8px;
     border-radius: 8px;
     border: 1px solid transparent;
     transition: background .15s, border-color .15s;
@@ -947,7 +952,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   }
   #userTopbar .ut-user-menu:hover { background: rgba(90,159,240,.08); border-color: rgba(90,159,240,.15); }
   #userTopbar .ut-user-menu.open   { background: rgba(90,159,240,.12); border-color: rgba(90,159,240,.25); }
-  #userTopbar .ut-chevron { font-size: 10px; color: rgba(160,185,230,.5); transition: transform .2s; }
+  #userTopbar .ut-chevron { font-size: 9px; color: rgba(160,185,230,.5); transition: transform .2s; }
   #userTopbar .ut-user-menu.open .ut-chevron { transform: rotate(180deg); }
 
   /* Dropdown panel */
@@ -956,7 +961,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
-    min-width: 200px;
+    min-width: 210px;
     background: #07111f;
     border: 1px solid rgba(90,159,240,.25);
     border-radius: 10px;
@@ -983,6 +988,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   }
   #userTopbar .ut-dd-logout { color: #ff8888; }
   #userTopbar .ut-dd-logout:hover { background: rgba(255,70,70,.12); }
+
+  /* Botones de nav en topbar */
   #userTopbar .ut-navbtn {
     display: flex; align-items: center; gap: 5px;
     background: rgba(90,159,240,.08);
@@ -1000,14 +1007,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
     color: rgba(100,220,160,.75);
   }
   #userTopbar .ut-navbtn--green:hover { background: rgba(61,214,140,.18); color: #7eefb8; }
+
 </style>
 
-<!-- ── BARRA SUPERIOR DE USUARIO (horizontal, de lado a lado) ── -->
+<!-- ── BARRA SUPERIOR (horizontal, de lado a lado) ── -->
 <div id="userTopbar">
+  <!-- zona izquierda: ancho del sidebar (234px) vacía + botones alineados al borde -->
   <div class="ut-left">
-    <span class="ut-logo">C3NTRO · Ingeniería</span>
-    <div class="ut-sep"></div>
-    <!-- 3 botones de acceso rápido -->
+    <div class="ut-sidebar-spacer"></div>
     <button class="ut-navbtn" onclick="goView('equipo')" title="Organigrama">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><rect x="3" y="3" width="5" height="5" rx="1"></rect><rect x="10" y="3" width="5" height="5" rx="1"></rect><rect x="17" y="3" width="4" height="5" rx="1"></rect><line x1="5.5" y1="8" x2="5.5" y2="11"></line><line x1="12.5" y1="8" x2="12.5" y2="11"></line><rect x="8" y="11" width="9" height="4" rx="1"></rect><line x1="12.5" y1="15" x2="12.5" y2="18"></line><rect x="9" y="18" width="7" height="3" rx="1"></rect></svg>
       Organigrama
@@ -1021,13 +1028,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       Herramientas
     </button>
   </div>
+  <!-- zona derecha: notificaciones + usuario -->
   <div class="ut-right">
+    <!-- Campana de notificaciones -->
+    <button class="ut-notif-btn" id="notifBellBtn" onclick="notifTogglePanel()" title="Notificaciones">
+      <span class="ut-notif-icon">🔔</span>
+      <span class="notif-badge" id="notifBadge" style="display:none">0</span>
+    </button>
+    <div class="ut-sep"></div>
+    <!-- Usuario (solo icono, despliega info + cerrar sesión) -->
     <div class="ut-user-menu" id="utUserMenu" onclick="utToggleDropdown(event)">
       <span class="ut-icon">👤</span>
-      <div class="ut-info">
-        <span class="ut-name" id="ubName">—</span>
-        <span class="ut-role" id="ubRole">—</span>
-      </div>
       <span class="ut-chevron" id="utChevron">▾</span>
       <!-- Dropdown -->
       <div class="ut-dropdown" id="utDropdown">
@@ -1160,12 +1171,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"></path><polyline points="16 11 17.5 13 21 10"></polyline></svg>
       Evaluaciones
     </button>
-    <div class="nl" style="margin-top:14px">Notificaciones</div>
-    <button class="notif-bell-btn" id="notifBellBtn" onclick="notifTogglePanel()">
-      <span class="nb-icon">🔔</span>
-      <span id="notifBellLabel">Sin notificaciones</span>
-      <span class="notif-badge" id="notifBadge" style="display:none">0</span>
-    </button>
+    <span id="notifBellLabel" style="display:none">Sin notificaciones</span>
     <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;margin-top:4px">
       <span id="supaIndicator" style="font-size:12px;padding:2px 7px;border-radius:5px;cursor:help;transition:all .3s;background:rgba(100,100,120,.15);color:var(--dim)" title="Verificando conexión…">💾</span>
       <button id="supaMigrateBtn" onclick="supaMigrateFromLocal()" style="flex:1;font-size:10px;padding:3px 8px;border-radius:5px;background:rgba(74,143,212,.12);border:1px solid rgba(74,143,212,.2);color:var(--muted);cursor:pointer;white-space:nowrap">☁️ Migrar datos</button>
@@ -9570,19 +9576,13 @@ function enterDashboard(){
     hideNavItems();
   }
 
-  // Llenar franja de usuario
+  // Llenar info de usuario en dropdown
   var displayName = _miNombre || (_currentUser && _currentUser.email) || '—';
   var roleLabel = _userRole === 'admin' ? 'Administrador'
                 : _userRole === 'jefe'  ? 'Jefe'
                 : _userRole === 'proyectista' ? 'Proyectista'
                 : (_userRole || '—');
 
-  var ubName = document.getElementById('ubName');
-  var ubRole = document.getElementById('ubRole');
-  if(ubName) ubName.textContent = displayName;
-  if(ubRole) ubRole.textContent = roleLabel;
-
-  // También en el dropdown
   var utDdName = document.getElementById('utDdName');
   var utDdRole = document.getElementById('utDdRole');
   if(utDdName) utDdName.textContent = displayName;
@@ -9638,11 +9638,7 @@ async function logout(){
   _currentUser=null; _userRole=null; _miNombre=null;
   sessionStorage.removeItem('c3ntro_role');
   sessionStorage.removeItem('c3ntro_nombre');
-  // Limpiar franja de usuario
-  var ubName = document.getElementById('ubName');
-  var ubRole = document.getElementById('ubRole');
-  if(ubName) ubName.textContent='—';
-  if(ubRole) ubRole.textContent='—';
+  // Limpiar info de usuario
   var utDdName = document.getElementById('utDdName');
   var utDdRole = document.getElementById('utDdRole');
   if(utDdName) utDdName.textContent='—';
