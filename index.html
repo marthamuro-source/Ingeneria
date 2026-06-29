@@ -933,21 +933,117 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
     display: flex; align-items: center; gap: 4px;
   }
   #userTopbar .ut-logout:hover { background: rgba(255,70,70,.22); color: #ffaaaa; }
+
+  /* ── User menu dropdown ── */
+  #userTopbar .ut-user-menu {
+    position: relative;
+    display: flex; align-items: center; gap: 8px;
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    transition: background .15s, border-color .15s;
+    user-select: none;
+  }
+  #userTopbar .ut-user-menu:hover { background: rgba(90,159,240,.08); border-color: rgba(90,159,240,.15); }
+  #userTopbar .ut-user-menu.open   { background: rgba(90,159,240,.12); border-color: rgba(90,159,240,.25); }
+  #userTopbar .ut-chevron { font-size: 10px; color: rgba(160,185,230,.5); transition: transform .2s; }
+  #userTopbar .ut-user-menu.open .ut-chevron { transform: rotate(180deg); }
+
+  /* Dropdown panel */
+  #userTopbar .ut-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 200px;
+    background: #07111f;
+    border: 1px solid rgba(90,159,240,.25);
+    border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.6);
+    overflow: hidden;
+    z-index: 99999;
+  }
+  #userTopbar .ut-user-menu.open .ut-dropdown { display: block; }
+  #userTopbar .ut-dd-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 14px 10px;
+  }
+  #userTopbar .ut-dd-icon { font-size: 22px; }
+  #userTopbar .ut-dd-name { font-size: 12px; font-weight: 600; color: #dde8ff; font-family: var(--font); }
+  #userTopbar .ut-dd-role { font-size: 10px; color: rgba(160,185,230,.55); font-family: var(--font); text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+  #userTopbar .ut-dd-divider { height: 1px; background: rgba(90,159,240,.15); margin: 0 10px; }
+  #userTopbar .ut-dd-item {
+    display: flex; align-items: center; gap: 8px;
+    width: 100%; padding: 10px 14px;
+    background: none; border: none;
+    font-size: 12px; font-family: var(--font);
+    cursor: pointer; transition: background .15s;
+    text-align: left;
+  }
+  #userTopbar .ut-dd-logout { color: #ff8888; }
+  #userTopbar .ut-dd-logout:hover { background: rgba(255,70,70,.12); }
+  #userTopbar .ut-navbtn {
+    display: flex; align-items: center; gap: 5px;
+    background: rgba(90,159,240,.08);
+    border: 1px solid rgba(90,159,240,.18);
+    color: rgba(180,210,255,.75);
+    font-size: 10px; font-family: var(--font);
+    padding: 4px 10px; border-radius: 6px;
+    cursor: pointer; transition: background .15s, color .15s;
+    white-space: nowrap;
+  }
+  #userTopbar .ut-navbtn:hover { background: rgba(90,159,240,.2); color: #c8deff; }
+  #userTopbar .ut-navbtn--green {
+    background: rgba(61,214,140,.08);
+    border-color: rgba(61,214,140,.2);
+    color: rgba(100,220,160,.75);
+  }
+  #userTopbar .ut-navbtn--green:hover { background: rgba(61,214,140,.18); color: #7eefb8; }
 </style>
 
 <!-- ── BARRA SUPERIOR DE USUARIO (horizontal, de lado a lado) ── -->
 <div id="userTopbar">
   <div class="ut-left">
     <span class="ut-logo">C3NTRO · Ingeniería</span>
+    <div class="ut-sep"></div>
+    <!-- 3 botones de acceso rápido -->
+    <button class="ut-navbtn" onclick="goView('equipo')" title="Organigrama">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><rect x="3" y="3" width="5" height="5" rx="1"></rect><rect x="10" y="3" width="5" height="5" rx="1"></rect><rect x="17" y="3" width="4" height="5" rx="1"></rect><line x1="5.5" y1="8" x2="5.5" y2="11"></line><line x1="12.5" y1="8" x2="12.5" y2="11"></line><rect x="8" y="11" width="9" height="4" rx="1"></rect><line x1="12.5" y1="15" x2="12.5" y2="18"></line><rect x="9" y="18" width="7" height="3" rx="1"></rect></svg>
+      Organigrama
+    </button>
+    <button class="ut-navbtn ut-navbtn--green" onclick="goView('ausencias')" title="Ausencias y Permisos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"></path></svg>
+      Ausencias
+    </button>
+    <button class="ut-navbtn" onclick="goView('herramientas')" title="Herramientas de trabajo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><path d="M3 13h18"></path><path d="M5 13V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v5"></path><rect x="2" y="13" width="20" height="7" rx="1.5"></rect><path d="M9 6V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1"></path><line x1="9" y1="16.5" x2="15" y2="16.5"></line></svg>
+      Herramientas
+    </button>
   </div>
   <div class="ut-right">
-    <span class="ut-icon">👤</span>
-    <div class="ut-info">
-      <span class="ut-name" id="ubName">—</span>
-      <span class="ut-role" id="ubRole">—</span>
+    <div class="ut-user-menu" id="utUserMenu" onclick="utToggleDropdown(event)">
+      <span class="ut-icon">👤</span>
+      <div class="ut-info">
+        <span class="ut-name" id="ubName">—</span>
+        <span class="ut-role" id="ubRole">—</span>
+      </div>
+      <span class="ut-chevron" id="utChevron">▾</span>
+      <!-- Dropdown -->
+      <div class="ut-dropdown" id="utDropdown">
+        <div class="ut-dd-header">
+          <span class="ut-dd-icon">👤</span>
+          <div>
+            <div class="ut-dd-name" id="utDdName">—</div>
+            <div class="ut-dd-role" id="utDdRole">—</div>
+          </div>
+        </div>
+        <div class="ut-dd-divider"></div>
+        <button class="ut-dd-item ut-dd-logout" onclick="logout()">
+          <span>🔐</span> Cerrar sesión
+        </button>
+      </div>
     </div>
-    <div class="ut-sep"></div>
-    <button class="ut-logout" onclick="logout()">🔐 Cerrar sesión</button>
   </div>
 </div>
 
@@ -1074,22 +1170,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <span id="supaIndicator" style="font-size:12px;padding:2px 7px;border-radius:5px;cursor:help;transition:all .3s;background:rgba(100,100,120,.15);color:var(--dim)" title="Verificando conexión…">💾</span>
       <button id="supaMigrateBtn" onclick="supaMigrateFromLocal()" style="flex:1;font-size:10px;padding:3px 8px;border-radius:5px;background:rgba(74,143,212,.12);border:1px solid rgba(74,143,212,.2);color:var(--muted);cursor:pointer;white-space:nowrap">☁️ Migrar datos</button>
     </div>
-    <div style="margin:10px 10px 0;padding:10px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid var(--border)">
-      <div id="roleBadge" style="display:none;font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;background:rgba(74,143,212,.15);color:var(--accent);margin-bottom:6px;text-align:center"></div>
-      <button onclick="logout()" style="width:100%;font-size:11px;padding:5px 8px;border-radius:6px;background:rgba(255,92,92,.1);border:1px solid rgba(255,92,92,.2);color:#ff7070;cursor:pointer;font-family:var(--font)">🔐 Cerrar sesión</button>
+    <div style="margin:10px 10px 0;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid var(--border)">
+      <div id="roleBadge" style="display:none;font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;background:rgba(74,143,212,.15);color:var(--accent);text-align:center"></div>
     </div>
   </nav>
-  <div class="sfooter">
-    <button class="org-fab" onclick="goView(&#39;equipo&#39;)" title="Organigrama">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="5" height="5" rx="1"></rect><rect x="10" y="3" width="5" height="5" rx="1"></rect><rect x="17" y="3" width="4" height="5" rx="1"></rect><line x1="5.5" y1="8" x2="5.5" y2="11"></line><line x1="12.5" y1="8" x2="12.5" y2="11"></line><rect x="8" y="11" width="9" height="4" rx="1"></rect><line x1="12.5" y1="15" x2="12.5" y2="18"></line><rect x="9" y="18" width="7" height="3" rx="1"></rect></svg>
-    </button>
-    <button class="org-fab" onclick="goView(&#39;ausencias&#39;)" title="Ausencias y Permisos" style="background:linear-gradient(135deg,#2a6b4a,#3dd68c)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"></path></svg>
-    </button>
-    <button class="org-fab" onclick="goView(&#39;herramientas&#39;)" title="Herramientas de trabajo">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 13h18"></path><path d="M5 13V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v5"></path><rect x="2" y="13" width="20" height="7" rx="1.5"></rect><path d="M9 6V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1"></path><line x1="9" y1="16.5" x2="15" y2="16.5"></line></svg>
-    </button>
-  </div>
 </aside>
 
 <!-- MAIN -->
@@ -9427,6 +9511,20 @@ async function getUserRole(email){
   }catch(e){ console.warn('getUserRole:',e); return null; }
 }
 
+// ── User menu dropdown ──
+function utToggleDropdown(e){
+  e.stopPropagation();
+  var menu = document.getElementById('utUserMenu');
+  var isOpen = menu.classList.contains('open');
+  // cerrar cualquier otro dropdown abierto
+  menu.classList.toggle('open', !isOpen);
+}
+// Cerrar al hacer click fuera
+document.addEventListener('click', function(){
+  var menu = document.getElementById('utUserMenu');
+  if(menu) menu.classList.remove('open');
+});
+
 function applyRole(role, nombre){
   _userRole = role;
   _miNombre = nombre;
@@ -9473,19 +9571,22 @@ function enterDashboard(){
   }
 
   // Llenar franja de usuario
+  var displayName = _miNombre || (_currentUser && _currentUser.email) || '—';
+  var roleLabel = _userRole === 'admin' ? 'Administrador'
+                : _userRole === 'jefe'  ? 'Jefe'
+                : _userRole === 'proyectista' ? 'Proyectista'
+                : (_userRole || '—');
+
   var ubName = document.getElementById('ubName');
   var ubRole = document.getElementById('ubRole');
-  if(ubName){
-    var displayName = _miNombre || (_currentUser && _currentUser.email) || '—';
-    ubName.textContent = displayName;
-  }
-  if(ubRole){
-    var roleLabel = _userRole === 'admin' ? 'Administrador'
-                  : _userRole === 'jefe'  ? 'Jefe'
-                  : _userRole === 'proyectista' ? 'Proyectista'
-                  : (_userRole || '—');
-    ubRole.textContent = roleLabel;
-  }
+  if(ubName) ubName.textContent = displayName;
+  if(ubRole) ubRole.textContent = roleLabel;
+
+  // También en el dropdown
+  var utDdName = document.getElementById('utDdName');
+  var utDdRole = document.getElementById('utDdRole');
+  if(utDdName) utDdName.textContent = displayName;
+  if(utDdRole) utDdRole.textContent = roleLabel;
 
   // Mostrar app
   document.body.classList.add('auth-ready');
@@ -9542,6 +9643,10 @@ async function logout(){
   var ubRole = document.getElementById('ubRole');
   if(ubName) ubName.textContent='—';
   if(ubRole) ubRole.textContent='—';
+  var utDdName = document.getElementById('utDdName');
+  var utDdRole = document.getElementById('utDdRole');
+  if(utDdName) utDdName.textContent='—';
+  if(utDdRole) utDdRole.textContent='—';
   // Restaurar goView original
   if(_origGoView){ window.goView=_origGoView; _origGoView=null; }
   // Mostrar login
