@@ -10724,8 +10724,12 @@ function renderSegNotas(){
   proyNotasLoad();
 
   const NOTA_COLORS_P = ['#f5e642','#f5a623','#3dd68c','#63b3ff','#f472b6','#c084fc'];
-  const pending = PROY_NOTAS.filter(n=>!n.done);
-  const done    = PROY_NOTAS.filter(n=> n.done);
+  // Proyectista solo ve sus propias notas (las que creó él o las dirigidas a su nombre)
+  const notasVisibles = (_userRole === 'proyectista' && _miNombre)
+    ? PROY_NOTAS.filter(n => !n.raquel || n.destinatario === _miNombre)
+    : PROY_NOTAS;
+  const pending = notasVisibles.filter(n=>!n.done);
+  const done    = notasVisibles.filter(n=> n.done);
   const tilts   = [-2,-1,0,1,2,1,-1];
 
   const fmtShort = iso => { try{ const d=new Date(iso); return `${d.getDate()}/${d.getMonth()+1}`; }catch(e){ return ''; } };
@@ -10753,10 +10757,9 @@ function renderSegNotas(){
     </div>`;
   };
 
-  let html = `
-    <div style="margin-bottom:14px;display:flex;justify-content:flex-end">
-      <button class="pa-btn" onclick="proyNotaNew()">+ Nueva nota</button>
-    </div>`;
+  let html = `<div style="margin-bottom:14px;display:flex;justify-content:flex-end">
+    <button class="pa-btn" onclick="proyNotaNew()">+ Nueva nota</button>
+  </div>`;
 
   // Pendientes
   if(pending.length){
