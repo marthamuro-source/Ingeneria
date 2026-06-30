@@ -3580,6 +3580,29 @@ async function removeFestivoSupabase(fecha){
   }catch(e){ console.warn('removeFestivoSupabase error',e); }
 }
 
+async function loadProyNotifs(){
+  if(!_supa || _userRole !== 'proyectista' || !_miNombre) return;
+  try{
+    const { data } = await _supa.from('notificaciones_proyectista')
+      .select('*')
+      .eq('proyectista', _miNombre)
+      .order('created_at', {ascending:false})
+      .limit(100);
+    if(data && data.length){
+      const rawNotifs = data.map(n=>({
+        id:n.id, icon:n.icon||'🔔', title:n.title||'',
+        msg:n.msg||'', tipo:n.tipo||'general', read:!!n.read,
+        time:n.created_at,
+      }));
+      const deletedKey = 'c3ntro_notifs_deleted_proy_'+toCanonical(_miNombre);
+      const deleted = JSON.parse(localStorage.getItem(deletedKey)||'[]');
+      NOTIFS = rawNotifs.filter(n=>!deleted.includes(n.id));
+      notifSave();
+      notifUpdateBell();
+    }
+  }catch(e){ console.warn('loadProyNotifs error',e); }
+}
+
 async function loadFromSupabase(){
   if(!_supa) return;
   try{
@@ -9757,7 +9780,8 @@ function enterDashboard(){
   Promise.all([
     loadFromSupabase(),
     orgLoadFromSupabase(),
-    hoLoadSchedule()
+    hoLoadSchedule(),
+    loadProyNotifs()
   ]).then(()=>{
     if(typeof renderFestivos==='function') renderFestivos();
     if(typeof renderVacList==='function') renderVacList();
@@ -10973,8 +10997,33 @@ function notifRemove(id){
   notifSave();
   notifUpdateBell();
   notifRenderPanel();
-  // Eliminar de Supabase también
-  if(_supa) _supa.from('notificaciones').delete().eq('id',id).catch(e=>console.warn(e));
+  // Guardar ID eliminado para no volver a mostrarlo
+  if(_userRole === 'proyectista' && _miNombre){
+    try{
+      const deletedKey = 'c3ntro_notifs_deleted_proy_'+toCanonical(_miNombre);
+      const deleted = JSON.parse(localStorage.getItem(deletedKey)||'[]');
+      if(!deleted.includes(id)) deleted.push(id);
+      if(deleted.length > 500) deleted.splice(0, deleted.length - 500);
+      localStorage.setItem(deletedKey, JSON.stringify(deleted));
+    }catch(e){}
+    // Eliminar de notificaciones_proyectista en Supabase
+    if(_supa) _supa.from('notificaciones_proyectista').delete().eq('id',id).catch(e=>console.warn(e));
+  } else {
+    try{
+      const deleted = JSON.parse(localStorage.getItem('c3ntro_notifs_deleted')||'[]');
+      if(!deleted.includes(id)) deleted.push(id);
+      if(deleted.length > 500) deleted.splice(0, deleted.length - 500);
+      localStorage.setItem('c3ntro_notifs_deleted', JSON.stringify(deleted));
+    }catch(e){}
+    if(_supa) _supa.from('notificaciones').delete().eq('id',id).catch(e=>console.warn(e));
+  }
+}
+
+function notifFilterDeleted(list){
+  try{
+    const deleted = JSON.parse(localStorage.getItem('c3ntro_notifs_deleted')||'[]');
+    return list.filter(n=>!deleted.includes(n.id));
+  }catch(e){ return list; }
 }
 
 function notifFmtTime(iso){
@@ -11088,23 +11137,23 @@ function notifNotaResuelta(persona, textoNota){
 
 // ── Para proyectista: nueva actividad asignada ──
 function notifNuevaActividad(responsable, folio, proyecto){
-  // Guarda en una clave especial por proyectista
+  const nProy = {
+    id:'np_'+Date.now()+'_'+Math.random().toString(36).slice(2,5),
+    icon:'📋', read:false,
+    title:'Nueva actividad asignada',
+    msg:`${folio||'Sin folio'} — ${(proyecto||'').slice(0,40)}`,
+    time: new Date().toISOString(), tipo:'actividad'
+  };
+  // Guardar en localStorage del proyectista
   const key = 'c3ntro_notifs_proy_'+toCanonical(responsable||'');
   try{
     const arr = JSON.parse(localStorage.getItem(key)||'[]');
-    arr.unshift({
-      id:'np_'+Date.now(), icon:'📋', read:false,
-      title:'Nueva actividad asignada',
-      msg:`${folio||'Sin folio'} — ${(proyecto||'').slice(0,40)}`,
-      time: new Date().toISOString(), tipo:'actividad'
-    });
+    arr.unshift(nProy);
     if(arr.length>50) arr.splice(50);
     localStorage.setItem(key, JSON.stringify(arr));
   }catch(e){}
-  // Si la vista actual es del proyectista, mostrar toast inmediato
-  if(avancePersonaVista===responsable){
-    notifAdd('📋','Nueva actividad asignada',`${folio||''} — ${(proyecto||'').slice(0,40)}`,'actividad');
-  }
+  // Sincronizar a Supabase para que el proyectista la vea en su sesión
+  if(typeof supaSyncNotifProy==='function') supaSyncNotifProy(responsable, nProy);
 }
 
 // ── Para proyectista: nota de Raquel ──
@@ -11974,11 +12023,12 @@ async function supaLoadAll(){
     // 6. Notificaciones
     const { data: notifs } = await _supa.from('notificaciones').select('*').order('created_at', {ascending:false}).limit(100);
     if(notifs && notifs.length){
-      NOTIFS = notifs.map(n=>({
+      const rawNotifs = notifs.map(n=>({
         id:n.id, icon:n.icon||'🔔', title:n.title||'',
         msg:n.msg||'', tipo:n.tipo||'general', read:!!n.read,
         time:n.created_at,
       }));
+      NOTIFS = notifFilterDeleted(rawNotifs);
       localStorage.setItem(NOTIF_KEY, JSON.stringify(NOTIFS));
       notifUpdateBell();
       console.log('✅ Notificaciones:', NOTIFS.length);
@@ -12306,6 +12356,8 @@ function supaStartRealtime(){
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'notificaciones'},
       payload=>{ 
         const n = payload.new;
+        // No mostrar si ya fue eliminada por el usuario
+        try{ const del=JSON.parse(localStorage.getItem('c3ntro_notifs_deleted')||'[]'); if(del.includes(n.id)) return; }catch(e){}
         notifLoad();
         if(!NOTIFS.find(x=>x.id===n.id)){
           NOTIFS.unshift({id:n.id,icon:n.icon,title:n.title,msg:n.msg,tipo:n.tipo,read:n.read,time:n.created_at});
@@ -12319,6 +12371,24 @@ function supaStartRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'avance_proyectista'},
       payload=>{ if(curView==='seguimiento') renderSegAvance(); })
     .subscribe();
+
+  // Escuchar nuevas notificaciones para proyectista
+  if(_userRole === 'proyectista' && _miNombre){
+    _supa.channel('notifs_proy_'+toCanonical(_miNombre))
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'notificaciones_proyectista',filter:`proyectista=eq.${_miNombre}`},
+        payload=>{
+          const n = payload.new;
+          const deletedKey = 'c3ntro_notifs_deleted_proy_'+toCanonical(_miNombre);
+          try{ const del=JSON.parse(localStorage.getItem(deletedKey)||'[]'); if(del.includes(n.id)) return; }catch(e){}
+          notifLoad();
+          if(!NOTIFS.find(x=>x.id===n.id)){
+            const notif = {id:n.id,icon:n.icon||'🔔',title:n.title||'',msg:n.msg||'',tipo:n.tipo||'general',read:false,time:n.created_at};
+            NOTIFS.unshift(notif);
+            notifSave(); notifUpdateBell(); notifShowToast(notif);
+          }
+        })
+      .subscribe();
+  }
 
   // Escuchar cambios en actividades (estatus, notas, km editados por proyectista)
   _supa.channel('actividades_changes')
