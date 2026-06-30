@@ -3583,13 +3583,15 @@ async function removeFestivoSupabase(fecha){
 async function loadProyNotifs(){
   if(!_supa || _userRole !== 'proyectista' || !_miNombre) return;
   try{
+    // Traer todas y filtrar por nombre canónico para tolerar diferencias de tildes/espacios
     const { data } = await _supa.from('notificaciones_proyectista')
       .select('*')
-      .eq('proyectista', _miNombre)
       .order('created_at', {ascending:false})
-      .limit(100);
+      .limit(200);
     if(data && data.length){
-      const rawNotifs = data.map(n=>({
+      const miCanonical = toCanonical(_miNombre);
+      const mias = data.filter(n => toCanonical(n.proyectista||'') === miCanonical);
+      const rawNotifs = mias.map(n=>({
         id:n.id, icon:n.icon||'🔔', title:n.title||'',
         msg:n.msg||'', tipo:n.tipo||'general', read:!!n.read,
         time:n.created_at,
@@ -12488,13 +12490,16 @@ async function supaSyncNotaProy(n){
 // Notif proyectista
 async function supaSyncNotifProy(proyectista, n){
   if(!SUPA_ONLINE) return;
+  console.log('📨 supaSyncNotifProy → proyectista:', proyectista, '| notif:', n.title);
   try{
-    await _supa.from('notificaciones_proyectista').insert({
+    const {error} = await _supa.from('notificaciones_proyectista').insert({
       id:n.id, proyectista, icon:n.icon, title:n.title,
       msg:n.msg, tipo:n.tipo, read:false,
       created_at:new Date().toISOString(),
     });
-  }catch(e){ console.warn('supaSyncNotifProy:', e); }
+    if(error) console.error('❌ supaSyncNotifProy error:', error);
+    else console.log('✅ Notif proyectista guardada en Supabase');
+  }catch(e){ console.warn('supaSyncNotifProy exception:', e); }
 }
 
 // Iniciar conexión
