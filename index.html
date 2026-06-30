@@ -10523,12 +10523,13 @@ function avanceSetField(id, field, value){
   // Determinar quién está editando
   const editorNombre = (_userRole === 'proyectista' && _miNombre) ? _miNombre : (avancePersonaVista !== 'todos' ? avancePersonaVista : null);
 
-  // Si es proyectista y cambia estatus o km → actualizar también PA_ITEMS y sincronizar a Supabase
-  if(_userRole === 'proyectista' && _miNombre && (field === 'estatus' || field === 'km')){
+  // Si es proyectista → actualizar PA_ITEMS y sincronizar a Supabase
+  if(_userRole === 'proyectista' && _miNombre && (field === 'estatus' || field === 'km' || field === 'nota')){
     const act = PA_ITEMS.find(a=>a.id===id);
     if(act){
       if(field === 'estatus') act.estatus = value;
       if(field === 'km') act.km = value;
+      if(field === 'nota') act.notas = value;
       if(typeof supaSyncActividad === 'function') supaSyncActividad(act);
     }
   }
@@ -10543,21 +10544,47 @@ function avanceSetField(id, field, value){
   renderSegAvance();
 }
 
-// Inline edit estatus
+// Inline edit estatus — usa modal flotante para evitar conflictos con innerHTML
 function avanceInlineStatus(id, cur, td){
+  // Remover dropdown previo si existe
+  const prev = document.getElementById('avanceStatusDropdown');
+  if(prev) prev.remove();
+
   const opts = Object.keys(PA_STATUS_CFG);
-  const sel = document.createElement('select');
-  sel.style.cssText='font-size:11px;padding:3px 6px;border-radius:5px;background:var(--surface2);border:1px solid var(--border);color:var(--text);';
-  opts.forEach(o=>{ const op=document.createElement('option'); op.value=op.textContent=o; if(o===cur) op.selected=true; sel.appendChild(op); });
-  td.innerHTML=''; td.appendChild(sel); sel.focus();
-  let saved = false;
-  sel.onchange = ()=>{
-    saved = true;
-    avanceSetField(id,'estatus',sel.value);
+  const rect = td.getBoundingClientRect();
+
+  const dropdown = document.createElement('div');
+  dropdown.id = 'avanceStatusDropdown';
+  dropdown.style.cssText = `position:fixed;top:${rect.bottom+2}px;left:${rect.left}px;z-index:9999;background:var(--surface2);border:1px solid var(--border);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.4);min-width:140px;overflow:hidden;`;
+
+  opts.forEach(o=>{
+    const sc = PA_STATUS_CFG[o]||{cls:'bgr'};
+    const item = document.createElement('div');
+    item.style.cssText = `padding:7px 14px;cursor:pointer;font-size:11px;color:var(--text);transition:background .1s;${o===cur?'background:rgba(74,143,212,.15);':''}`;
+    item.innerHTML = `<span class="badge ${sc.cls}" style="font-size:10px">${o}</span>`;
+    item.onmouseover = ()=>item.style.background='rgba(74,143,212,.1)';
+    item.onmouseout  = ()=>item.style.background=o===cur?'rgba(74,143,212,.15)':'';
+    item.onclick = (e)=>{
+      e.stopPropagation();
+      dropdown.remove();
+      avanceSetField(id,'estatus',o);
+    };
+    dropdown.appendChild(item);
+  });
+
+  document.body.appendChild(dropdown);
+
+  // Cerrar al hacer click fuera — usar mousedown para no competir con el click del td
+  const closeDropdown = (e)=>{
+    if(!dropdown.contains(e.target)){
+      dropdown.remove();
+      document.removeEventListener('mousedown', closeDropdown);
+    }
   };
-  sel.onblur = ()=>{
-    if(!saved) renderSegAvance();
-  };
+  // Delay para que no capture el mismo mousedown que lo abrió
+  requestAnimationFrame(()=>{
+    document.addEventListener('mousedown', closeDropdown);
+  });
 }
 
 // Inline edit notas de estatus
@@ -10639,8 +10666,7 @@ function renderSegAvance(){
   html+=`<th>Folio / Actividad</th>`;
   if(!isOp) html+=`<th style="text-align:right">Km orig.</th>`;
   html+=`<th>F. Término</th>`;
-  html+=`<th>Estatus original</th>`;
-  html+=`<th>Mi estatus</th>`;
+  html+=`<th>Estatus</th>`;
   html+=`<th>Nota de avance</th>`;
   if(!isOp && !isImp) html+=`<th style="text-align:right">Km act.</th>`;
   html+=`</tr></thead><tbody>`;
@@ -10669,8 +10695,7 @@ function renderSegAvance(){
     html+=`<td><div style="font-family:var(--mono);font-size:11px;color:var(--accent)">${folio}</div>${isOp?`<div class="avance-nota-st" style="color:var(--muted)">${(a.actividad||'').slice(0,30)}</div>`:''}</td>`;
     if(!isOp) html+=`<td style="text-align:right;font-size:11px;color:var(--muted)">${a.km||'—'}</td>`;
     html+=`<td style="font-size:11px;white-space:nowrap;color:var(--muted)">${fmtD(a.fechaTermino)}</td>`;
-    html+=`<td><span class="badge ${scOrig.cls}" style="font-size:9px;pointer-events:none">${estOrig}</span></td>`;
-    html+=`<td style="cursor:pointer" onclick="avanceInlineStatus('${a.id}','${estAct}',this)" title="Clic para actualizar tu estatus"><span class="badge ${sc.cls}">${estAct}</span></td>`;
+    html+=`<td style="cursor:pointer" onclick="avanceInlineStatus('${a.id}','${estAct}',this)" title="Clic para actualizar estatus"><span class="badge ${sc.cls}">${estAct}</span></td>`;
     html+=`<td style="cursor:pointer;min-width:120px" onclick="avanceInlineNota('${a.id}','${nota.replace(/'/g,"\'")}',this)" title="Clic para agregar nota de avance">${notaDisplay}</td>`;
     if(!isOp && !isImp) html+=`<td style="text-align:right;cursor:pointer" onclick="avanceInlineKm('${a.id}','${kmAct}',this)" title="Clic para actualizar km"><span style="font-size:11px;font-family:var(--mono);color:${kmAct?'var(--text)':'var(--dim)'}">${kmAct||'+ km'}</span></td>`;
     html+=`</tr>`;
@@ -10939,6 +10964,16 @@ function notifMarkRead(id){
   if(n){ n.read=true; notifSave(); notifUpdateBell(); notifRenderPanel(); }
 }
 
+function notifRemove(id){
+  notifLoad();
+  NOTIFS = NOTIFS.filter(x=>x.id!==id);
+  notifSave();
+  notifUpdateBell();
+  notifRenderPanel();
+  // Eliminar de Supabase también
+  if(_supa) _supa.from('notificaciones').delete().eq('id',id).catch(e=>console.warn(e));
+}
+
 function notifFmtTime(iso){
   try{
     const d = new Date(iso);
@@ -11006,6 +11041,7 @@ function notifRenderPanel(){
         <div class="notif-item-msg">${n.msg}</div>
         <div class="notif-item-time">${notifFmtTime(n.time)}</div>
       </div>
+      <button onclick="event.stopPropagation();notifRemove('${n.id}')" title="Eliminar notificación" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:4px;flex-shrink:0;line-height:1" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--muted)'">✕</button>
     </div>`).join('');
 }
 
@@ -12279,6 +12315,22 @@ function supaStartRealtime(){
   _supa.channel('avance_proyectista')
     .on('postgres_changes',{event:'*',schema:'public',table:'avance_proyectista'},
       payload=>{ if(curView==='seguimiento') renderSegAvance(); })
+    .subscribe();
+
+  // Escuchar cambios en actividades (estatus, notas, km editados por proyectista)
+  _supa.channel('actividades_changes')
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'actividades'},
+      payload=>{
+        const r = payload.new;
+        const act = PA_ITEMS.find(a=>a.id===r.id);
+        if(act){
+          if(r.estatus) act.estatus = r.estatus;
+          if(r.notas !== undefined) act.notas = r.notas;
+          if(r.km !== undefined) act.km = r.km;
+          if(curView==='panel') renderPanel();
+          if(curView==='seguimiento') renderSegAvance();
+        }
+      })
     .subscribe();
 }
 
