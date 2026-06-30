@@ -9782,16 +9782,18 @@ function hideNavItems(){
 function enterDashboard(){
   document.getElementById('loginScreen').style.display='none';
 
-  // Cargar datos compartidos desde Supabase
+  // Cargar datos compartidos desde Supabase (incluyendo ud_status con todos los proyectistas)
   Promise.all([
     loadFromSupabase(),
     orgLoadFromSupabase(),
     hoLoadSchedule(),
-    loadProyNotifs()
+    loadProyNotifs(),
+    typeof supaLoadAll==='function' ? supaLoadAll() : Promise.resolve()
   ]).then(()=>{
     if(typeof renderFestivos==='function') renderFestivos();
     if(typeof renderVacList==='function') renderVacList();
     if(curView==='ausencias' || curView==='equipo') goView(curView);
+    if(curView==='udemy' || curView==='seguimiento') renderUdemy && renderUdemy();
   }).catch(e=>console.warn('enterDashboard supabase load error',e));
 
   if(_userRole === 'proyectista'){
