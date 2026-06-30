@@ -11319,9 +11319,15 @@ async function supaSyncUdCourses(){
 // ── Udemy Mis Cursos Extra (Raquel) ──
 async function supaSyncUdMisExtra(){
   if(!SUPA_ONLINE || !UD_MIS_EXTRA?.length) return;
+  const usuario = _miNombre || 'Raquel';
   try{
-    const rows = UD_MIS_EXTRA.map(c=>({nombre:c.name||c.nombre, duracion:c.duracion||'', categoria:c.cat||'General'}));
-    if(rows.length) await _supa.from('ud_mis_extra').upsert(rows,{onConflict:'nombre'});
+    const rows = UD_MIS_EXTRA.map(c=>({
+      usuario,
+      nombre: c.name||c.nombre,
+      duracion: c.duracion||'',
+      categoria: c.cat||'General'
+    }));
+    if(rows.length) await _supa.from('ud_mis_extra').upsert(rows,{onConflict:'usuario,nombre'});
   }catch(e){ console.warn('supaSyncUdMisExtra:', e); }
 }
 
@@ -11740,8 +11746,9 @@ function renderUdHeatmapLocal(courses){
         ? `<div><a class="ud-cert-btn" href="${cert}" target="_blank" onclick="event.stopPropagation()">🏅 Ver cert.</a></div>`
         : `<div><span class="ud-cert-add" onclick="event.stopPropagation();udMiPromptCert('${cN}')">+ certificado</span></div>`
       : '';
-    html+=`<td style="padding:6px 8px;border-bottom:1px solid var(--border);text-align:center;cursor:pointer"
-      onclick="udMiCycle('${cN}')" title="Raquel — ${course.name}\n${cfg.label}\n(Clic para cambiar estatus)">
+    const _raqEditable = (_userRole !== 'proyectista');
+    html+=`<td style="padding:6px 8px;border-bottom:1px solid var(--border);text-align:center;cursor:${_raqEditable?'pointer':'default'}"
+      onclick="${_raqEditable?`udMiCycle('${cN}')`:''}" title="Raquel — ${course.name}\n${cfg.label}\n${_raqEditable?'(Clic para cambiar estatus)':'(Solo lectura)'}">
       <div style="display:inline-flex;align-items:center;justify-content:center;background:${cfg.bg};border-radius:7px;padding:4px 8px;min-width:80px;gap:4px;transition:opacity .15s"
         onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">
         <span style="font-size:12px;color:${cfg.color}">${cfg.sym}</span>
@@ -11801,23 +11808,33 @@ try{ udLoadLocal(); }catch(e){}
 // ══════════════════════════════════════════════════════
 //  LISTADO GENERAL DE CURSOS + MIS CURSOS (RAQUEL)
 // ══════════════════════════════════════════════════════
-const UD_MIS_KEY     = 'ud_mis_cursos_v1';   // cursos propios de Raquel
-const UD_MIS_ST_KEY  = 'ud_mis_status_v1';   // estatus de Raquel por curso
-const UD_MIS_CERT_KEY= 'ud_mis_cert_v1';     // certificados de Raquel
+// Claves de localStorage por usuario — cursos propios son privados
+function udMiKeys(){
+  const suffix = (_userRole === 'proyectista' && _miNombre)
+    ? '_proy_' + (_miNombre||'').toLowerCase().replace(/\s+/g,'_').slice(0,20)
+    : '_raquel';
+  return {
+    extra:  'ud_mis_cursos_v1' + suffix,
+    status: 'ud_mis_status_v1' + suffix,
+    cert:   'ud_mis_cert_v1'   + suffix,
+  };
+}
 
-let UD_MIS_EXTRA   = [];   // [{name, duracion, cat}] — cursos propios
+let UD_MIS_EXTRA   = [];   // [{name, duracion, cat}] — cursos propios del usuario actual
 let UD_MIS_STATUS  = {};   // { 'Nombre curso': 'done'|'inprogress'|'pending'|'noaccount' }
 let UD_MIS_CERTS   = {};   // { 'Nombre curso': 'https://...' }
 
 function udMiLoad(){
-  try{ UD_MIS_EXTRA  = JSON.parse(localStorage.getItem(UD_MIS_KEY)||'[]'); }catch(e){ UD_MIS_EXTRA=[]; }
-  try{ UD_MIS_STATUS = JSON.parse(localStorage.getItem(UD_MIS_ST_KEY)||'{}'); }catch(e){ UD_MIS_STATUS={}; }
-  try{ UD_MIS_CERTS  = JSON.parse(localStorage.getItem(UD_MIS_CERT_KEY)||'{}'); }catch(e){ UD_MIS_CERTS={}; }
+  const k = udMiKeys();
+  try{ UD_MIS_EXTRA  = JSON.parse(localStorage.getItem(k.extra)||'[]'); }catch(e){ UD_MIS_EXTRA=[]; }
+  try{ UD_MIS_STATUS = JSON.parse(localStorage.getItem(k.status)||'{}'); }catch(e){ UD_MIS_STATUS={}; }
+  try{ UD_MIS_CERTS  = JSON.parse(localStorage.getItem(k.cert)||'{}'); }catch(e){ UD_MIS_CERTS={}; }
 }
 function udMiSave(){
-  localStorage.setItem(UD_MIS_KEY,      JSON.stringify(UD_MIS_EXTRA));
-  localStorage.setItem(UD_MIS_ST_KEY,   JSON.stringify(UD_MIS_STATUS));
-  localStorage.setItem(UD_MIS_CERT_KEY, JSON.stringify(UD_MIS_CERTS));
+  const k = udMiKeys();
+  localStorage.setItem(k.extra,  JSON.stringify(UD_MIS_EXTRA));
+  localStorage.setItem(k.status, JSON.stringify(UD_MIS_STATUS));
+  localStorage.setItem(k.cert,   JSON.stringify(UD_MIS_CERTS));
   if(typeof supaSyncUdMisStatus==='function')  supaSyncUdMisStatus();
   if(typeof supaSyncUdMisCerts==='function')   supaSyncUdMisCerts();
   if(typeof supaSyncUdMisExtra==='function')   supaSyncUdMisExtra();
@@ -11827,9 +11844,17 @@ function udMiGetStatus(name){ return UD_MIS_STATUS[name]||'pending'; }
 function udMiSetStatus(name, s){
   UD_MIS_STATUS[name]=s;
   udMiSave();
-  if(typeof notifProyUdemy==='function'){
-    const label = s==='done'?'Finalizó':s==='inprogress'?'En progreso':s==='noaccount'?'Sin cuenta':'Sin iniciar';
-    notifProyUdemy(avancePersonaVista!=='todos'?avancePersonaVista:'Proyectista', name, label);
+  // Si es proyectista, también actualizar el mapa (UD_STATUS_LOCAL) y sincronizar a Supabase
+  if(_userRole === 'proyectista' && _miNombre){
+    if(!UD_STATUS_LOCAL[_miNombre]) UD_STATUS_LOCAL[_miNombre] = {};
+    UD_STATUS_LOCAL[_miNombre][name] = s;
+    udSaveLocal();
+    if(typeof supaSyncUdStatus==='function') supaSyncUdStatus();
+    // Notificar a Raquel
+    if(typeof notifProyUdemy==='function'){
+      const label = s==='done'?'Finalizó':s==='inprogress'?'En progreso':s==='noaccount'?'Sin cuenta':'Sin iniciar';
+      notifProyUdemy(_miNombre, name, label);
+    }
   }
   renderUdemy();
 }
@@ -11846,7 +11871,16 @@ function udMiPromptCert(name){
   if(url===null) return;
   if(url && url !== 'https://') UD_MIS_CERTS[name] = url.trim();
   else delete UD_MIS_CERTS[name];
-  udMiSave(); renderUdemy();
+  udMiSave();
+  // Si es proyectista, también sincronizar certificado al mapa
+  if(_userRole === 'proyectista' && _miNombre){
+    const certKey = _miNombre + '|' + name;
+    if(url && url !== 'https://') UD_CERTS_LOCAL[certKey] = url.trim();
+    else delete UD_CERTS_LOCAL[certKey];
+    udSaveLocal();
+    if(typeof supaSyncUdCerts==='function') supaSyncUdCerts();
+  }
+  renderUdemy();
 }
 function udMiCursoAdd(){
   const cats = udGetEffectiveCats();
@@ -12142,10 +12176,12 @@ async function supaLoadAll(){
     }
 
     // 15. Udemy mis cursos extra (Raquel)
-    const { data: udmiex } = await _supa.from('ud_mis_extra').select('*');
+    const _udMiUsuario = _miNombre || 'Raquel';
+    const { data: udmiex } = await _supa.from('ud_mis_extra').select('*').eq('usuario', _udMiUsuario);
     if(udmiex && udmiex.length){
       UD_MIS_EXTRA = udmiex.map(r=>({name:r.nombre, duracion:r.duracion||'', cat:r.categoria||'General'}));
-      localStorage.setItem(UD_MIS_KEY, JSON.stringify(UD_MIS_EXTRA));
+      const k = udMiKeys();
+      localStorage.setItem(k.extra, JSON.stringify(UD_MIS_EXTRA));
     }
 
     // 16. Home Office schedule
@@ -12442,6 +12478,19 @@ function supaStartRealtime(){
           udSaveLocal();
           if(curView==='udemy') renderUdemy();
           if(curView==='seguimiento') renderSegAvance();
+        }
+      })
+    .subscribe();
+
+  // Escuchar cambios en ud_certs (certificados de proyectistas)
+  _supa.channel('ud_certs_changes')
+    .on('postgres_changes',{event:'*',schema:'public',table:'ud_certs'},
+      payload=>{
+        const r = payload.new;
+        if(r && r.persona && r.curso){
+          UD_CERTS_LOCAL[r.persona+'|'+r.curso] = r.url;
+          udSaveLocal();
+          if(curView==='udemy') renderUdemy();
         }
       })
     .subscribe();
