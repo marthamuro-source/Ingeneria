@@ -9706,7 +9706,13 @@ async function loginSubmit(){
     _currentUser = res.data.user;
 
     var rd = await getUserRole(email);
-    if(rd) applyRole(rd.role, rd.nombre);
+    if(rd){
+      applyRole(rd.role, rd.nombre);
+    } else {
+      // Sin registro en user_roles → asumir proyectista por seguridad
+      console.warn('Sin rol en user_roles para:', email, '— asignando proyectista por defecto');
+      applyRole('proyectista', email.split('@')[0]);
+    }
 
     enterDashboard();
   }catch(e){
@@ -9799,7 +9805,12 @@ window.addEventListener('load', async function(){
   if(sess.data && sess.data.session && sess.data.session.user){
     _currentUser = sess.data.session.user;
     var rd = await getUserRole(_currentUser.email);
-    if(rd) applyRole(rd.role, rd.nombre);
+    if(rd){
+      applyRole(rd.role, rd.nombre);
+    } else {
+      console.warn('Sin rol en user_roles para:', _currentUser.email, '— asignando proyectista por defecto');
+      applyRole('proyectista', _currentUser.email.split('@')[0]);
+    }
     enterDashboard();
   } else {
     document.getElementById('loginScreen').style.display='flex';
