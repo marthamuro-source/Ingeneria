@@ -11926,7 +11926,14 @@ function udMiDelete(name){
   UD_MIS_EXTRA = UD_MIS_EXTRA.filter(c=>c.name!==name);
   delete UD_MIS_STATUS[name];
   delete UD_MIS_CERTS[name];
-  udMiSave(); renderUdMisCursos();
+  udMiSave();
+  // Eliminar de Supabase para que no regrese al recargar
+  if(_supa && SUPA_ONLINE){
+    const usuario = _miNombre || 'Raquel';
+    _supa.from('ud_mis_extra').delete().eq('usuario', usuario).eq('nombre', name).catch(e=>console.warn(e));
+    _supa.from('ud_mis_status').delete().eq('usuario', usuario).eq('curso', name).catch(e=>console.warn(e));
+  }
+  renderUdMisCursos();
 }
 
 // ── Listado general de cursos del equipo ──
