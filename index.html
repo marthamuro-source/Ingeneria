@@ -11846,21 +11846,32 @@ function udMiSave(){
   if(typeof supaSyncUdMisExtra==='function')   supaSyncUdMisExtra();
 }
 
-function udMiGetStatus(name){ return UD_MIS_STATUS[name]||'pending'; }
-function udMiSetStatus(name, s){
-  UD_MIS_STATUS[name]=s;
-  udMiSave();
-  // Si es proyectista, también actualizar el mapa (UD_STATUS_LOCAL) y sincronizar a Supabase
+function udMiGetStatus(name){
+  // Proyectista: leer de su propia fila en UD_STATUS_LOCAL
   if(_userRole === 'proyectista' && _miNombre){
+    return (UD_STATUS_LOCAL[_miNombre] && UD_STATUS_LOCAL[_miNombre][name]) || 'pending';
+  }
+  return UD_MIS_STATUS[name]||'pending';
+}
+function udMiSetStatus(name, s){
+  if(_userRole === 'proyectista' && _miNombre){
+    // Proyectista: guardar en su propia fila del mapa
     if(!UD_STATUS_LOCAL[_miNombre]) UD_STATUS_LOCAL[_miNombre] = {};
     UD_STATUS_LOCAL[_miNombre][name] = s;
     udSaveLocal();
     if(typeof supaSyncUdStatus==='function') supaSyncUdStatus();
+    // También en UD_MIS_STATUS para consistencia local
+    UD_MIS_STATUS[name] = s;
+    udMiSave();
     // Notificar a Raquel
     if(typeof notifProyUdemy==='function'){
       const label = s==='done'?'Finalizó':s==='inprogress'?'En progreso':s==='noaccount'?'Sin cuenta':'Sin iniciar';
       notifProyUdemy(_miNombre, name, label);
     }
+  } else {
+    // Admin/Raquel: comportamiento normal
+    UD_MIS_STATUS[name]=s;
+    udMiSave();
   }
   renderUdemy();
 }
@@ -11870,7 +11881,13 @@ function udMiCycle(name){
   const next = UD_MI_CYCLE[(UD_MI_CYCLE.indexOf(cur)+1) % UD_MI_CYCLE.length];
   udMiSetStatus(name, next);
 }
-function udMiGetCert(name){ return UD_MIS_CERTS[name]||''; }
+function udMiGetCert(name){
+  // Proyectista: leer de UD_CERTS_LOCAL con su nombre
+  if(_userRole === 'proyectista' && _miNombre){
+    return UD_CERTS_LOCAL[_miNombre+'|'+name] || '';
+  }
+  return UD_MIS_CERTS[name]||'';
+}
 function udMiPromptCert(name){
   const cur = udMiGetCert(name);
   const url = prompt('Link del certificado — ' + name.slice(0,40)+':', cur||'https://');
