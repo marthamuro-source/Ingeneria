@@ -761,11 +761,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .postit-text{flex:1;font-size:12.5px;line-height:1.5;color:#1a1a1a;white-space:pre-wrap;word-break:break-word;cursor:pointer;}
 .postit.done .postit-text{text-decoration:line-through;color:#444;}
 .postit-date{position:absolute;bottom:8px;left:14px;font-size:9px;color:rgba(0,0,0,.4);font-family:var(--mono);}
-.postit-actions{position:absolute;bottom:6px;right:8px;display:flex;gap:2px;}
+.postit-actions{position:absolute;bottom:6px;left:8px;right:8px;display:flex;align-items:center;justify-content:space-between;gap:4px;}
 .postit-actions button{background:rgba(0,0,0,.08);border:none;border-radius:4px;width:20px;height:20px;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;color:rgba(0,0,0,.55);transition:background .15s;}
 .postit-actions button:hover{background:rgba(0,0,0,.18);color:#000;}
 .postit-edit-area{flex:1;width:100%;border:none;background:transparent;resize:none;font-family:var(--font);font-size:12.5px;line-height:1.5;color:#1a1a1a;outline:none;}
-.postit-color-dot{position:absolute;top:8px;right:8px;width:9px;height:9px;border-radius:50%;border:1px solid rgba(0,0,0,.15);cursor:pointer;}
+.postit-color-dot{width:9px;height:9px;border-radius:50%;border:1px solid rgba(0,0,0,.15);cursor:pointer;flex-shrink:0;}
 .pa-sec-usb .pa-section-header{background:linear-gradient(135deg,#400020,#a00060,#d0008a);border-left:4px solid #ff3ca0;}
 
 .usb-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;}
@@ -11600,6 +11600,11 @@ function udSetStatus(personName, courseName, status){
   if(!UD_STATUS_LOCAL[personName]) UD_STATUS_LOCAL[personName] = {};
   UD_STATUS_LOCAL[personName][courseName] = status;
   udSaveLocal();
+  // Si es proyectista actualizando su propia fila → también sincronizar Mis cursos
+  if(_userRole === 'proyectista' && _miNombre && toCanonical(personName) === toCanonical(_miNombre)){
+    UD_MIS_STATUS[courseName] = status;
+    udMiSave();
+  }
   renderUdemy();
 }
 
