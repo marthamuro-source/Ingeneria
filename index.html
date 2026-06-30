@@ -11113,13 +11113,11 @@ function notifRenderPanel(){
 function notifProyActualizó(persona, campo, valor, actividad){
   const nombre = (persona||'').split(' ').slice(0,2).join(' ');
   const campoLabel = campo==='estatus'?'estatus':campo==='nota'?'nota de avance':'kilómetros';
-  // skipSupabase=true para evitar doble toast por canal realtime
   notifAdd(
     '📝',
     `${nombre} actualizó su avance`,
     `${campoLabel}: ${valor||''}${actividad?' — '+actividad.slice(0,35):''}`,
-    'avance',
-    true
+    'avance'
   );
 }
 
@@ -12366,13 +12364,17 @@ function supaStartRealtime(){
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'notificaciones'},
       payload=>{ 
         const n = payload.new;
-        // No mostrar si ya fue eliminada por el usuario
+        // No mostrar si ya fue eliminada
         try{ const del=JSON.parse(localStorage.getItem('c3ntro_notifs_deleted')||'[]'); if(del.includes(n.id)) return; }catch(e){}
         notifLoad();
-        if(!NOTIFS.find(x=>x.id===n.id)){
-          NOTIFS.unshift({id:n.id,icon:n.icon,title:n.title,msg:n.msg,tipo:n.tipo,read:n.read,time:n.created_at});
-          notifSave(); notifUpdateBell(); notifShowToast({...n,time:n.created_at});
+        const yaExiste = NOTIFS.find(x=>x.id===n.id);
+        if(!yaExiste){
+          // Notif nueva (creada por proyectista en otra sesión) — agregar y mostrar toast
+          const notif = {id:n.id,icon:n.icon,title:n.title,msg:n.msg,tipo:n.tipo,read:false,time:n.created_at};
+          NOTIFS.unshift(notif);
+          notifSave(); notifUpdateBell(); notifShowToast(notif);
         }
+        // Si ya existe la ignoramos (ya la mostramos localmente al crearla)
       })
     .subscribe();
 
