@@ -10523,11 +10523,12 @@ function avanceSetField(id, field, value){
   // Determinar quién está editando
   const editorNombre = (_userRole === 'proyectista' && _miNombre) ? _miNombre : (avancePersonaVista !== 'todos' ? avancePersonaVista : null);
 
-  // Si es proyectista y cambia estatus → actualizar también PA_ITEMS y sincronizar a Supabase
-  if(_userRole === 'proyectista' && _miNombre && field === 'estatus'){
+  // Si es proyectista y cambia estatus o km → actualizar también PA_ITEMS y sincronizar a Supabase
+  if(_userRole === 'proyectista' && _miNombre && (field === 'estatus' || field === 'km')){
     const act = PA_ITEMS.find(a=>a.id===id);
     if(act){
-      act.estatus = value;
+      if(field === 'estatus') act.estatus = value;
+      if(field === 'km') act.km = value;
       if(typeof supaSyncActividad === 'function') supaSyncActividad(act);
     }
   }
@@ -10549,8 +10550,14 @@ function avanceInlineStatus(id, cur, td){
   sel.style.cssText='font-size:11px;padding:3px 6px;border-radius:5px;background:var(--surface2);border:1px solid var(--border);color:var(--text);';
   opts.forEach(o=>{ const op=document.createElement('option'); op.value=op.textContent=o; if(o===cur) op.selected=true; sel.appendChild(op); });
   td.innerHTML=''; td.appendChild(sel); sel.focus();
-  sel.onchange = ()=>{ avanceSetField(id,'estatus',sel.value); };
-  sel.onblur   = ()=>{ renderSegAvance(); };
+  let saved = false;
+  sel.onchange = ()=>{
+    saved = true;
+    avanceSetField(id,'estatus',sel.value);
+  };
+  sel.onblur = ()=>{
+    if(!saved) renderSegAvance();
+  };
 }
 
 // Inline edit notas de estatus
