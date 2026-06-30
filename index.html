@@ -1763,7 +1763,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   <div id="v-udemy" style="display:none">
     <div class="topbar">
       <div><h1>Udemy · Formación del equipo</h1><div class="tmeta" id="udMeta">sin datos</div></div>
-      <div style="display:flex;gap:8px;align-items:center"><button class="pa-btn" onclick="udOpenCourseModal()">+ Gestionar cursos</button></div>
+      <div style="display:flex;gap:8px;align-items:center" id="udGestionarBtns"><button class="pa-btn" onclick="udOpenCourseModal()">+ Gestionar cursos</button></div>
     </div>
     <div class="content">
       <div id="udData">
@@ -4804,7 +4804,7 @@ const UD_TEAM = [
   'Isabel Adriana Roa Hernandez',
   'Llense Omar Torres Almeraya',
   'Edgar Daniel Reyes Vega',
-  'Jonathan Ishidro Hernandez',
+  'Jonathan Isidro Hernandez',
   'Mauricio Garduño Silverio',
   'Sergio Daniel Hernández Alvarado',
 ];
@@ -9724,6 +9724,10 @@ function applyProyectistaReadOnly(){
   var orgAdminBtns = document.getElementById('orgAdminBtns');
   if(orgAdminBtns) orgAdminBtns.style.display='none';
 
+  // Udemy: ocultar Gestionar cursos
+  var udGestionarBtns = document.getElementById('udGestionarBtns');
+  if(udGestionarBtns) udGestionarBtns.style.display='none';
+
   // Ausencias: ocultar Nuevo registro, agregar festivos y Editar días Home Office
   var ausAdminBtns = document.getElementById('ausAdminBtns');
   if(ausAdminBtns) ausAdminBtns.style.display='none';
@@ -10763,7 +10767,7 @@ function renderSegNotas(){
   const buildPostit = (n, allowDelete=false) => {
     const isRaquel = !!n.raquel;
     const cls = 'postit' + (isRaquel?' nota-raquel':'') + (n.done?' nota-done':'');
-    const badge = isRaquel ? `<div class="nota-raquel-badge">📌 Raquel</div>` : '';
+    const badge = isRaquel ? `<div class="nota-raquel-badge">📌 De Raquel</div>` : '';
     const texto = n.texto
       ? escapeHtml(n.texto).replace(/\n/g,'<br>')
       : '<span style="opacity:.45">Toca para escribir…</span>';
@@ -10791,16 +10795,34 @@ function renderSegNotas(){
   if(pending.length){
     html+=`<div class="panel" style="margin-bottom:18px">
       <div class="ph"><div><div class="pt">📌 Notas pendientes</div><div class="ps">${pending.length} nota${pending.length!==1?'s':''} · toca para editar · ✓ para resolver</div></div></div>
-      <div class="pb proy-notas-board">${pending.map(n=>buildPostit(n,!n.raquel)).join('')}</div>
+      <div class="pb proy-notas-board">${pending.map(n=>{
+        // Proyectista: puede eliminar sus propias notas, no las de Raquel
+        const canDel = _userRole === 'proyectista' ? !n.raquel : !n.raquel;
+        return buildPostit(n, canDel);
+      }).join('')}</div>
     </div>`;
   }
 
-  // Resueltas
+  // Resueltas — apiladas y colapsadas para proyectistas
   if(done.length){
-    html+=`<div class="panel">
-      <div class="ph"><div><div class="pt">✓ Notas resueltas</div><div class="ps">${done.length} resueltas</div></div></div>
-      <div class="pb proy-notas-board" style="opacity:.6">${done.map(n=>buildPostit(n,false)).join('')}</div>
-    </div>`;
+    if(_userRole === 'proyectista'){
+      html+=`<div class="panel">
+        <div class="ph" style="cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none';this.querySelector('.resueltas-toggle').textContent=this.nextElementSibling.style.display==='none'?'▶':'▼">
+          <div><div class="pt">✓ Notas resueltas <span class="resueltas-toggle" style="font-size:11px;margin-left:6px">▶</span></div>
+          <div class="ps">${done.length} resuelta${done.length!==1?'s':''} · clic para ver</div></div>
+        </div>
+        <div class="pb proy-notas-board" style="opacity:.6;display:none">${done.map(n=>{
+          // Proyectista puede eliminar sus propias notas resueltas, no las de Raquel
+          const canDel = !n.raquel;
+          return buildPostit(n, canDel);
+        }).join('')}</div>
+      </div>`;
+    } else {
+      html+=`<div class="panel">
+        <div class="ph"><div><div class="pt">✓ Notas resueltas</div><div class="ps">${done.length} resueltas</div></div></div>
+        <div class="pb proy-notas-board" style="opacity:.6">${done.map(n=>buildPostit(n,false)).join('')}</div>
+      </div>`;
+    }
   }
 
   if(!pending.length && !done.length){
@@ -11577,10 +11599,16 @@ function udSetStatus(personName, courseName, status){
 
 const UD_STATUS_CYCLE = ['pending','inprogress','done','noaccount'];
 function udCycleStatus(person, course){
+  // Proyectista solo puede editar su propia fila
+  if(_userRole === 'proyectista' && _miNombre){
+    if(toCanonical(person) !== toCanonical(_miNombre)) return;
+  }
   const cur = udGetStatus(person, course);
   const idx = UD_STATUS_CYCLE.indexOf(cur);
   const next = UD_STATUS_CYCLE[(idx+1) % UD_STATUS_CYCLE.length];
   udSetStatus(person, course, next);
+  // Sincronizar a Supabase en tiempo real
+  if(typeof supaSyncUdStatus === 'function') supaSyncUdStatus();
 }
 
 function udGetEffectiveCats(){
@@ -11685,7 +11713,8 @@ function renderUdHeatmapLocal(courses){
       const cN=course.name.replace(/'/g,"\\'");
       const cert=udGetCert(nombre,course.name);
       const certBtn=s==='done'?(cert?`<div><a class="ud-cert-btn" href="${cert}" target="_blank" onclick="event.stopPropagation()">🏅 Ver cert.</a></div>`:`<div><span class="ud-cert-add" onclick="event.stopPropagation();udPromptCert('${pN}','${cN}')">+ certificado</span></div>`):""; 
-      html+=`<td style="padding:6px 8px;border-bottom:1px solid var(--border);text-align:center;cursor:pointer" onclick="udCycleStatus('${pN}','${cN}')" title="${nombre} — ${course.name}\n${cfg.label}\n(Clic para cambiar estatus)"><div style="display:inline-flex;align-items:center;justify-content:center;background:${cfg.bg};border-radius:7px;padding:4px 8px;min-width:80px;gap:4px;transition:opacity .15s" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'"><span style="font-size:12px;color:${cfg.color}">${cfg.sym}</span><span style="font-size:10px;color:${cfg.color};white-space:nowrap">${cfg.label}</span></div>${certBtn}</td>`;
+      const _udEditable = (_userRole !== 'proyectista') || (toCanonical(pN) === toCanonical(_miNombre||''));
+      html+=`<td style="padding:6px 8px;border-bottom:1px solid var(--border);text-align:center;cursor:${_udEditable?'pointer':'default'}" onclick="udCycleStatus('${pN}','${cN}')" title="${nombre} — ${course.name}\n${cfg.label}\n${_udEditable?'(Clic para cambiar estatus)':'(Solo lectura)'}"><div style="display:inline-flex;align-items:center;justify-content:center;background:${cfg.bg};border-radius:7px;padding:4px 8px;min-width:80px;gap:4px;transition:opacity .15s" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'"><span style="font-size:12px;color:${cfg.color}">${cfg.sym}</span><span style="font-size:10px;color:${cfg.color};white-space:nowrap">${cfg.label}</span></div>${certBtn}</td>`;
     });
     html+=`</tr>`;
   });
@@ -12401,6 +12430,21 @@ function supaStartRealtime(){
         })
       .subscribe();
   }
+
+  // Escuchar cambios en ud_status (proyectistas actualizando cursos Udemy)
+  _supa.channel('ud_status_changes')
+    .on('postgres_changes',{event:'*',schema:'public',table:'ud_status'},
+      payload=>{
+        const r = payload.new;
+        if(r && r.persona && r.curso){
+          if(!UD_STATUS_LOCAL[r.persona]) UD_STATUS_LOCAL[r.persona] = {};
+          UD_STATUS_LOCAL[r.persona][r.curso] = r.status;
+          udSaveLocal();
+          if(curView==='udemy') renderUdemy();
+          if(curView==='seguimiento') renderSegAvance();
+        }
+      })
+    .subscribe();
 
   // Escuchar cambios en actividades (estatus, notas, km editados por proyectista)
   _supa.channel('actividades_changes')
