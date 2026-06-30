@@ -3552,38 +3552,61 @@ const FEST_LABELS = {
 // vacaciones[nombre] = Set de 'YYYY-MM-DD'
 let VACACIONES = {};
 
-// ─── PERSISTENCE (localStorage) ──────────────────────────────────────────────
-function saveToStorage(){
+// ─── PERSISTENCE (Supabase) ──────────────────────────────────────────────────
+async function saveVacacionesSupabase(persona, fecha, action){
+  if(!_supa) return;
   try{
-    const vacObj={};
-    Object.entries(VACACIONES).forEach(([p,s])=>{ vacObj[p]=[...s]; });
-    localStorage.setItem('c3ntro_vacaciones', JSON.stringify(vacObj));
-    localStorage.setItem('c3ntro_festivos',   JSON.stringify(FESTIVOS));
-    // Save any custom labels added beyond the defaults
-    localStorage.setItem('c3ntro_fest_labels', JSON.stringify(FEST_LABELS));
-  }catch(e){ console.warn('saveToStorage error',e); }
+    if(action === 'add'){
+      await _supa.from('vacaciones').upsert({persona, fecha}, {onConflict:'persona,fecha'});
+    } else {
+      await _supa.from('vacaciones').delete().eq('persona', persona).eq('fecha', fecha);
+    }
+  }catch(e){ console.warn('saveVacacionesSupabase error',e); }
 }
 
-function loadFromStorage(){
+async function saveFestivosSupabase(){
+  if(!_supa) return;
   try{
-    const vac = localStorage.getItem('c3ntro_vacaciones');
-    if(vac){
-      const parsed = JSON.parse(vac);
-      Object.entries(parsed).forEach(([p,arr])=>{ VACACIONES[p]=new Set(arr); });
-    }
-    const fest = localStorage.getItem('c3ntro_festivos');
-    if(fest) FESTIVOS = JSON.parse(fest);
-    // Restore custom labels (merge into existing FEST_LABELS)
-    const labels = localStorage.getItem('c3ntro_fest_labels');
-    if(labels){
-      const parsed = JSON.parse(labels);
-      Object.entries(parsed).forEach(([k,v])=>{ FEST_LABELS[k]=v; });
-    }
-  }catch(e){ console.warn('loadFromStorage error',e); }
+    // Upsert todos los festivos actuales
+    const rows = FESTIVOS.map(f => ({ fecha: f, etiqueta: FEST_LABELS[f]||null }));
+    await _supa.from('festivos').upsert(rows, {onConflict:'fecha'});
+  }catch(e){ console.warn('saveFestivosSupabase error',e); }
 }
 
-// Load saved data immediately after variable declarations
-loadFromStorage();
+async function removeFestivoSupabase(fecha){
+  if(!_supa) return;
+  try{
+    await _supa.from('festivos').delete().eq('fecha', fecha);
+  }catch(e){ console.warn('removeFestivoSupabase error',e); }
+}
+
+async function loadFromSupabase(){
+  if(!_supa) return;
+  try{
+    // Cargar festivos
+    const { data: festData } = await _supa.from('festivos').select('fecha,etiqueta').order('fecha');
+    if(festData && festData.length){
+      FESTIVOS = festData.map(r => r.fecha);
+      festData.forEach(r => { if(r.etiqueta) FEST_LABELS[r.fecha] = r.etiqueta; });
+    } else {
+      // Primera vez: subir los defaults
+      await saveFestivosSupabase();
+    }
+    // Cargar vacaciones
+    const { data: vacData } = await _supa.from('vacaciones').select('persona,fecha');
+    if(vacData){
+      VACACIONES = {};
+      vacData.forEach(r => {
+        if(!VACACIONES[r.persona]) VACACIONES[r.persona] = new Set();
+        VACACIONES[r.persona].add(r.fecha);
+      });
+    }
+  }catch(e){ console.warn('loadFromSupabase error',e); }
+}
+
+// saveToStorage queda como no-op (ya no usamos localStorage para esto)
+function saveToStorage(){ }
+function loadFromStorage(){ }
 
 // ─── CSV2 LOADING ─────────────────────────────────────────────────────────────
 document.getElementById('csvInput2').addEventListener('change', function(e){
@@ -3671,7 +3694,12 @@ function renderFestivos(){
   }).join('');
   if(curView==='reporteo'&&REP_ROWS.length) renderReporteo();
 }
-function removeFestivo(f){ FESTIVOS=FESTIVOS.filter(x=>x!==f); saveToStorage(); renderFestivos(); if(REP_ROWS.length) renderReporteo(); }
+function removeFestivo(f){
+  FESTIVOS=FESTIVOS.filter(x=>x!==f);
+  removeFestivoSupabase(f);
+  renderFestivos();
+  if(REP_ROWS.length) renderReporteo();
+}
 function addFestivo(){
   const input = document.getElementById('festivoNewDate');
   const label = document.getElementById('festivoNewLabel');
@@ -3684,7 +3712,7 @@ function addFestivo(){
   if(l) FEST_LABELS[d]=l;
   if(input) input.value='';
   if(label) label.value='';
-  saveToStorage();
+  saveFestivosSupabase();
   renderFestivos();
   if(REP_ROWS.length) renderReporteo();
 }
@@ -3714,14 +3742,17 @@ function addVacacion(){
   }
   if(!VACACIONES[p]) VACACIONES[p]=new Set();
   VACACIONES[p].add(d);
-  saveToStorage();
+  saveVacacionesSupabase(p, d, 'add');
   renderVacList();
   if(curView==='reporteo'&&REP_ROWS.length) renderReporteo();
 }
 function removeVac(p,d){
   // Proyectista solo puede quitar sus propias vacaciones
   if(_userRole === 'proyectista' && _miNombre && p !== _miNombre){ alert('Solo puedes modificar tus propias vacaciones.'); return; }
-  VACACIONES[p]?.delete(d); saveToStorage(); renderVacList(); if(curView==='reporteo'&&REP_ROWS.length) renderReporteo();
+  VACACIONES[p]?.delete(d);
+  saveVacacionesSupabase(p, d, 'remove');
+  renderVacList();
+  if(curView==='reporteo'&&REP_ROWS.length) renderReporteo();
 }
 
 // ─── QUARTER CONFIG ───────────────────────────────────────────────────────────
@@ -7818,12 +7849,52 @@ const ORG_DEFAULT = [
   {id:"cesar",    nombre:"Cesar Augusto Orozpe Casique",        puesto:"Vacante", profesion:"", cedula:"", correo:"", telefono:"", ingreso:"", cumple:"", equipo:"", inactive:true},
 ];
 
-let ORG_DATA = (()=>{
-  try{ return JSON.parse(localStorage.getItem('c3ntro_equipo')||'null') || ORG_DEFAULT; }
-  catch(e){ return ORG_DEFAULT; }
-})();
+let ORG_DATA = [...ORG_DEFAULT];
 
-function orgSave(){ localStorage.setItem('c3ntro_equipo', JSON.stringify(ORG_DATA)); }
+async function orgSave(){
+  // No-op síncrono; usar orgSaveMember(id) para guardar un miembro específico
+}
+async function orgSaveMemberToSupabase(id){
+  if(!_supa) return;
+  const m = ORG_DATA.find(x=>x.id===id);
+  if(!m) return;
+  try{
+    await _supa.from('org_directory').upsert({
+      id: m.id,
+      nombre: m.nombre||null,
+      puesto: m.puesto||null,
+      profesion: m.profesion||null,
+      cedula: m.cedula||null,
+      correo: m.correo||null,
+      telefono: m.telefono||null,
+      equipo: m.equipo||null,
+      ingreso: m.ingreso||null,
+      cumple: m.cumple||null,
+      updated_at: new Date().toISOString()
+    }, {onConflict:'id'});
+  }catch(e){ console.warn('orgSaveMemberToSupabase error',e); }
+}
+async function orgLoadFromSupabase(){
+  if(!_supa) return;
+  try{
+    const { data } = await _supa.from('org_directory').select('*');
+    if(data && data.length){
+      data.forEach(row => {
+        const m = ORG_DATA.find(x=>x.id===row.id);
+        if(m){
+          ['nombre','puesto','profesion','cedula','correo','telefono','equipo','ingreso','cumple'].forEach(k=>{
+            if(row[k] !== null && row[k] !== undefined) m[k] = row[k];
+          });
+        }
+      });
+    } else {
+      // Primera vez: subir todos los miembros default
+      for(const m of ORG_DATA){
+        await orgSaveMemberToSupabase(m.id);
+      }
+    }
+  }catch(e){ console.warn('orgLoadFromSupabase error',e); }
+}
 function orgIni(name){ return (name||'?').split(' ').filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join(''); }
 
 // ── Migrar: rellenar campos vacíos del directorio con datos por defecto, sin pisar lo ya capturado ──
@@ -7848,7 +7919,7 @@ function orgIni(name){ return (name||'?').split(' ').filter(Boolean).slice(0,2).
       if(!m[key] && def[key]){ m[key]=def[key]; changed=true; }
     });
   });
-  if(changed) orgSave();
+  // fillOrgDefaults: ya no guardamos en localStorage, Supabase es la fuente de verdad
 })();
 
 function renderEquipo(){
@@ -8330,7 +8401,9 @@ function orgSaveMember(){
     if(omPhotoB64) ORG_PHOTOS[id] = omPhotoB64;
   }
 
-  orgSave();
+  // Guardar en Supabase
+  const savedId = omEditingId || ORG_DATA[ORG_DATA.length-1]?.id;
+  if(savedId) orgSaveMemberToSupabase(savedId);
   orgCloseMemberModal();
   renderEquipo();
 }
@@ -8341,9 +8414,11 @@ function orgDeleteMember(){
   if(!m) return;
   const name = m.nombre.split(' ').slice(0,2).join(' ');
   if(!confirm(`¿Eliminar a ${name} del equipo? Esta acción no se puede deshacer.`)) return;
+  const delId = omEditingId;
   ORG_DATA = ORG_DATA.filter(x=>x.id!==omEditingId);
   delete ORG_PHOTOS[omEditingId];
-  orgSave();
+  // Eliminar de Supabase
+  if(_supa && delId) _supa.from('org_directory').delete().eq('id', delId).then(()=>{}).catch(e=>console.warn(e));
   orgCloseMemberModal();
   renderEquipo();
 }
@@ -8481,14 +8556,14 @@ function dirUpdateMonthDay(id, key, text, inputEl){
     return;
   }
   const m = ORG_DATA.find(x=>x.id===id);
-  if(m){ m[key]=parsed; orgSave(); }
+  if(m){ m[key]=parsed; orgSaveMemberToSupabase(id); }
   if(inputEl) inputEl.value = dirFmtMonthDay(parsed);
   renderOrgChart(); // refresh badges/banner since dates may affect alerts
 }
 
 function dirUpdate(id, key, value){
   const m = ORG_DATA.find(x=>x.id===id);
-  if(m){ m[key]=value; orgSave(); }
+  if(m){ m[key]=value; orgSaveMemberToSupabase(id); }
 }
 
 // ── Export directorio ──
@@ -9668,6 +9743,17 @@ function hideNavItems(){
 // Entrar al dashboard después del login
 function enterDashboard(){
   document.getElementById('loginScreen').style.display='none';
+
+  // Cargar datos compartidos desde Supabase
+  Promise.all([
+    loadFromSupabase(),
+    orgLoadFromSupabase(),
+    hoLoadSchedule()
+  ]).then(()=>{
+    if(typeof renderFestivos==='function') renderFestivos();
+    if(typeof renderVacList==='function') renderVacList();
+    if(curView==='ausencias' || curView==='equipo') goView(curView);
+  }).catch(e=>console.warn('enterDashboard supabase load error',e));
 
   if(_userRole === 'proyectista'){
     setupGoViewGuard();
@@ -11150,26 +11236,33 @@ function segMount(tab){
 }
 
 // ══ HOME OFFICE EDITOR ══
-const HO_STORAGE_KEY = 'ho_schedule_v1';
 const HO_CAPACITY = 6;
-function hoLoadSchedule(){
+async function hoLoadSchedule(){
+  if(!_supa) return;
   try{
-    const raw = localStorage.getItem(HO_STORAGE_KEY);
-    if(raw){
-      const p = JSON.parse(raw);
-      HO_PATTERN.lunes     = p.lunes     || HO_PATTERN.lunes;
-      HO_PATTERN.martes    = p.martes    || HO_PATTERN.martes;
-      HO_PATTERN.miercoles = p.miercoles || HO_PATTERN.miercoles;
-      HO_PATTERN.jueves    = p.jueves    || HO_PATTERN.jueves;
-      HO_PATTERN.viernes   = p.viernes   || HO_PATTERN.viernes;
+    const { data } = await _supa.from('home_office').select('*').eq('id','schedule').single();
+    if(data){
+      HO_PATTERN.lunes     = data.lunes     || HO_PATTERN.lunes;
+      HO_PATTERN.martes    = data.martes    || HO_PATTERN.martes;
+      HO_PATTERN.miercoles = data.miercoles || HO_PATTERN.miercoles;
+      HO_PATTERN.jueves    = data.jueves    || HO_PATTERN.jueves;
+      HO_PATTERN.viernes   = data.viernes   || HO_PATTERN.viernes;
+    } else {
+      // Primera vez: subir el default
+      await hoSaveSchedule();
     }
-  }catch(e){}
+  }catch(e){ console.warn('hoLoadSchedule error',e); }
 }
-function hoSaveSchedule(){
-  localStorage.setItem(HO_STORAGE_KEY, JSON.stringify({
-    lunes:HO_PATTERN.lunes, martes:HO_PATTERN.martes,
-    miercoles:HO_PATTERN.miercoles, jueves:HO_PATTERN.jueves, viernes:HO_PATTERN.viernes
-  }));
+async function hoSaveSchedule(){
+  if(!_supa) return;
+  try{
+    await _supa.from('home_office').upsert({
+      id:'schedule',
+      lunes:HO_PATTERN.lunes, martes:HO_PATTERN.martes,
+      miercoles:HO_PATTERN.miercoles, jueves:HO_PATTERN.jueves, viernes:HO_PATTERN.viernes,
+      updated_at: new Date().toISOString()
+    }, {onConflict:'id'});
+  }catch(e){ console.warn('hoSaveSchedule error',e); }
 }
 let hoActiveViernesSem = 0;
 function hoOpenModal(){
