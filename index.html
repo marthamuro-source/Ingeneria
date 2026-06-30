@@ -1796,7 +1796,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
         <!-- Mis cursos — Raquel -->
         <div class="panel" style="margin-bottom:0">
           <div class="ph">
-            <div><div class="pt">Mis cursos</div><div class="ps">Seguimiento personal · incluye cursos del equipo y propios</div></div>
+            <div><div class="pt">Mis cursos</div><div class="ps" id="udMisCursosSubtitle">Seguimiento personal · incluye cursos del equipo y propios</div></div>
             <button class="ho-edit-btn" onclick="udMiCursoAdd()">+ Agregar curso propio</button>
           </div>
           <div class="pb" style="padding:0;overflow-x:auto">
@@ -11975,10 +11975,15 @@ function renderUdCourseList(){
   el.innerHTML = html;
 }
 
-// ── Mis cursos (Raquel) ──
+// ── Mis cursos (por usuario) ──
 function renderUdMisCursos(){
   const el = document.getElementById('udMisCursos'); if(!el) return;
   udMiLoad();
+  // Actualizar subtítulo según rol
+  const subtitle = document.getElementById('udMisCursosSubtitle');
+  if(subtitle) subtitle.textContent = (_userRole === 'proyectista')
+    ? 'Mis cursos propios'
+    : 'Seguimiento personal · incluye cursos del equipo y propios';
   const cats = udGetEffectiveCats();
   const STATUS_CFG={
     done:       {color:'#3dd68c', label:'✓ Finalizado',  sym:'✓', bg:'rgba(61,214,140,.15)'},
@@ -11987,15 +11992,18 @@ function renderUdMisCursos(){
     noaccount:  {color:'var(--dim)', label:'✕ Sin cuenta',sym:'✕', bg:'rgba(122,128,152,.1)'},
   };
 
-  // Construir lista completa: cursos del equipo + propios
+  // Para proyectistas: solo mostrar cursos propios (no los del equipo)
+  const esProyectista = (_userRole === 'proyectista');
   const allRows = [];
-  Object.entries(cats).forEach(([cat, courses])=>{
-    courses.forEach(c=>allRows.push({name:c.name, duracion:c.duracion||'', cat, propio:false}));
-  });
+  if(!esProyectista){
+    Object.entries(cats).forEach(([cat, courses])=>{
+      courses.forEach(c=>allRows.push({name:c.name, duracion:c.duracion||'', cat, propio:false}));
+    });
+  }
   UD_MIS_EXTRA.forEach(c=>allRows.push({...c, propio:true}));
 
   if(!allRows.length){
-    el.innerHTML='<div style="padding:20px;text-align:center;color:var(--dim);font-size:12px">Sin cursos registrados.</div>';
+    el.innerHTML='<div style="padding:20px;text-align:center;color:var(--dim);font-size:12px">' + (esProyectista ? 'Sin cursos propios aún. Agrega con el botón de arriba.' : 'Sin cursos registrados.') + '</div>';
     return;
   }
 
