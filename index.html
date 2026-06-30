@@ -10565,20 +10565,28 @@ function renderSegAvance(){
   const el = document.getElementById('segAvanceMount'); if(!el) return;
   const avData = avanceLoad();
 
-  // ── Selector "Ver como" ──
-  const personas = ['todos', ...PA_MEMBERS];
-  let html = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
-    <span style="font-size:11px;color:var(--muted);white-space:nowrap">👁️ Ver como:</span>
-    <select onchange="avancePersonaVista=this.value;renderSegAvance()" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:11px;flex:1;max-width:260px">
-      ${personas.map(p=>`<option value="${p}" ${p===avancePersonaVista?'selected':''}>${p==='todos'?'👩‍💼 Raquel (ver todo)':p.split(' ').slice(0,2).join(' ')}</option>`).join('')}
-    </select>
-    ${avancePersonaVista!=='todos'?`<span style="font-size:11px;padding:3px 10px;border-radius:6px;background:rgba(74,143,212,.12);color:var(--accent)">Vista de proyectista</span>`:''}
-  </div>`;
+  // ── Selector "Ver como" (solo para admin/jefe) ──
+  // Para proyectistas, forzar siempre su propio nombre
+  let avanceVista = avancePersonaVista;
+  let html = '';
+  if(_userRole !== 'proyectista'){
+    const personas = ['todos', ...PA_MEMBERS];
+    html = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
+      <span style="font-size:11px;color:var(--muted);white-space:nowrap">👁️ Ver como:</span>
+      <select onchange="avancePersonaVista=this.value;renderSegAvance()" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:11px;flex:1;max-width:260px">
+        ${personas.map(p=>`<option value="${p}" ${p===avancePersonaVista?'selected':''}>${p==='todos'?'👩‍💼 Raquel (ver todo)':p.split(' ').slice(0,2).join(' ')}</option>`).join('')}
+      </select>
+      ${avancePersonaVista!=='todos'?`<span style="font-size:11px;padding:3px 10px;border-radius:6px;background:rgba(74,143,212,.12);color:var(--accent)">Vista de proyectista</span>`:''}
+    </div>`;
+  } else {
+    // Proyectista: forzar su propio nombre
+    avanceVista = _miNombre || avancePersonaVista;
+  }
 
   // Tabs por tipo
   html += `<div class="avance-tipo-tabs">`;
   AVANCE_TIPOS.forEach(t=>{
-    const base = avancePersonaVista==='todos' ? PA_ITEMS : PA_ITEMS.filter(a=>a.responsable===avancePersonaVista);
+    const base = avanceVista==='todos' ? PA_ITEMS : PA_ITEMS.filter(a=>a.responsable===avanceVista);
     const cnt = base.filter(a=>a.tipo===t).length;
     html+=`<div class="avance-tipo-tab${avanceTipoActivo===t?' on':''}" onclick="avanceTipoActivo='${t}';renderSegAvance()">${t} <span style="font-size:9px;opacity:.6">(${cnt})</span></div>`;
   });
@@ -10587,7 +10595,7 @@ function renderSegAvance(){
   // Filtrar por tipo Y por persona si aplica
   const items = PA_ITEMS.filter(a=>
     a.tipo===avanceTipoActivo &&
-    (avancePersonaVista==='todos' || a.responsable===avancePersonaVista)
+    (avanceVista==='todos' || a.responsable===avanceVista)
   );
 
   if(!items.length){
