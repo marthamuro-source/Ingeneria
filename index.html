@@ -10942,10 +10942,15 @@ function notifLoad(){
 function notifSave(){
   // Máximo 100 notificaciones
   if(NOTIFS.length > 100) NOTIFS = NOTIFS.slice(0,100);
-  localStorage.setItem(NOTIF_KEY, JSON.stringify(NOTIFS));
+  if(_userRole === 'proyectista' && _miNombre){
+    const key = 'c3ntro_notifs_proy_'+toCanonical(_miNombre);
+    localStorage.setItem(key, JSON.stringify(NOTIFS));
+  } else {
+    localStorage.setItem(NOTIF_KEY, JSON.stringify(NOTIFS));
+  }
 }
 
-function notifAdd(icon, title, msg, tipo='general'){
+function notifAdd(icon, title, msg, tipo='general', skipSupabase=false){
   notifLoad();
   const n = {
     id:    'notif_'+Date.now()+'_'+Math.random().toString(36).slice(2,5),
@@ -10957,7 +10962,8 @@ function notifAdd(icon, title, msg, tipo='general'){
   notifSave();
   notifUpdateBell();
   notifShowToast(n);
-  if(typeof supaSyncNotif==='function') supaSyncNotif(n);
+  // No sincronizar a Supabase si es notif local (evita doble toast por realtime)
+  if(!skipSupabase && typeof supaSyncNotif==='function') supaSyncNotif(n);
 }
 
 function notifUnreadCount(){
@@ -11107,11 +11113,13 @@ function notifRenderPanel(){
 function notifProyActualizó(persona, campo, valor, actividad){
   const nombre = (persona||'').split(' ').slice(0,2).join(' ');
   const campoLabel = campo==='estatus'?'estatus':campo==='nota'?'nota de avance':'kilómetros';
+  // skipSupabase=true para evitar doble toast por canal realtime
   notifAdd(
     '📝',
     `${nombre} actualizó su avance`,
     `${campoLabel}: ${valor||''}${actividad?' — '+actividad.slice(0,35):''}`,
-    'avance'
+    'avance',
+    true
   );
 }
 
