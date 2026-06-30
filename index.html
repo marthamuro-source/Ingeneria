@@ -10519,12 +10519,26 @@ function avanceSetField(id, field, value){
   if(!data[id]) data[id] = {};
   data[id][field] = value;
   avanceSave(data);
-  // Sync to Supabase
-  if(avancePersonaVista!=='todos' && typeof supaSyncAvanceField==='function'){
-    supaSyncAvanceField(id, avancePersonaVista, data[id]);
+
+  // Determinar quién está editando
+  const editorNombre = (_userRole === 'proyectista' && _miNombre) ? _miNombre : (avancePersonaVista !== 'todos' ? avancePersonaVista : null);
+
+  // Si es proyectista y cambia estatus → actualizar también PA_ITEMS y sincronizar a Supabase
+  if(_userRole === 'proyectista' && _miNombre && field === 'estatus'){
     const act = PA_ITEMS.find(a=>a.id===id);
-    notifProyActualizó(avancePersonaVista, field, value, act?.folio||act?.actividad||'');
+    if(act){
+      act.estatus = value;
+      if(typeof supaSyncActividad === 'function') supaSyncActividad(act);
+    }
   }
+
+  // Sync override a avance_proyectista y notificar
+  if(editorNombre && typeof supaSyncAvanceField === 'function'){
+    supaSyncAvanceField(id, editorNombre, data[id]);
+    const act = PA_ITEMS.find(a=>a.id===id);
+    notifProyActualizó(editorNombre, field, value, act?.folio||act?.actividad||'');
+  }
+
   renderSegAvance();
 }
 
