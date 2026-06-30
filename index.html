@@ -6135,6 +6135,8 @@ function paRenderTipo(tipo){
 
   let items = PA_ITEMS.filter(a=>{
     if(a.tipo!==tipo) return false;
+    // Proyectista solo ve sus propias actividades
+    if(_userRole === 'proyectista' && _miNombre && a.responsable !== _miNombre) return false;
     if(filtResp && a.responsable!==filtResp) return false;
     if(filtEst && a.estatus!==filtEst) return false;
     if(search){
@@ -6152,8 +6154,11 @@ function paRenderTipo(tipo){
 
   const tbody = document.getElementById('paTbody-'+tipo);
   const metaEl = document.getElementById('paMeta-'+tipo);
-  const total = PA_ITEMS.filter(a=>a.tipo===tipo).length;
-  const activas = PA_ITEMS.filter(a=>a.tipo===tipo&&a.estatus!=='Terminado').length;
+  const _paBase = (_userRole === 'proyectista' && _miNombre)
+    ? PA_ITEMS.filter(a=>a.responsable===_miNombre)
+    : PA_ITEMS;
+  const total = _paBase.filter(a=>a.tipo===tipo).length;
+  const activas = _paBase.filter(a=>a.tipo===tipo&&a.estatus!=='Terminado').length;
   if(metaEl) metaEl.textContent = `${total} registros · ${activas} activos`;
 
   // Update count badge
@@ -6451,7 +6456,11 @@ function paAlertFilter(kind){
 // ── Semáforo de disponibilidad ──
 function paAvailability(){
   const today = new Date(); today.setHours(0,0,0,0);
-  const active = PA_MEMBERS.map(name=>{
+  // Proyectista solo ve su propia tarjeta en el semáforo
+  const membersToShow = (_userRole === 'proyectista' && _miNombre)
+    ? PA_MEMBERS.filter(n => n === _miNombre)
+    : PA_MEMBERS;
+  const active = membersToShow.map(name=>{
     const enProceso = PA_ITEMS.filter(a=> a.responsable===name && a.estatus==='En progreso');
     const abiertas = PA_ITEMS.filter(a=> a.responsable===name && (a.estatus==='Sin iniciar'||a.estatus==='En revisión'||a.estatus==='En pausa'));
 
