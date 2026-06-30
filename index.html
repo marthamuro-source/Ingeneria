@@ -10809,7 +10809,7 @@ function renderSegNotas(){
   if(done.length){
     if(_userRole === 'proyectista'){
       html+=`<div class="panel">
-        <div class="ph" style="cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none';this.querySelector('.resueltas-toggle').textContent=this.nextElementSibling.style.display==='none'?'▶':'▼">
+        <div class="ph" style="cursor:pointer" onclick="var b=this.nextElementSibling;var open=b.style.display==='none';b.style.display=open?'':'none';this.querySelector('.resueltas-toggle').textContent=open?'▼':'▶'">
           <div><div class="pt">✓ Notas resueltas <span class="resueltas-toggle" style="font-size:11px;margin-left:6px">▶</span></div>
           <div class="ps">${done.length} resuelta${done.length!==1?'s':''} · clic para ver</div></div>
         </div>
@@ -11732,7 +11732,8 @@ function renderUdHeatmapLocal(courses){
     });
     html+=`</tr>`;
   });
-  // ── Raquel — fila independiente con UD_MIS_STATUS ──
+  // ── Raquel — fila independiente, solo visible para admin/jefe ──
+  if(_userRole === 'proyectista') { html+=`</table>`; el.innerHTML=html; return; }
   const {c:raqC, bg:raqBg} = pcolor('Martha Raquel Muro Morales');
   html+=`<tr style="background:rgba(74,143,212,.04)">`;
   html+=`<td style="padding:8px 14px;border-bottom:1px solid var(--border)">
