@@ -2621,7 +2621,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   <div id="v-equipo" style="display:none">
     <div class="topbar">
       <div><h1>Organigrama & Directorio</h1><div class="tmeta">Coordinación de Ingeniería · C3NTRO Telecom</div></div>
-      <div style="display:flex;gap:8px">
+      <div id="orgAdminBtns" style="display:flex;gap:8px">
         <button class="pa-btn pa-btn-ghost" onclick="orgAddMember()" style="font-size:12px">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Agregar miembro
@@ -2663,7 +2663,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   <div id="v-ausencias" style="display:none">
     <div class="topbar">
       <div><h1>Ausencias y Permisos</h1><div class="tmeta">Vacaciones, Home Office y permisos del equipo</div></div>
-      <div style="display:flex;gap:8px">
+      <div id="ausAdminBtns" style="display:flex;gap:8px">
         <button class="pa-btn pa-btn-primary" onclick="ausOpenModal(null)" style="font-size:12px">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           Nuevo registro
@@ -2680,7 +2680,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
             <div><div class="pt">Días festivos 2026</div><div class="ps">Precargados del calendario C3NTRO · se guardan automáticamente</div></div>
           </div>
           <div class="pb" style="padding:12px 16px">
-            <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+            <div id="festivoAddRow" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
               <input type="date" id="festivoNewDate" style="font-family:var(--font);font-size:12px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text)">
               <input type="text" id="festivoNewLabel" placeholder="Descripción (opcional)" style="flex:1;min-width:120px;font-family:var(--font);font-size:12px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text)">
               <button onclick="addFestivo()" style="font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--accent);cursor:pointer;font-family:var(--font);white-space:nowrap">+ Agregar</button>
@@ -2704,7 +2704,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <!-- Home Office -->
       <div class="panel" style="margin-bottom:18px">
         <div class="ph"><div><div class="pt">Home Office</div><div class="ps">Asignación semanal — quién está en casa y quién en oficina</div></div>
-          <button class="ho-edit-btn" onclick="hoOpenModal()">✏️ Editar días</button>
+          <button id="hoEditBtn" class="ho-edit-btn" onclick="hoOpenModal()">✏️ Editar días</button>
         </div>
         <div class="pb">
           <div id="ausWeekGrid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px"></div>
@@ -9607,6 +9607,18 @@ function applyProyectistaReadOnly(){
   // Ocultar calculadora en herramientas
   var calcBtn = document.getElementById('rendCalcToggleBtn');
   if(calcBtn && calcBtn.parentElement) calcBtn.parentElement.style.display='none';
+
+  // Ocultar botones de Agregar miembro y Exportar en organigrama
+  var orgAdminBtns = document.getElementById('orgAdminBtns');
+  if(orgAdminBtns) orgAdminBtns.style.display='none';
+
+  // Ausencias: ocultar Nuevo registro, agregar festivos y Editar días Home Office
+  var ausAdminBtns = document.getElementById('ausAdminBtns');
+  if(ausAdminBtns) ausAdminBtns.style.display='none';
+  var festivoAddRow = document.getElementById('festivoAddRow');
+  if(festivoAddRow) festivoAddRow.style.display='none';
+  var hoEditBtn = document.getElementById('hoEditBtn');
+  if(hoEditBtn) hoEditBtn.style.display='none';
 
   // Ocultar botones de acción del panel: Nueva actividad, Exportar CSV, PDF
   ['paOpenTypeSelector','paOpenExportCSV','paExportPDF'].forEach(function(fn){
