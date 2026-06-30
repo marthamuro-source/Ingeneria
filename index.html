@@ -11269,14 +11269,15 @@ async function supaSyncUdStatus(){
   }catch(e){ console.warn('supaSyncUdStatus:', e); }
 }
 
-// ── Udemy Mis Status (Raquel) ──
+// ── Udemy Mis Status (por usuario) ──
 async function supaSyncUdMisStatus(){
   if(!SUPA_ONLINE || !UD_MIS_STATUS) return;
+  const usuario = _miNombre || 'Raquel';
   try{
     const rows = Object.entries(UD_MIS_STATUS).map(([curso,estatus])=>({
-      curso, estatus, updated_at:new Date().toISOString()
+      usuario, curso, estatus, updated_at:new Date().toISOString()
     }));
-    if(rows.length) await _supa.from('ud_mis_status').upsert(rows,{onConflict:'curso'});
+    if(rows.length) await _supa.from('ud_mis_status').upsert(rows,{onConflict:'usuario,curso'});
   }catch(e){ console.warn('supaSyncUdMisStatus:', e); }
 }
 
@@ -12145,12 +12146,14 @@ async function supaLoadAll(){
       localStorage.setItem(UD_STATUS_KEY, JSON.stringify(UD_STATUS_LOCAL));
     }
 
-    // 11. Udemy mis status (Raquel)
-    const { data: udmis } = await _supa.from('ud_mis_status').select('*');
+    // 11. Udemy mis status (por usuario)
+    const _udMisUsuario = _miNombre || 'Raquel';
+    const { data: udmis } = await _supa.from('ud_mis_status').select('*').eq('usuario', _udMisUsuario);
     if(udmis && udmis.length){
       UD_MIS_STATUS = {};
       udmis.forEach(r=>{ UD_MIS_STATUS[r.curso]=r.estatus; });
-      localStorage.setItem(UD_MIS_ST_KEY, JSON.stringify(UD_MIS_STATUS));
+      const k2 = udMiKeys();
+      localStorage.setItem(k2.status, JSON.stringify(UD_MIS_STATUS));
     }
 
     // 12. Udemy certificados equipo
