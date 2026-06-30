@@ -3664,8 +3664,9 @@ function renderFestivos(){
   document.getElementById('festivosList').innerHTML = FESTIVOS.map(f=>{
     const [y,m,d]=f.split('-'); const label=FEST_LABELS[f]||f;
     const display=`${parseInt(d)}/${parseInt(m)} ${label}`;
+    const removeBtn = (_userRole !== 'proyectista') ? `<button onclick="removeFestivo('${f}')" style="background:none;border:none;color:#ff8080;cursor:pointer;font-size:11px;padding:0;margin:0;line-height:1">✕</button>` : '';
     return `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(255,92,92,.1);border:1px solid rgba(255,92,92,.2);color:#ff8080;font-size:11px;padding:3px 8px;border-radius:20px">
-      ${display}<button onclick="removeFestivo('${f}')" style="background:none;border:none;color:#ff8080;cursor:pointer;font-size:11px;padding:0;margin:0;line-height:1">✕</button>
+      ${display}${removeBtn}
     </span>`;
   }).join('');
   if(curView==='reporteo'&&REP_ROWS.length) renderReporteo();
@@ -3696,8 +3697,10 @@ function renderVacList(){
   });
   document.getElementById('vacList').innerHTML = items.map(({p,d})=>{
     const [y,mo,day]=d.split('-');
+    const puedeEliminar = (_userRole !== 'proyectista') || (_miNombre && p === _miNombre);
+    const removeVacBtn = puedeEliminar ? `<button onclick="removeVac('${p}','${d}')" style="background:none;border:none;color:#5de8dc;cursor:pointer;font-size:11px;padding:0">✕</button>` : '';
     return `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.2);color:#5de8dc;font-size:11px;padding:3px 8px;border-radius:20px">
-      ${p.split(' ')[0]} ${parseInt(day)}/${parseInt(mo)}<button onclick="removeVac('${p}','${d}')" style="background:none;border:none;color:#5de8dc;cursor:pointer;font-size:11px;padding:0">✕</button>
+      ${p.split(' ')[0]} ${parseInt(day)}/${parseInt(mo)}${removeVacBtn}
     </span>`;
   }).join('') || '<span style="font-size:11px;color:var(--dim)">Sin vacaciones registradas</span>';
 }
