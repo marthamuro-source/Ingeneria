@@ -1096,7 +1096,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   </div>
 </div>
 
-<div id="splashScreen" style="position:fixed;inset:0;background:#04080f;z-index:9999;display:none;flex-direction:column;align-items:center;justify-content:center;cursor:default;overflow:hidden;">
+<div id="splashScreen" style="position:fixed;inset:0;background:#04080f;z-index:20000;display:none;flex-direction:column;align-items:center;justify-content:center;cursor:default;overflow:hidden;">
 
   <div id="splashContent" style="display:flex;flex-direction:column;align-items:center;gap:0;opacity:0;transform:scale(.9);transition:opacity .8s ease,transform .8s ease;">
 
@@ -3705,13 +3705,21 @@ function addVacacion(){
   const p=document.getElementById('vacPerson').value;
   const d=document.getElementById('vacDate').value;
   if(!p||!d){ alert('Selecciona persona y fecha'); return; }
+  // Proyectista solo puede agregar sus propias vacaciones
+  if(_userRole === 'proyectista' && _miNombre && p !== _miNombre){
+    alert('Solo puedes registrar tus propias vacaciones.'); return;
+  }
   if(!VACACIONES[p]) VACACIONES[p]=new Set();
   VACACIONES[p].add(d);
   saveToStorage();
   renderVacList();
   if(curView==='reporteo'&&REP_ROWS.length) renderReporteo();
 }
-function removeVac(p,d){ VACACIONES[p]?.delete(d); saveToStorage(); renderVacList(); if(curView==='reporteo'&&REP_ROWS.length) renderReporteo(); }
+function removeVac(p,d){
+  // Proyectista solo puede quitar sus propias vacaciones
+  if(_userRole === 'proyectista' && _miNombre && p !== _miNombre){ alert('Solo puedes modificar tus propias vacaciones.'); return; }
+  VACACIONES[p]?.delete(d); saveToStorage(); renderVacList(); if(curView==='reporteo'&&REP_ROWS.length) renderReporteo();
+}
 
 // ─── QUARTER CONFIG ───────────────────────────────────────────────────────────
 const QUARTERS = {
@@ -6144,12 +6152,21 @@ function paRenderTipo(tipo){
     const notasDisplay = a.notas?`<span style="font-size:11px;color:var(--text)" title="${notasVal}">${a.notas.length>22?a.notas.slice(0,22)+'…':a.notas}</span>`:`<span style="font-size:11px;color:var(--dim)">+ nota</span>`;
     const enlaceCell = a.enlace
       ?`<a href="${a.enlace}" target="_blank" style="color:var(--accent);display:flex;align-items:center;justify-content:center" onclick="event.stopPropagation()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></a>`
-      :`<span style="color:var(--dim);font-size:11px;cursor:pointer" onclick="paInlineEnlace('${a.id}','')" title="Agregar enlace">+</span>`;
+      :(_userRole !== 'proyectista' ? `<span style="color:var(--dim);font-size:11px;cursor:pointer" onclick="paInlineEnlace('${a.id}','')" title="Agregar enlace">+</span>` : '');
     const respTd = `<td><div class="chip"><div class="mav" style="background:${bg};color:${c}">${ini(a.responsable)}</div>${nombreCorto(a.responsable)}</div></td>`;
-    const estatusTd = `<td style="cursor:pointer" onclick="paInlineStatus('${a.id}','${a.estatus||''}',this)" title="Clic para editar"><span class="badge ${sc.cls}">${a.estatus}</span></td>`;
-    const notasTd = `<td style="cursor:pointer;min-width:100px" onclick="paInlineNotas('${a.id}','${notasVal}',this)" title="Clic para editar la nota">${notasDisplay}</td>`;
-    const fechaAsigTd = `<td style="color:var(--text);font-size:11px;white-space:nowrap;cursor:pointer" onclick="paInlineDate('${a.id}','fechaAsig','${a.fechaAsig||''}',this)" title="Clic para editar la fecha de asignación">${fmtD(a.fechaAsig)||'—'}</td>`;
-    const fechaTermTd = `<td style="color:var(--text);font-size:11px;white-space:nowrap;cursor:pointer" onclick="paInlineDate('${a.id}','fechaTermino','${a.fechaTermino||''}',this)" title="Clic para editar la fecha de término">${fmtD(a.fechaTermino)||'—'}</td>`;
+    var _puedoEditar = (_userRole !== 'proyectista') || (_miNombre && a.responsable === _miNombre);
+    const estatusTd = _puedoEditar
+      ? `<td style="cursor:pointer" onclick="paInlineStatus('${a.id}','${a.estatus||''}',this)" title="Clic para editar estatus"><span class="badge ${sc.cls}">${a.estatus}</span></td>`
+      : `<td><span class="badge ${sc.cls}">${a.estatus}</span></td>`;
+    const notasTd = _puedoEditar
+      ? `<td style="cursor:pointer;min-width:100px" onclick="paInlineNotas('${a.id}','${notasVal}',this)" title="Clic para editar la nota">${notasDisplay}</td>`
+      : `<td style="min-width:100px">${notasDisplay}</td>`;
+    const fechaAsigTd = (_userRole !== 'proyectista')
+      ? `<td style="color:var(--text);font-size:11px;white-space:nowrap;cursor:pointer" onclick="paInlineDate('${a.id}','fechaAsig','${a.fechaAsig||''}',this)" title="Editar fecha asignación">${fmtD(a.fechaAsig)||'—'}</td>`
+      : `<td style="color:var(--text);font-size:11px;white-space:nowrap">${fmtD(a.fechaAsig)||'—'}</td>`;
+    const fechaTermTd = (_userRole !== 'proyectista')
+      ? `<td style="color:var(--text);font-size:11px;white-space:nowrap;cursor:pointer" onclick="paInlineDate('${a.id}','fechaTermino','${a.fechaTermino||''}',this)" title="Editar fecha término">${fmtD(a.fechaTermino)||'—'}</td>`
+      : `<td style="color:var(--text);font-size:11px;white-space:nowrap">${fmtD(a.fechaTermino)||'—'}</td>`;
 
     // ── Fecha Final Real — manual, independiente del estatus ──
     let realBadge = '';
@@ -6164,9 +6181,13 @@ function paRenderTipo(tipo){
     } else if(a.fechaReal && !a.fechaTermino){
       realBadge = `<span style="color:var(--muted);font-size:9px;margin-left:5px">registrado</span>`;
     }
-    const fechaRealTd = `<td style="color:var(--text);font-size:11px;white-space:nowrap;cursor:pointer" onclick="paInlineDate('${a.id}','fechaReal','${a.fechaReal||''}',this)" title="Clic para registrar fecha real de entrega">${a.fechaReal?fmtD(a.fechaReal):'<span style="color:var(--dim)">+ registrar</span>'}${realBadge}</td>`;
+    const fechaRealTd = (_userRole !== 'proyectista')
+      ? `<td style="color:var(--text);font-size:11px;white-space:nowrap;cursor:pointer" onclick="paInlineDate('${a.id}','fechaReal','${a.fechaReal||''}',this)" title="Registrar fecha real">${a.fechaReal?fmtD(a.fechaReal):'<span style="color:var(--dim)">+ registrar</span>'}${realBadge}</td>`
+      : `<td style="color:var(--text);font-size:11px;white-space:nowrap">${a.fechaReal?fmtD(a.fechaReal):'<span style="color:var(--dim)">—</span>'}${realBadge}</td>`;
 
-    const acciones = `<td style="padding-right:10px;white-space:nowrap"><button class="et-act-btn" onclick="paOpenModal('${a.id}')" title="Editar">✎</button><button class="et-act-btn del" onclick="paDelete('${a.id}')" title="Eliminar">✕</button></td>`;
+    const acciones = (_userRole !== 'proyectista')
+      ? `<td style="padding-right:10px;white-space:nowrap"><button class="et-act-btn" onclick="paOpenModal('${a.id}')" title="Editar">✎</button><button class="et-act-btn del" onclick="paDelete('${a.id}')" title="Eliminar">✕</button></td>`
+      : `<td></td>`;
     const dCells = `<td style="text-align:center">${dEstCell}</td><td style="text-align:center">${dRealCell}</td>`;
     const enlaceTd = `<td style="text-align:center;width:32px">${enlaceCell}</td>`;
 
@@ -6197,7 +6218,7 @@ function paRenderTipo(tipo){
         ${proyectoTd}
         ${propietarioTd}
         ${responsableTd}${fechaAsigTd}${fechaTermTd}${fechaRealTd}
-        <td style="color:var(--text);font-size:11px;text-align:right">${a.km||'—'}</td>
+        <td style="color:var(--text);font-size:11px;text-align:right${_puedoEditar?';cursor:pointer':''}" ${_puedoEditar ? `onclick="paInlineKm('${a.id}','${a.km||''}',this)" title="Clic para editar km"` : ''}>${a.km||'—'}</td>
         ${estatusTd}${dCells}${notasTd}${enlaceTd}${acciones}
       </tr>`;
     } else if(tipo==='Trabajo Operativo'){
@@ -6973,6 +6994,17 @@ function paInlineNumBobina(id, currentVal, td){
   function save(){ const v=inp.value.trim(); const a=PA_ITEMS.find(x=>x.id===id); if(a){a.numBobina=v;paSave(a);} paRenderTipo('Planos de Conectividad'); }
   inp.addEventListener('blur', save);
   inp.addEventListener('keydown', e=>{ if(e.key==='Enter') inp.blur(); if(e.key==='Escape') paRenderTipo('Planos de Conectividad'); });
+}
+
+function paInlineKm(id, currentVal, td){
+  if(!td||td.querySelector('input')) return;
+  const inp = document.createElement('input');
+  inp.type='number'; inp.value=currentVal||''; inp.placeholder='km'; inp.min='0'; inp.step='0.1';
+  inp.style.cssText='background:var(--surface2);border:1px solid rgba(74,143,212,.4);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:2px 5px;width:70px;text-align:right;';
+  td.innerHTML=''; td.appendChild(inp); inp.focus(); inp.select();
+  function save(){ const v=inp.value.trim(); const a=PA_ITEMS.find(x=>x.id===id); if(a){a.km=v;paSave(a);} renderPanel(); }
+  inp.addEventListener('blur', save);
+  inp.addEventListener('keydown', e=>{ if(e.key==='Enter') inp.blur(); if(e.key==='Escape') renderPanel(); });
 }
 
 function paInlineEnlace(id, currentVal){
@@ -9557,11 +9589,53 @@ function setupGoViewGuard(){
   if(_origGoView) return;
   _origGoView = window.goView;
   window.goView = function(name){
-    if(_userRole === 'proyectista' && (name==='panel' || name==='servicios')){
-      _origGoView('seguimiento');
-      return;
+    if(_userRole === 'proyectista'){
+      var bloqueadas = ['panel','servicios'];
+      if(bloqueadas.indexOf(name) > -1){
+        _origGoView('seguimiento');
+        return;
+      }
     }
     _origGoView(name);
+  };
+}
+
+// ── Aplicar restricciones de solo lectura para proyectista ──
+function applyProyectistaReadOnly(){
+  if(_userRole !== 'proyectista') return;
+
+  // Ocultar calculadora en herramientas
+  var calcBtn = document.getElementById('rendCalcToggleBtn');
+  if(calcBtn && calcBtn.parentElement) calcBtn.parentElement.style.display='none';
+
+  // Ocultar botones de acción del panel: Nueva actividad, Exportar CSV, PDF
+  ['paOpenTypeSelector','paOpenExportCSV','paExportPDF'].forEach(function(fn){
+    document.querySelectorAll('button[onclick*="'+fn+'"]').forEach(function(b){ b.style.display='none'; });
+  });
+
+  // Ausencias: preseleccionar y deshabilitar selector de persona
+  var vacSel = document.getElementById('vacPerson');
+  if(vacSel && _miNombre){
+    for(var i=0; i<vacSel.options.length; i++){
+      if(vacSel.options[i].value === _miNombre){ vacSel.selectedIndex=i; break; }
+    }
+    vacSel.disabled=true;
+    vacSel.title='Solo puedes registrar tus propias vacaciones';
+  }
+}
+
+// Re-aplicar restricciones al cambiar de vista (por si se renderiza de nuevo)
+var _origGoViewFull = null;
+function wrapGoViewWithRestrictions(){
+  if(_origGoViewFull) return;
+  var originalGoView = window.goView;
+  _origGoViewFull = originalGoView;
+  window.goView = function(name){
+    var result = originalGoView ? originalGoView(name) : undefined;
+    if(_userRole === 'proyectista'){
+      setTimeout(applyProyectistaReadOnly, 200);
+    }
+    return result;
   };
 }
 
@@ -9569,7 +9643,10 @@ function setupGoViewGuard(){
 function hideNavItems(){
   document.querySelectorAll('.ni').forEach(function(btn){
     var oc = btn.getAttribute('onclick')||'';
-    if(oc.indexOf("'panel'")>-1 || oc.indexOf("'servicios'")>-1) btn.style.display='none';
+    if(_userRole === 'proyectista'){
+      // Ocultar Panel de control y Servicios Esp.
+      if(oc.indexOf("'panel'")>-1 || oc.indexOf("'servicios'")>-1) btn.style.display='none';
+    }
   });
 }
 
@@ -9580,6 +9657,8 @@ function enterDashboard(){
   if(_userRole === 'proyectista'){
     setupGoViewGuard();
     hideNavItems();
+    wrapGoViewWithRestrictions();
+    setTimeout(applyProyectistaReadOnly, 400);
   }
 
   // Llenar info de usuario en dropdown
@@ -10646,7 +10725,15 @@ const NOTIF_KEY = 'c3ntro_notifs_v1';
 let NOTIFS = [];
 
 function notifLoad(){
-  try{ NOTIFS = JSON.parse(localStorage.getItem(NOTIF_KEY)||'[]'); }catch(e){ NOTIFS=[]; }
+  try{
+    if(_userRole === 'proyectista' && _miNombre){
+      // Proyectista: cargar sus propias notificaciones
+      const key = 'c3ntro_notifs_proy_'+toCanonical(_miNombre);
+      NOTIFS = JSON.parse(localStorage.getItem(key)||'[]');
+    } else {
+      NOTIFS = JSON.parse(localStorage.getItem(NOTIF_KEY)||'[]');
+    }
+  }catch(e){ NOTIFS=[]; }
 }
 function notifSave(){
   // Máximo 100 notificaciones
