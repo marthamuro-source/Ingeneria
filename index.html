@@ -11921,17 +11921,26 @@ function udMiCursoAdd(){
   UD_MIS_STATUS[name.trim()] = 'pending';
   udMiSave(); renderUdMisCursos();
 }
-function udMiDelete(name){
+async function udMiDelete(name){
   if(!confirm('¿Eliminar "'+name+'" de Mis cursos?')) return;
   UD_MIS_EXTRA = UD_MIS_EXTRA.filter(c=>c.name!==name);
   delete UD_MIS_STATUS[name];
   delete UD_MIS_CERTS[name];
+  // Guardar en lista de eliminados localmente para filtrar en recargas
+  try{
+    const delKey = 'ud_mis_deleted_'+((_miNombre||'raquel').toLowerCase().replace(/\s+/g,'_').slice(0,20));
+    const deleted = JSON.parse(localStorage.getItem(delKey)||'[]');
+    if(!deleted.includes(name)) deleted.push(name);
+    localStorage.setItem(delKey, JSON.stringify(deleted));
+  }catch(e){}
   udMiSave();
-  // Eliminar de Supabase para que no regrese al recargar
+  // Eliminar de Supabase
   if(_supa && SUPA_ONLINE){
     const usuario = _miNombre || 'Raquel';
-    _supa.from('ud_mis_extra').delete().eq('usuario', usuario).eq('nombre', name).catch(e=>console.warn(e));
-    _supa.from('ud_mis_status').delete().eq('usuario', usuario).eq('curso', name).catch(e=>console.warn(e));
+    await Promise.all([
+      _supa.from('ud_mis_extra').delete().eq('usuario', usuario).eq('nombre', name),
+      _supa.from('ud_mis_status').delete().eq('usuario', usuario).eq('curso', name),
+    ]).catch(e=>console.warn(e));
   }
   renderUdMisCursos();
 }
@@ -12222,7 +12231,12 @@ async function supaLoadAll(){
     const _udMiUsuario = _miNombre || 'Raquel';
     const { data: udmiex } = await _supa.from('ud_mis_extra').select('*').eq('usuario', _udMiUsuario);
     if(udmiex && udmiex.length){
-      UD_MIS_EXTRA = udmiex.map(r=>({name:r.nombre, duracion:r.duracion||'', cat:r.categoria||'General'}));
+      // Filtrar los que el usuario eliminó localmente
+      const delKey = 'ud_mis_deleted_'+((_udMiUsuario).toLowerCase().replace(/\s+/g,'_').slice(0,20));
+      const deleted = JSON.parse(localStorage.getItem(delKey)||'[]');
+      UD_MIS_EXTRA = udmiex
+        .filter(r=>!deleted.includes(r.nombre))
+        .map(r=>({name:r.nombre, duracion:r.duracion||'', cat:r.categoria||'General'}));
       const k = udMiKeys();
       localStorage.setItem(k.extra, JSON.stringify(UD_MIS_EXTRA));
     }
