@@ -5228,9 +5228,13 @@ function renderReporteoView(){
 }
 
 async function cronoRecargarDeSupabase(){
-  if(!_supa || !SUPA_ONLINE) return;
+  if(!_supa){ console.warn('⛔ cronoRecargar: _supa no disponible'); return; }
+  if(!SUPA_ONLINE){ console.warn('⛔ cronoRecargar: SUPA_ONLINE=false'); return; }
   try{
-    const {data:cron} = await _supa.from('cronograma').select('*');
+    console.log('🔄 Recargando cronograma de Supabase...');
+    const {data:cron, error} = await _supa.from('cronograma').select('*');
+    if(error){ console.error('❌ cronoRecargar error:', error); return; }
+    console.log('📦 Supabase cronograma rows:', cron?.length, cron?.map(r=>({id:r.id,actId:r.actividad_id,sts:JSON.parse(r.subtareas||'[]').length})));
     if(cron && cron.length){
       CRONO_ITEMS = cron.map(r=>({
         id:r.id, actividadId:r.actividad_id, responsable:r.responsable||'',
@@ -5239,9 +5243,12 @@ async function cronoRecargarDeSupabase(){
         subtareas: typeof r.subtareas==='string'?JSON.parse(r.subtareas):r.subtareas||[],
         reportes:  typeof r.reportes==='string'?JSON.parse(r.reportes):r.reportes||[]
       }));
+      console.log('✅ CRONO_ITEMS cargados:', CRONO_ITEMS.length, 'items');
       localStorage.setItem(CRONO_KEY, JSON.stringify(CRONO_ITEMS));
+    } else {
+      console.warn('⚠ Supabase devolvió 0 rows de cronograma');
     }
-  }catch(e){ console.warn('cronoRecargarDeSupabase error',e); }
+  }catch(e){ console.error('❌ cronoRecargarDeSupabase exception:', e); }
 }
 
 async function cronoSetSubTab(tab){
