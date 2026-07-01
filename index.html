@@ -1893,8 +1893,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
     <div class="content" style="padding-top:0">
       <div class="dash-subtabs" style="margin-bottom:20px">
         <div class="dash-subtab on" id="segTab-reporteo" onclick="segSetTab('reporteo')">📅 Reporteo</div>
+        <div class="dash-subtab"   id="segTab-avance"   onclick="segSetTab('avance')">📊 Asignación</div>
         <div class="dash-subtab"   id="segTab-udemy"    onclick="segSetTab('udemy')">🎓 Udemy</div>
-        <div class="dash-subtab"   id="segTab-avance"   onclick="segSetTab('avance')">📊 Avance</div>
         <div class="dash-subtab"   id="segTab-notas"    onclick="segSetTab('notas')">📌 Notas</div>
       </div>
       <div id="segView-reporteo"><div id="segReporteoMount"></div></div>
@@ -4982,8 +4982,8 @@ function renderReporteoView(){
 
   let html = `
   <div style="display:flex;gap:0;border-bottom:0.5px solid rgba(255,255,255,.08);margin-bottom:20px">
-    <button class="seg-subtab${cronoSubTab==='csv'?' on':''}" onclick="cronoSetSubTab('csv')">📅 Reporte CSV</button>
-    <button class="seg-subtab${cronoSubTab==='cronograma'?' on':''}" onclick="cronoSetSubTab('cronograma')">🗓 Cronograma</button>
+    <button class="seg-subtab${cronoSubTab==='csv'?' on':''}" onclick="cronoSetSubTab('csv')">📅 Reporte diario</button>
+    <button class="seg-subtab${cronoSubTab==='cronograma'?' on':''}" onclick="cronoSetSubTab('cronograma')">📋 Subtareas</button>
   </div>`;
 
   if(cronoSubTab==='csv'){
