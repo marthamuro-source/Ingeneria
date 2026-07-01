@@ -4987,19 +4987,21 @@ function renderReporteoView(){
   </div>`;
 
   if(cronoSubTab==='csv'){
-    // Montar la vista CSV original + calendario de reportes (solo admin/jefe)
-    html += `<div id="csvContent"></div>`;
-    if(_userRole !== 'proyectista'){
+    if(_userRole === 'proyectista'){
+      // Proyectista: calendario personal de reportes diarios
+      mount.innerHTML = html + `<div id="cronoCalProyWrap"></div>`;
+      renderCronoCalProyectista();
+    } else {
+      // Admin/jefe: reporte CSV + calendario general
+      html += `<div id="csvContent"></div>`;
       html += `<div id="cronoCalendarioWrap" style="margin-top:28px"></div>`;
-    }
-    mount.innerHTML = html;
-    const csvEl = document.getElementById('csvContent');
-    if(csvEl){
-      const orig = document.getElementById('v-reporteo');
-      if(orig) csvEl.innerHTML = orig.innerHTML;
-      else renderReporteo();
-    }
-    if(_userRole !== 'proyectista'){
+      mount.innerHTML = html;
+      const csvEl = document.getElementById('csvContent');
+      if(csvEl){
+        const orig = document.getElementById('v-reporteo');
+        if(orig) csvEl.innerHTML = orig.innerHTML;
+        else renderReporteo();
+      }
       renderCronoCalendario();
     }
     return;
@@ -5144,7 +5146,6 @@ function renderReporteoView(){
             </td>
             <td style="padding:8px;text-align:right;white-space:nowrap">
               ${st.pendienteValidacion && (_userRole==='admin'||_userRole==='jefe') ? `<button class="et-act-btn" onclick="cronoValidarSubtarea('${a.id}','${st.id}')" title="Validar rendimiento" style="font-size:10px;background:rgba(245,166,35,.15);color:var(--amber)">✓ Validar</button>` : ''}
-              ${!st.pendienteValidacion ? `<button class="et-act-btn" onclick="cronoReportarSubtarea('${a.id}','${st.id}')" title="Reportar avance" style="font-size:10px">+ Reportar</button>` : ''}
               <button class="et-act-btn del" onclick="cronoDeleteSubtarea('${a.id}','${st.id}')" title="Eliminar">✕</button>
             </td>
           </tr>`;
@@ -5628,8 +5629,297 @@ function cronoCatAdd(){
 
 try{ cronoLoad(); cronoLoadCatalogo(); }catch(e){}
 
+
 // ══════════════════════════════════════════════════════════════════════════════
-//  CALENDARIO DE REPORTES DIARIOS
+//  CALENDARIO PERSONAL DEL PROYECTISTA — REPORTE DIARIO
+// ══════════════════════════════════════════════════════════════════════════════
+let calProyMes = new Date().getMonth();
+let calProyAnio = new Date().getFullYear();
+
+function renderCronoCalProyectista(){
+  const el = document.getElementById('cronoCalProyWrap');
+  if(!el) return;
+  cronoLoad();
+
+  const hoyStr = repDateKey(new Date());
+  const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const diasSem = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+  // Recopilar reportes del proyectista actual
+  const misReportesPorDia = {};
+  CRONO_ITEMS.filter(item=>toCanonical(item.responsable||'')===toCanonical(_miNombre||'')).forEach(item=>{
+    (item.reportes||[]).forEach(r=>{
+      if(!r.fecha) return;
+      if(!misReportesPorDia[r.fecha]) misReportesPorDia[r.fecha]=[];
+      misReportesPorDia[r.fecha].push({...r, proyecto:item.proyecto, folio:(PA_ITEMS.find(a=>a.id===item.actividadId)?.folio)||''});
+    });
+  });
+
+  const primerDia = new Date(calProyAnio, calProyMes, 1);
+  const ultimoDia = new Date(calProyAnio, calProyMes+1, 0);
+  const startDow = primerDia.getDay();
+  const totalDias = ultimoDia.getDate();
+  const esEsteMes = calProyMes===new Date().getMonth() && calProyAnio===new Date().getFullYear();
+
+  let html = `
+  <div style="background:rgba(255,255,255,.03);border:0.5px solid rgba(255,255,255,.08);border-radius:12px;padding:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <div style="font-size:14px;font-weight:600;color:var(--text)">📅 Mi reporte diario</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:2px">${meses[calProyMes]} ${calProyAnio} · Solo puedes reportar el día de hoy</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="pa-btn pa-btn-ghost" onclick="calProyPrev()" style="font-size:12px;padding:4px 10px">← </button>
+        <button class="pa-btn pa-btn-ghost" onclick="calProyHoy()" style="font-size:12px;padding:4px 10px">Hoy</button>
+        <button class="pa-btn pa-btn-ghost" onclick="calProyNext()" style="font-size:12px;padding:4px 10px"> →</button>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px">
+      ${diasSem.map(d=>`<div style="text-align:center;font-size:10px;font-weight:600;color:var(--dim);padding:4px 0;text-transform:uppercase;letter-spacing:.04em">${d}</div>`).join('')}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">`;
+
+  // Celdas vacías
+  for(let i=0;i<startDow;i++) html+=`<div style="min-height:64px"></div>`;
+
+  for(let d=1;d<=totalDias;d++){
+    const fecha = `${calProyAnio}-${String(calProyMes+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const esHoy = fecha===hoyStr;
+    const esFinSem = [0,6].includes(new Date(calProyAnio,calProyMes,d).getDay());
+    const esFuturo = fecha>hoyStr;
+    const reps = misReportesPorDia[fecha]||[];
+    const yaReporto = reps.length>0;
+
+    // Color según estado
+    let bg, border, cursor;
+    if(esHoy){
+      bg='rgba(74,143,212,.12)'; border='rgba(74,143,212,.5)'; cursor='pointer';
+    } else if(esFuturo || esFinSem){
+      bg='rgba(255,255,255,.01)'; border='rgba(255,255,255,.04)'; cursor='default';
+    } else if(yaReporto){
+      bg='rgba(61,214,140,.06)'; border='rgba(61,214,140,.2)'; cursor='pointer';
+    } else {
+      bg='rgba(255,92,92,.04)'; border='rgba(255,92,92,.15)'; cursor='default';
+    }
+
+    const clickFn = esHoy ? `calProySelDia('${fecha}')` : (yaReporto && !esFuturo ? `calProyVerDia('${fecha}')` : '');
+
+    html+=`<div onclick="${clickFn}" style="min-height:64px;border-radius:8px;padding:6px;border:0.5px solid ${border};background:${bg};cursor:${cursor};transition:background .15s"
+      ${esHoy?`onmouseover="this.style.background='rgba(74,143,212,.2)'" onmouseout="this.style.background='${bg}'"`:''}>
+      <div style="font-size:11px;font-weight:${esHoy?'700':'500'};color:${esHoy?'var(--accent)':esFinSem||esFuturo?'rgba(255,255,255,.2)':'var(--text)'}">${d}</div>
+      ${esHoy?`<div style="font-size:9px;color:var(--accent);margin-top:3px;font-weight:600">${yaReporto?'✓ Reportado':'→ Reportar'}</div>`:''}
+      ${!esHoy && yaReporto?`<div style="font-size:9px;color:var(--green);margin-top:3px">✓ ${reps.length} rep.</div>`:''}
+      ${!esHoy && !yaReporto && !esFinSem && !esFuturo?`<div style="font-size:9px;color:rgba(255,92,92,.5);margin-top:3px">Sin reporte</div>`:''}
+    </div>`;
+  }
+
+  html+=`</div></div>`;
+
+  // Panel de reporte de hoy
+  html+=`<div id="calProyPanelHoy" style="margin-top:12px"></div>`;
+
+  el.innerHTML=html;
+
+  // Si estamos en el mes actual, mostrar panel de hoy automáticamente
+  if(esEsteMes) renderCalProyPanelHoy(hoyStr, misReportesPorDia[hoyStr]||[]);
+}
+
+function calProySelDia(fecha){
+  cronoLoad();
+  const misReportesPorDia = {};
+  CRONO_ITEMS.filter(item=>toCanonical(item.responsable||'')===toCanonical(_miNombre||'')).forEach(item=>{
+    (item.reportes||[]).forEach(r=>{
+      if(!r.fecha) return;
+      if(!misReportesPorDia[r.fecha]) misReportesPorDia[r.fecha]=[];
+      misReportesPorDia[r.fecha].push({...r, actividadId:item.actividadId, proyecto:item.proyecto});
+    });
+  });
+  renderCalProyPanelHoy(fecha, misReportesPorDia[fecha]||[]);
+}
+
+function calProyVerDia(fecha){
+  cronoLoad();
+  const reps = [];
+  CRONO_ITEMS.filter(item=>toCanonical(item.responsable||'')===toCanonical(_miNombre||'')).forEach(item=>{
+    (item.reportes||[]).forEach(r=>{
+      if(r.fecha===fecha) reps.push({...r, proyecto:item.proyecto, folio:(PA_ITEMS.find(a=>a.id===item.actividadId)?.folio)||''});
+    });
+  });
+  const panel = document.getElementById('calProyPanelHoy');
+  if(!panel) return;
+  const dObj = new Date(fecha+'T00:00:00');
+  const fmtDia = dObj.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
+  panel.innerHTML=`
+  <div style="background:rgba(61,214,140,.05);border:0.5px solid rgba(61,214,140,.2);border-radius:10px;padding:14px 16px">
+    <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:10px;text-transform:capitalize">✓ Reportes del ${fmtDia}</div>
+    ${reps.map(r=>`
+      <div style="padding:8px 0;border-bottom:0.5px solid rgba(255,255,255,.06)">
+        <div style="font-size:11px;font-weight:500;color:var(--accent);margin-bottom:2px">${r.subtareaNombre||'—'} · ${r.folio||r.proyecto||''}</div>
+        ${r.nota?`<div style="font-size:12px;color:var(--text)">${r.nota}</div>`:''}
+        ${r.cantidad?`<div style="font-size:11px;color:var(--dim);margin-top:2px">+${r.cantidad} ${r.unidad||''}</div>`:''}
+      </div>`).join('')}
+  </div>`;
+}
+
+function renderCalProyPanelHoy(fecha, repsExistentes){
+  const panel = document.getElementById('calProyPanelHoy');
+  if(!panel) return;
+
+  const hoyStr = repDateKey(new Date());
+  const esHoy = fecha===hoyStr;
+
+  // Mis actividades activas con subtareas validadas
+  const misActividades = PA_ITEMS.filter(a=>
+    toCanonical(a.responsable||'')===toCanonical(_miNombre||'') &&
+    ['Proyecto','Trabajo Operativo','Impresiones'].includes(a.tipo) &&
+    a.estatus!=='Terminado'
+  );
+
+  const subtareasDisponibles = [];
+  misActividades.forEach(a=>{
+    const crono = CRONO_ITEMS.find(x=>x.actividadId===a.id);
+    if(!crono) return;
+    (crono.subtareas||[]).filter(st=>!st.pendienteValidacion && st.estatus!=='completada').forEach(st=>{
+      subtareasDisponibles.push({actividadId:a.id, folio:a.folio||a.actividad, proyecto:a.proyecto, st});
+    });
+  });
+
+  const dObj = new Date(fecha+'T00:00:00');
+  const fmtDia = dObj.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
+
+  let html=`<div style="background:rgba(74,143,212,.05);border:0.5px solid rgba(74,143,212,.2);border-radius:10px;padding:14px 16px">
+    <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;text-transform:capitalize">${esHoy?'📝 Reporte de hoy — ':''} ${fmtDia}</div>`;
+
+  // Reportes ya hechos hoy
+  if(repsExistentes.length){
+    html+=`<div style="margin-bottom:14px">
+      <div style="font-size:11px;color:var(--green);font-weight:500;margin-bottom:6px">✓ Ya reportaste ${repsExistentes.length} subtarea${repsExistentes.length!==1?'s':''} hoy</div>
+      ${repsExistentes.map(r=>`
+        <div style="font-size:11px;color:var(--dim);padding:4px 0;border-bottom:0.5px solid rgba(255,255,255,.05)">
+          <span style="color:var(--accent)">${r.subtareaNombre||'—'}</span> · +${r.cantidad||0} ${r.unidad||''} · ${r.nota||''}
+        </div>`).join('')}
+    </div>`;
+  }
+
+  if(!esHoy){
+    html+=`<div style="font-size:12px;color:var(--dim);text-align:center;padding:10px 0">Solo puedes reportar el día de hoy.</div></div>`;
+    panel.innerHTML=html;
+    return;
+  }
+
+  if(!subtareasDisponibles.length){
+    html+=`<div style="font-size:12px;color:var(--dim);text-align:center;padding:10px 0">Sin subtareas activas para reportar. Revisa el tab Subtareas.</div></div>`;
+    panel.innerHTML=html;
+    return;
+  }
+
+  // Formulario de reporte
+  const stOpts = subtareasDisponibles.map((x,i)=>
+    `<option value="${i}">${x.folio||x.proyecto} — ${x.st.nombre} (${x.st.unidad})</option>`
+  ).join('');
+
+  html+=`
+    <div style="margin-bottom:10px">
+      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Subtarea a reportar</label>
+      <select id="calProyStSel" onchange="calProyStChange(${JSON.stringify(subtareasDisponibles.map(x=>({actividadId:x.actividadId,stId:x.st.id,unidad:x.st.unidad,nombre:x.st.nombre,cant:x.st.cantidad,acum:x.st.avanceAcum||0})))})"
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px">
+        <option value="">— Selecciona una subtarea —</option>
+        ${stOpts}
+      </select>
+    </div>
+    <div id="calProyStInfo" style="font-size:11px;color:var(--accent);margin-bottom:8px;min-height:16px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Cantidad avanzada hoy</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input id="calProyCant" type="number" min="0" step="0.1" placeholder="0"
+            style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+          <span id="calProyUnidad" style="font-size:11px;color:var(--dim);white-space:nowrap">—</span>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Estatus</label>
+        <select id="calProyEstatus" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px">
+          <option value="en_progreso">En progreso</option>
+          <option value="completada">Completada</option>
+          <option value="bloqueada">Bloqueada</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Nota / comentario del día</label>
+      <textarea id="calProyNota" rows="2" placeholder="¿Qué avanzaste hoy? ¿Algún bloqueo?" 
+        style="width:100%;resize:vertical;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px"></textarea>
+    </div>
+    <button class="pa-btn pa-btn-primary" onclick="calProyGuardarReporte(${JSON.stringify(subtareasDisponibles.map(x=>({actividadId:x.actividadId,stId:x.st.id,unidad:x.st.unidad,nombre:x.st.nombre})))},'${fecha}')" style="width:100%">
+      💾 Guardar reporte del día
+    </button>
+  </div>`;
+
+  panel.innerHTML=html;
+}
+
+function calProyStChange(subtareas){
+  const sel = document.getElementById('calProyStSel');
+  const idx = parseInt(sel?.value);
+  const unidEl = document.getElementById('calProyUnidad');
+  const infoEl = document.getElementById('calProyStInfo');
+  if(isNaN(idx)||idx<0||!subtareas[idx]){ if(unidEl) unidEl.textContent='—'; return; }
+  const st = subtareas[idx];
+  if(unidEl) unidEl.textContent = st.unidad;
+  if(infoEl) infoEl.textContent = `Acumulado: ${st.acum}/${st.cant} ${st.unidad}`;
+}
+
+function calProyGuardarReporte(subtareas, fecha){
+  const sel = document.getElementById('calProyStSel');
+  const idx = parseInt(sel?.value);
+  if(isNaN(idx)||idx<0||!subtareas[idx]){ alert('Selecciona una subtarea'); return; }
+  const stData = subtareas[idx];
+  const cantidad = parseFloat(document.getElementById('calProyCant')?.value)||0;
+  const estatus = document.getElementById('calProyEstatus')?.value||'en_progreso';
+  const nota = document.getElementById('calProyNota')?.value.trim()||'';
+  if(!nota&&!cantidad){ alert('Agrega al menos una cantidad o nota'); return; }
+
+  cronoLoad();
+  const item = CRONO_ITEMS.find(x=>x.actividadId===stData.actividadId);
+  const st = item?.subtareas?.find(s=>s.id===stData.stId);
+  if(!st||!item){ alert('No se encontró la subtarea'); return; }
+
+  st.avanceAcum = (st.avanceAcum||0) + cantidad;
+  st.estatus = estatus;
+  if(!item.reportes) item.reportes=[];
+  item.reportes.push({
+    id:'rep_'+Date.now(),
+    fecha,
+    quien: _miNombre||'—',
+    subtareaId: st.id,
+    subtareaNombre: st.nombre,
+    unidad: st.unidad,
+    cantidad, nota, estatus
+  });
+  cronoSave();
+
+  // Notificar a Raquel
+  if(typeof notifAdd==='function'){
+    notifAdd('📋',`${(_miNombre||'').split(' ')[0]} reportó avance`,
+      `${st.nombre}: +${cantidad} ${st.unidad}${nota?' — '+nota.slice(0,35):''}`, 'avance', false);
+  }
+
+  // Refrescar
+  renderCronoCalProyectista();
+}
+
+function calProyPrev(){ calProyMes--; if(calProyMes<0){calProyMes=11;calProyAnio--;} renderCronoCalProyectista(); }
+function calProyNext(){
+  const hoy=new Date();
+  if(calProyAnio===hoy.getFullYear()&&calProyMes>=hoy.getMonth()) return; // No adelantar
+  calProyMes++; if(calProyMes>11){calProyMes=0;calProyAnio++;} renderCronoCalProyectista();
+}
+function calProyHoy(){ calProyMes=new Date().getMonth(); calProyAnio=new Date().getFullYear(); renderCronoCalProyectista(); }
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  CALENDARIO DE REPORTES DIARIOS (ADMIN)
 // ══════════════════════════════════════════════════════════════════════════════
 let calMes = new Date().getMonth();
 let calAnio = new Date().getFullYear();
