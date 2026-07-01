@@ -4809,6 +4809,11 @@ const CRONO_CATALOGO_DEFAULT = [
   { id:'cat_010', nombre:'Factibilidad de ruta aéreo (kmz con punteo)',              unidad:'km',    rendimiento:20 },
   { id:'cat_011', nombre:'Factibilidad de ruta (kmz sin identificación)',             unidad:'km',    rendimiento:200},
   { id:'cat_012', nombre:'Generación de perfiles de altimetría (Google Earth)',      unidad:'km',    rendimiento:15 },
+  { id:'cat_013', nombre:'AP de conectividad (kmz, planos, volumétrico)',             unidad:'AP',    rendimiento:1,  tipo:'dias_por_unidad' },
+  { id:'cat_014', nombre:'Actualización SICT (planta y altimetría)',                  unidad:'km',    rendimiento:2.5,tipo:'unidades_por_dia' },
+  { id:'cat_015', nombre:'Nuevo proyecto SICT (planta y altimetría)',                 unidad:'km',    rendimiento:2.5,tipo:'unidades_por_dia' },
+  { id:'cat_016', nombre:'Cruce férreo (kmz, planos, señalización, memorias)',        unidad:'cruces',rendimiento:2,  tipo:'dias_por_unidad' },
+  { id:'cat_017', nombre:'Actualización de entregable (kmz, memorias, volumetría)',   unidad:'entregables',rendimiento:1,tipo:'dias_por_unidad' },
 ];
 
 const CRONO_KEY = 'c3ntro_cronograma_v1';
@@ -4849,6 +4854,20 @@ function cronoSave(){
   }
 }
 
+// ── Calcular días según tipo de rendimiento ──
+function cronoDiasParaSubtarea(st){
+  const tipo = st.tipo || 'unidades_por_dia';
+  const cant = parseFloat(st.cantidad)||1;
+  const rend = parseFloat(st.rendimiento)||1;
+  if(tipo === 'dias_por_unidad'){
+    // Ej: 2 días/cruce × 3 cruces = 6 días
+    return Math.ceil(cant * rend);
+  } else {
+    // Ej: 6 km/día, tengo 18 km → 3 días
+    return Math.ceil(cant / rend);
+  }
+}
+
 // ── Calcular fecha pronóstico sumando días hábiles ──
 function cronoAddWorkdays(fechaStr, dias){
   let d = new Date(fechaStr + 'T00:00:00');
@@ -4876,8 +4895,9 @@ function cronoFmtShort(str){
 function cronoCalcPronostico(subtareas, fechaInicio){
   if(!subtareas||!subtareas.length||!fechaInicio) return null;
   let cursor = fechaInicio;
-  subtareas.forEach(st=>{
-    const dias = Math.ceil((st.cantidad||1) / (st.rendimiento||1));
+  // Solo incluir subtareas validadas (pendienteValidacion=true las excluye)
+  subtareas.filter(st=>!st.pendienteValidacion).forEach(st=>{
+    const dias = cronoDiasParaSubtarea(st);
     cursor = cronoAddWorkdays(cursor, dias);
   });
   return cursor;
@@ -5086,12 +5106,12 @@ function renderReporteoView(){
 
         let cursor = crono.fechaInicio;
         subtareas.forEach((st,si)=>{
-          const diasRaw = (st.cantidad||1)/(st.rendimiento||1);
-          const dias = diasRaw % 1 === 0 ? diasRaw : parseFloat(diasRaw.toFixed(2));
+          const dias = cronoDiasParaSubtarea(st);
+          const diasRaw = dias;
           const fechaFin = cronoAddWorkdays(cursor, dias);
-          const stColor = st.estatus==='completada'?'var(--green)':st.estatus==='en_progreso'?'var(--accent)':'var(--dim)';
-          const stLabel = st.estatus==='completada'?'✓ Completada':st.estatus==='en_progreso'?'↗ En progreso':'○ Pendiente';
-          const stBg = st.estatus==='completada'?'rgba(61,214,140,.1)':st.estatus==='en_progreso'?'rgba(74,143,212,.1)':'rgba(255,255,255,.04)';
+          const stColor = st.pendienteValidacion?'var(--amber)':st.estatus==='completada'?'var(--green)':st.estatus==='en_progreso'?'var(--accent)':'var(--dim)';
+          const stLabel = st.pendienteValidacion?'⏳ Pend. validación':st.estatus==='completada'?'✓ Completada':st.estatus==='en_progreso'?'↗ En progreso':'○ Pendiente';
+          const stBg = st.pendienteValidacion?'rgba(245,166,35,.1)':st.estatus==='completada'?'rgba(61,214,140,.1)':st.estatus==='en_progreso'?'rgba(74,143,212,.1)':'rgba(255,255,255,.04)';
           const avanceSt = st.avanceAcum||0;
           const pctSt = st.cantidad ? Math.min(100,Math.round((avanceSt/st.cantidad)*100)) : 0;
           html += `<tr style="border-bottom:0.5px solid rgba(255,255,255,.05)">
@@ -5108,8 +5128,9 @@ function renderReporteoView(){
             <td style="padding:8px;text-align:center">
               <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:${stBg};color:${stColor};white-space:nowrap">${stLabel}</span>
             </td>
-            <td style="padding:8px;text-align:right">
-              <button class="et-act-btn" onclick="cronoReportarSubtarea('${a.id}','${st.id}')" title="Reportar avance" style="font-size:10px">+ Reportar</button>
+            <td style="padding:8px;text-align:right;white-space:nowrap">
+              ${st.pendienteValidacion && (_userRole==='admin'||_userRole==='jefe') ? `<button class="et-act-btn" onclick="cronoValidarSubtarea('${a.id}','${st.id}')" title="Validar rendimiento" style="font-size:10px;background:rgba(245,166,35,.15);color:var(--amber)">✓ Validar</button>` : ''}
+              ${!st.pendienteValidacion ? `<button class="et-act-btn" onclick="cronoReportarSubtarea('${a.id}','${st.id}')" title="Reportar avance" style="font-size:10px">+ Reportar</button>` : ''}
               <button class="et-act-btn del" onclick="cronoDeleteSubtarea('${a.id}','${st.id}')" title="Eliminar">✕</button>
             </td>
           </tr>`;
@@ -5177,11 +5198,19 @@ function cronoAddSubtareaModal(actId){
   const old = document.getElementById('cronoSubtareaModalBg');
   if(old) old.remove();
 
+  const esProyectista = _userRole === 'proyectista';
   const bg = document.createElement('div');
   bg.id = 'cronoSubtareaModalBg';
   bg.className = 'pa-modal-bg open';
-  bg.innerHTML = `<div class="pa-modal" style="max-width:480px" onclick="event.stopPropagation()">
+  bg.innerHTML = `<div class="pa-modal" style="max-width:500px" onclick="event.stopPropagation()">
     <div class="pa-modal-title">Agregar subtarea</div>
+
+    <div style="background:rgba(74,143,212,.08);border:0.5px solid rgba(74,143,212,.2);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:11px;color:var(--dim);line-height:1.6">
+      <b style="color:var(--accent)">💡 Tipos de rendimiento:</b><br>
+      <b>Unidades/día:</b> cuántas unidades produces en un día. Ej: 6 km/día → 18 km = 3 días.<br>
+      <b>Días/unidad:</b> cuántos días tarda cada unidad. Ej: 2 días/cruce → 3 cruces = 6 días.
+    </div>
+
     <div style="margin-bottom:14px">
       <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Desde catálogo (opcional)</label>
       <select id="cronoStCat" onchange="cronoCatChange()" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px">
@@ -5191,26 +5220,50 @@ function cronoAddSubtareaModal(actId){
     </div>
     <div style="margin-bottom:12px">
       <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Nombre de la subtarea</label>
-      <input id="cronoStNombre" type="text" placeholder="Ej. Levantamiento digital" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+      <input id="cronoStNombre" type="text" placeholder="Ej. Levantamiento digital" ${esProyectista?'':''}
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
       <div>
         <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Unidad</label>
-        <input id="cronoStUnidad" type="text" placeholder="km, cortes..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+        <input id="cronoStUnidad" type="text" placeholder="km, cortes, AP..." 
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
       </div>
       <div>
         <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Cantidad total</label>
-        <input id="cronoStCantidad" type="number" min="1" placeholder="0" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
-      </div>
-      <div>
-        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Rendimiento/día</label>
-        <input id="cronoStRend" type="number" min="0.1" step="0.1" placeholder="0" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+        <input id="cronoStCantidad" type="number" min="0.1" step="0.1" placeholder="0" 
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
       </div>
     </div>
+
+    <!-- Toggle tipo de rendimiento -->
+    <div style="margin-bottom:12px">
+      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:6px">Tipo de rendimiento</label>
+      <div style="display:flex;gap:0;border:0.5px solid var(--border);border-radius:6px;overflow:hidden" id="cronoTipoWrap">
+        <button id="btnTipoUnidDia" onclick="cronoSetTipo('unidades_por_dia')"
+          style="flex:1;padding:6px 10px;font-size:11px;border:none;cursor:pointer;transition:all .15s;background:rgba(74,143,212,.2);color:var(--accent);font-weight:600">
+          📊 Unidades/día
+        </button>
+        <button id="btnTipoDiaUnid" onclick="cronoSetTipo('dias_por_unidad')"
+          style="flex:1;padding:6px 10px;font-size:11px;border:none;cursor:pointer;transition:all .15s;background:var(--surface2);color:var(--dim)">
+          📅 Días/unidad
+        </button>
+      </div>
+      <input type="hidden" id="cronoStTipo" value="unidades_por_dia">
+    </div>
+
+    <div style="margin-bottom:12px">
+      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px" id="cronoRendLabel">Rendimiento (unidades/día)</label>
+      <input id="cronoStRend" type="number" min="0.1" step="0.1" placeholder="0"
+        ${esProyectista?'':''}
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+      ${esProyectista?`<div style="font-size:10px;color:var(--amber);margin-top:4px">⚠ Tu propuesta de rendimiento será validada por el administrador antes de incluirse en el cronograma.</div>`:''}
+    </div>
+
     <div id="cronoDiasEstimados" style="font-size:12px;color:var(--accent);margin-bottom:14px;min-height:18px"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="pa-btn pa-btn-ghost" onclick="cronoCloseSubModal()">Cancelar</button>
-      <button class="pa-btn pa-btn-primary" onclick="cronoGuardarSubtarea()">Agregar</button>
+      <button class="pa-btn pa-btn-primary" onclick="cronoGuardarSubtarea()">${esProyectista?'Proponer subtarea':'Agregar'}</button>
     </div>
   </div>`;
   bg.onclick = ()=>bg.classList.remove('open');
@@ -5222,6 +5275,25 @@ function cronoAddSubtareaModal(actId){
   });
 }
 
+function cronoSetTipo(tipo){
+  document.getElementById('cronoStTipo').value = tipo;
+  const btnU = document.getElementById('btnTipoUnidDia');
+  const btnD = document.getElementById('btnTipoDiaUnid');
+  const lbl  = document.getElementById('cronoRendLabel');
+  if(btnU && btnD){
+    if(tipo==='unidades_por_dia'){
+      btnU.style.background='rgba(74,143,212,.2)'; btnU.style.color='var(--accent)'; btnU.style.fontWeight='600';
+      btnD.style.background='var(--surface2)'; btnD.style.color='var(--dim)'; btnD.style.fontWeight='400';
+      if(lbl) lbl.textContent='Rendimiento (unidades/día)';
+    } else {
+      btnD.style.background='rgba(74,143,212,.2)'; btnD.style.color='var(--accent)'; btnD.style.fontWeight='600';
+      btnU.style.background='var(--surface2)'; btnU.style.color='var(--dim)'; btnU.style.fontWeight='400';
+      if(lbl) lbl.textContent='Rendimiento (días/unidad)';
+    }
+  }
+  cronoDiasUpdate();
+}
+
 function cronoCatChange(){
   const sel = document.getElementById('cronoStCat').value;
   if(!sel) return;
@@ -5230,17 +5302,36 @@ function cronoCatChange(){
   document.getElementById('cronoStNombre').value = cat.nombre;
   document.getElementById('cronoStUnidad').value = cat.unidad;
   document.getElementById('cronoStRend').value = cat.rendimiento;
+  // Setear tipo del catálogo y bloquear rendimiento si es del catálogo
+  const tipo = cat.tipo||'unidades_por_dia';
+  cronoSetTipo(tipo);
+  // Si es del catálogo, el rendimiento es fijo para proyectistas
+  if(_userRole==='proyectista'){
+    const rendInput = document.getElementById('cronoStRend');
+    if(rendInput) rendInput.readOnly = true;
+    if(rendInput) rendInput.style.opacity='.6';
+  }
   cronoDiasUpdate();
 }
 
 function cronoDiasUpdate(){
   const cant = parseFloat(document.getElementById('cronoStCantidad')?.value)||0;
   const rend = parseFloat(document.getElementById('cronoStRend')?.value)||0;
+  const tipo = document.getElementById('cronoStTipo')?.value||'unidades_por_dia';
   const el = document.getElementById('cronoDiasEstimados');
   if(el && cant>0 && rend>0){
-    const dias = cant/rend;
-    const diasStr = dias % 1 === 0 ? `${dias} día${dias!==1?'s':''}` : `${dias.toFixed(2)} días (${Math.floor(dias)}d ${Math.round((dias%1)*8)}h aprox.)`;
-    el.textContent = `→ Jornadas estimadas: ${diasStr}`;
+    let dias;
+    if(tipo==='dias_por_unidad'){
+      dias = Math.ceil(cant * rend);
+      el.textContent = `→ ${cant} ${document.getElementById('cronoStUnidad')?.value||'unidades'} × ${rend} días/unidad = ${dias} día${dias!==1?'s hábiles':''}`;
+    } else {
+      dias = cant/rend;
+      const diasCeil = Math.ceil(dias);
+      el.textContent = dias%1===0
+        ? `→ ${cant} ÷ ${rend} = ${diasCeil} día${diasCeil!==1?'s hábiles':'hábil'}`
+        : `→ ${cant} ÷ ${rend} = ${dias.toFixed(2)} días (≈ ${diasCeil} día${diasCeil!==1?'s hábiles':'hábil'})`;
+    }
+    el.style.color = 'var(--accent)';
   } else if(el){ el.textContent=''; }
 }
 
@@ -5253,6 +5344,8 @@ function cronoGuardarSubtarea(){
   const unidad = document.getElementById('cronoStUnidad')?.value.trim();
   const cantidad = parseFloat(document.getElementById('cronoStCantidad')?.value)||0;
   const rendimiento = parseFloat(document.getElementById('cronoStRend')?.value)||0;
+  const tipo = document.getElementById('cronoStTipo')?.value||'unidades_por_dia';
+  const catId = document.getElementById('cronoStCat')?.value||'';
   if(!nombre||!unidad||!cantidad||!rendimiento){ alert('Completa todos los campos'); return; }
 
   cronoLoad();
@@ -5263,14 +5356,67 @@ function cronoGuardarSubtarea(){
     item = cronoGetOrCreate(pa);
   }
   if(!item.subtareas) item.subtareas=[];
+
+  // Determinar si requiere validación
+  const esDeCatalogo = !!catId;
+  const esProyectista = _userRole==='proyectista';
+  const requiereValidacion = esProyectista && !esDeCatalogo;
+
   item.subtareas.push({
     id:'st_'+Date.now(),
-    nombre, unidad, cantidad, rendimiento,
+    nombre, unidad, cantidad, rendimiento, tipo,
+    esDeCatalogo, catId: catId||null,
+    pendienteValidacion: requiereValidacion,
+    propuestaPor: esProyectista ? _miNombre : null,
     estatus:'pendiente',
     avanceAcum:0
   });
   cronoSave();
   cronoCloseSubModal();
+
+  // Notificar al admin si es proyectista con personalizada
+  if(requiereValidacion && typeof notifAdd==='function'){
+    notifAdd('🔔', `${(_miNombre||'').split(' ')[0]} propuso subtarea`,
+      `"${nombre}" — ${cantidad} ${unidad} · Requiere validación`, 'avance', false);
+  }
+
+  renderReporteoView();
+}
+
+function cronoValidarSubtarea(actId, stId){
+  cronoLoad();
+  const item = CRONO_ITEMS.find(x=>x.actividadId===actId);
+  const st = item?.subtareas?.find(s=>s.id===stId);
+  if(!st) return;
+
+  const nuevoRend = prompt(
+    `Validar subtarea: "${st.nombre}"\n` +
+    `Tipo: ${st.tipo==='dias_por_unidad'?'Días/unidad':'Unidades/día'}\n` +
+    `Rendimiento propuesto: ${st.rendimiento} ${st.tipo==='dias_por_unidad'?'días/'+st.unidad:st.unidad+'/día'}\n\n` +
+    `Confirma o ajusta el rendimiento:`,
+    st.rendimiento
+  );
+  if(nuevoRend===null) return; // Canceló
+  const rend = parseFloat(nuevoRend);
+  if(!rend||rend<=0){ alert('Rendimiento inválido'); return; }
+
+  st.rendimiento = rend;
+  st.pendienteValidacion = false;
+  st.validadoPor = _miNombre||'Admin';
+  st.validadoAt = repDateKey(new Date());
+  cronoSave();
+
+  // Notificar al proyectista
+  if(typeof supaSyncNotifProy==='function' && item.responsable){
+    const n = {
+      id:'np_val_'+Date.now(),
+      icon:'✅', title:'Subtarea validada',
+      msg:`"${st.nombre}" fue aprobada con rendimiento ${rend} ${st.tipo==='dias_por_unidad'?'días/'+st.unidad:st.unidad+'/día'}`,
+      time:new Date().toISOString(), tipo:'avance'
+    };
+    supaSyncNotifProy(item.responsable, n);
+  }
+
   renderReporteoView();
 }
 
@@ -12580,7 +12726,7 @@ function renderUdHeatmapLocal(courses){
       const pN=nombre.replace(/'/g,"\\'");
       const cN=course.name.replace(/'/g,"\\'");
       const cert=udGetCert(nombre,course.name);
-      const certBtn=s==='done'?(cert?`<div><a class="ud-cert-btn" href="${cert}" target="_blank" onclick="event.stopPropagation()">🏅 Ver cert.</a></div>`:`<div><span class="ud-cert-add" onclick="event.stopPropagation();udPromptCert('${pN}','${cN}')">+ certificado</span></div>`):""; 
+      const certBtn=s==='done'?(cert?`<div style="display:flex;gap:4px;align-items:center;justify-content:center"><a class="ud-cert-btn" href="${cert}" target="_blank" onclick="event.stopPropagation()">🏅 Ver cert.</a><span class="ud-cert-add" onclick="event.stopPropagation();udPromptCert(\'${pN}\',\'${cN}\')" title="Editar link">✎</span></div>`:`<div><span class="ud-cert-add" onclick="event.stopPropagation();udPromptCert('${pN}','${cN}')">+ certificado</span></div>`):""; 
       const _udEditable = (_userRole !== 'proyectista') || (toCanonical(pN) === toCanonical(_miNombre||''));
       html+=`<td style="padding:6px 8px;border-bottom:1px solid var(--border);text-align:center;cursor:${_udEditable?'pointer':'default'}" onclick="udCycleStatus('${pN}','${cN}')" title="${nombre} — ${course.name}\n${cfg.label}\n${_udEditable?'(Clic para cambiar estatus)':'(Solo lectura)'}"><div style="display:inline-flex;align-items:center;justify-content:center;background:${cfg.bg};border-radius:7px;padding:4px 8px;min-width:80px;gap:4px;transition:opacity .15s" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'"><span style="font-size:12px;color:${cfg.color}">${cfg.sym}</span><span style="font-size:10px;color:${cfg.color};white-space:nowrap">${cfg.label}</span></div>${certBtn}</td>`;
     });
@@ -12606,7 +12752,7 @@ function renderUdHeatmapLocal(courses){
     const cN  = course.name.replace(/'/g,"\'");
     const certBtn = s==='done'
       ? cert
-        ? `<div><a class="ud-cert-btn" href="${cert}" target="_blank" onclick="event.stopPropagation()">🏅 Ver cert.</a></div>`
+        ? `<div style="display:flex;gap:4px;align-items:center;justify-content:center"><a class="ud-cert-btn" href="${cert}" target="_blank" onclick="event.stopPropagation()">🏅 Ver cert.</a><span class="ud-cert-add" onclick="event.stopPropagation();udMiPromptCert('${cN}')" title="Editar link">✎</span></div>`
         : `<div><span class="ud-cert-add" onclick="event.stopPropagation();udMiPromptCert('${cN}')">+ certificado</span></div>`
       : '';
     const _raqEditable = (_userRole !== 'proyectista');
@@ -12659,7 +12805,7 @@ function udBuildPersonCard(nombre, courses){
     const pN=nombre.replace(/'/g,"\\'");
     const cN=course.name.replace(/'/g,"\\'");
     const cert=udGetCert(nombre,course.name);
-    const certEl=s==='done'?(cert?`<a class="ud-cert-btn" href="${cert}" target="_blank" onclick="event.stopPropagation()">🏅 Ver cert.</a>`:`<span class="ud-cert-add" onclick="event.stopPropagation();udPromptCert('${pN}','${cN}')">+ certificado</span>`):""; 
+    const certEl=s==='done'?(cert?`<span style="display:inline-flex;gap:4px;align-items:center"><a class="ud-cert-btn" href="${cert}" target="_blank" onclick="event.stopPropagation()">🏅 Ver cert.</a><span class="ud-cert-add" onclick="event.stopPropagation();udPromptCert('${pN}','${cN}')" title="Editar">✎</span></span>`:`<span class="ud-cert-add" onclick="event.stopPropagation();udPromptCert('${pN}','${cN}')">+ certificado</span>`):""; 
     return `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="udCycleStatus('${pN}','${cN}')" title="Clic para cambiar estatus"><div style="width:24px;height:24px;border-radius:5px;background:${cfg.bg};display:flex;align-items:center;justify-content:center;font-size:12px;color:${cfg.color};flex-shrink:0;margin-top:2px">${cfg.sym}</div><div style="flex:1;min-width:0"><div style="font-size:11px;color:var(--text);line-height:1.3">${course.name.slice(0,34)}</div><div style="font-size:10px;color:${cfg.color}">${cfg.label}</div>${certEl}</div><div style="font-size:10px;color:var(--dim);flex-shrink:0;padding-top:2px">${course.duracion||''}</div></div>`;
   }).join('');
   const udBadge=hasUd?`<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:rgba(61,214,140,.12);color:#5ce8a6">✓ Udemy activo</span>`:`<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:rgba(255,92,92,.1);color:#ff8080">✕ Sin cuenta</span>`;
