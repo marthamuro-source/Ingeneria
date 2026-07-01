@@ -5278,7 +5278,7 @@ function cronoAddSubtareaModal(actId){
     <div id="cronoDiasEstimados" style="font-size:12px;color:var(--accent);margin-bottom:14px;min-height:18px"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="pa-btn pa-btn-ghost" onclick="cronoCloseSubModal()">Cancelar</button>
-      <button class="pa-btn pa-btn-primary" onclick="cronoGuardarSubtarea()">${esProyectista?'Proponer subtarea':'Agregar'}</button>
+      <button class="pa-btn pa-btn-primary" id="crono-guardar-btn" onclick="cronoGuardarSubtarea()">Agregar</button>
     </div>
   </div>`;
   bg.onclick = (e)=>{ if(e.target===bg) bg.classList.remove('open'); };
@@ -5318,6 +5318,9 @@ function cronoCatChange(){
     });
     document.getElementById('cronoStNombre').value='';
     document.getElementById('cronoStUnidad').value='';
+    // Botón cambia a "Proponer" si proyectista con personalizada
+    const guardarBtn2 = document.getElementById('crono-guardar-btn');
+    if(guardarBtn2) guardarBtn2.textContent = (_userRole==='proyectista') ? 'Proponer subtarea' : 'Agregar';
     cronoSetTipo('unidades_por_dia');
     cronoDiasUpdate();
     return;
@@ -5330,6 +5333,10 @@ function cronoCatChange(){
   // Setear tipo del catálogo y bloquear rendimiento si es del catálogo
   const tipo = cat.tipo||'unidades_por_dia';
   cronoSetTipo(tipo);
+  // Actualizar texto del botón según origen
+  const guardarBtn = document.getElementById('crono-guardar-btn');
+  if(guardarBtn) guardarBtn.textContent = 'Agregar';
+
   // Si es del catálogo, rendimiento Y unidad son fijos para proyectistas
   const rendInput = document.getElementById('cronoStRend');
   const unidInput = document.getElementById('cronoStUnidad');
@@ -5398,10 +5405,10 @@ function cronoGuardarSubtarea(){
   }
   if(!item.subtareas) item.subtareas=[];
 
-  // Determinar si requiere validación
+  // Determinar si requiere validación — solo personalizadas del proyectista
   const esDeCatalogo = !!catId;
   const esProyectista = _userRole==='proyectista';
-  const requiereValidacion = esProyectista && !esDeCatalogo;
+  const requiereValidacion = esProyectista && !esDeCatalogo; // Del catálogo → directo, personalizada → validar
 
   item.subtareas.push({
     id:'st_'+Date.now(),
