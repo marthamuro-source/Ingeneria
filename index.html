@@ -5054,6 +5054,31 @@ function renderReporteoView(){
   </div>`;
 
   if(_userRole==='admin'||_userRole==='jefe'){
+    // Banner de subtareas pendientes de validación
+    const pendientes = [];
+    CRONO_ITEMS.forEach(item=>{
+      (item.subtareas||[]).filter(st=>st.pendienteValidacion).forEach(st=>{
+        pendientes.push({actividadId:item.actividadId, stId:st.id, nombre:st.nombre,
+          responsable:item.responsable, folio:(PA_ITEMS.find(a=>a.id===item.actividadId)?.folio)||''});
+      });
+    });
+    if(pendientes.length){
+      html += `<div style="background:rgba(245,166,35,.08);border:0.5px solid rgba(245,166,35,.3);border-radius:10px;padding:12px 16px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:13px">⏳</span>
+          <span style="font-size:12px;font-weight:600;color:var(--amber)">${pendientes.length} subtarea${pendientes.length!==1?'s':''} pendiente${pendientes.length!==1?'s':''} de validación</span>
+        </div>
+        ${pendientes.map(p=>`
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid rgba(245,166,35,.1)">
+            <div style="flex:1;font-size:11px;color:var(--text)">
+              <span style="color:var(--accent)">${p.nombre}</span>
+              <span style="color:var(--dim)"> · ${p.folio||''} · ${(p.responsable||'').split(' ').slice(0,2).join(' ')}</span>
+            </div>
+            <button class="et-act-btn" onclick="cronoValidarSubtarea('${p.actividadId}','${p.stId}')"
+              style="font-size:10px;background:rgba(245,166,35,.15);color:var(--amber);white-space:nowrap">✓ Validar</button>
+          </div>`).join('')}
+      </div>`;
+    }
     html += `<div style="display:flex;justify-content:flex-end;margin-bottom:12px">
       <button class="pa-btn pa-btn-ghost" onclick="cronoCatalogoModal()" style="font-size:12px">⚙️ Gestionar catálogo</button>
     </div>`;
@@ -5193,8 +5218,24 @@ function renderReporteoView(){
   mount.innerHTML = html;
 }
 
-function cronoSetSubTab(tab){
+async function cronoSetSubTab(tab){
   cronoSubTab = tab;
+  // Si abre Subtareas como admin, recargar cronogramas frescos de Supabase
+  if(tab==='cronograma' && _supa && SUPA_ONLINE && _userRole!=='proyectista'){
+    try{
+      const {data:cron} = await _supa.from('cronograma').select('*');
+      if(cron&&cron.length){
+        CRONO_ITEMS = cron.map(r=>({
+          id:r.id, actividadId:r.actividad_id, responsable:r.responsable||'',
+          proyecto:r.proyecto||'', tipo:r.tipo||'',
+          fechaInicio:r.fecha_inicio||'',
+          subtareas: typeof r.subtareas==='string'?JSON.parse(r.subtareas):r.subtareas||[],
+          reportes:  typeof r.reportes==='string'?JSON.parse(r.reportes):r.reportes||[]
+        }));
+        localStorage.setItem(CRONO_KEY, JSON.stringify(CRONO_ITEMS));
+      }
+    }catch(e){ console.warn('cronoSetSubTab reload error',e); }
+  }
   renderReporteoView();
 }
 
@@ -5456,6 +5497,25 @@ function cronoValidarSubtarea(actId, stId){
   st.validadoAt = repDateKey(new Date());
   cronoSave();
 
+  // Ofrecer agregar al catálogo general
+  if(confirm(`¿Agregar "${st.nombre}" al catálogo general para uso futuro?`)){
+    cronoLoadCatalogo();
+    const yaExiste = CRONO_CATALOGO.find(c=>c.nombre.toLowerCase()===st.nombre.toLowerCase());
+    if(!yaExiste){
+      CRONO_CATALOGO.push({
+        id:'cat_'+Date.now(),
+        nombre:st.nombre,
+        unidad:st.unidad,
+        rendimiento:rend,
+        tipo:st.tipo||'unidades_por_dia'
+      });
+      cronoSaveCatalogo();
+      alert(`✓ "${st.nombre}" agregado al catálogo.`);
+    } else {
+      alert(`"${st.nombre}" ya existe en el catálogo.`);
+    }
+  }
+
   // Notificar al proyectista
   if(typeof supaSyncNotifProy==='function' && item.responsable){
     const n = {
@@ -5467,6 +5527,8 @@ function cronoValidarSubtarea(actId, stId){
     supaSyncNotifProy(item.responsable, n);
   }
 
+  cronoSubTab = 'cronograma';
+  cronoExpandedId = actId;
   renderReporteoView();
 }
 
@@ -13900,6 +13962,27 @@ function supaStartRealtime(){
         })
       .subscribe();
   }
+
+  // Escuchar cambios en cronograma (subtareas y reportes en tiempo real)
+  _supa.channel('cronograma_changes')
+    .on('postgres_changes',{event:'*',schema:'public',table:'cronograma'},
+      payload=>{
+        const r = payload.new;
+        if(!r) return;
+        const idx = CRONO_ITEMS.findIndex(x=>x.id===r.id);
+        const parsed = {
+          id:r.id, actividadId:r.actividad_id, responsable:r.responsable||'',
+          proyecto:r.proyecto||'', tipo:r.tipo||'',
+          fechaInicio:r.fecha_inicio||'',
+          subtareas: typeof r.subtareas==='string'?JSON.parse(r.subtareas):r.subtareas||[],
+          reportes:  typeof r.reportes==='string'?JSON.parse(r.reportes):r.reportes||[]
+        };
+        if(idx>=0) CRONO_ITEMS[idx]=parsed;
+        else CRONO_ITEMS.push(parsed);
+        localStorage.setItem(CRONO_KEY, JSON.stringify(CRONO_ITEMS));
+        if(curView==='seguimiento' && cronoSubTab==='cronograma') renderReporteoView();
+      })
+    .subscribe();
 
   // Escuchar cambios en ud_status (proyectistas actualizando cursos Udemy)
   _supa.channel('ud_status_changes')
