@@ -5229,7 +5229,7 @@ function renderReporteoView(){
 
 async function cronoRecargarDeSupabase(){
   if(!_supa){ console.warn('⛔ cronoRecargar: _supa no disponible'); return; }
-  if(!SUPA_ONLINE){ console.warn('⛔ cronoRecargar: SUPA_ONLINE=false'); return; }
+  // No depender de SUPA_ONLINE — puede ser false en el primer load
   try{
     console.log('🔄 Recargando cronograma de Supabase...');
     const {data:cron, error} = await _supa.from('cronograma').select('*');
@@ -12976,7 +12976,7 @@ function hoShowToast(msg){
   if(!t||!m) return; m.textContent=msg; t.style.display='block';
   clearTimeout(hoShowToast._t); hoShowToast._t=setTimeout(()=>{t.style.display='none';},4000);
 }
-try{ hoLoadSchedule(); }catch(e){}
+// hoLoadSchedule se llama después del login, no aquí
 
 
 // ══════════════════════════════════════════════════════
