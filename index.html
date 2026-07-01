@@ -107,6 +107,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .dash-subtab{padding:10px 16px;font-size:12px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;font-weight:500;}
 .dash-subtab:hover{color:var(--text);}
 .dash-subtab.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
+.seg-subtab{padding:8px 14px;font-size:12px;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;font-weight:500;font-family:var(--font);}
+.seg-subtab:hover{color:var(--text);}
+.seg-subtab.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
 .dash-subview{}
 .nl:first-child{margin-top:0;}
 .ni{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;cursor:pointer;color:var(--muted);font-size:13px;border:none;background:none;width:100%;text-align:left;transition:all .15s;}
@@ -4787,10 +4790,624 @@ function renderCalTable(rows){
     </tr>`;
   }).join('') || `<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--dim)">Sin resultados</td></tr>`;
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  SISTEMA DE CRONOGRAMA Y REPORTEO DIARIO
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Catálogo de subtareas predefinidas ──
+const CRONO_CATALOGO_DEFAULT = [
+  { id:'cat_001', nombre:'Cortes transversales nuevos',                              unidad:'cortes', rendimiento:6  },
+  { id:'cat_002', nombre:'Cortes transversales actualización',                       unidad:'cortes', rendimiento:9  },
+  { id:'cat_003', nombre:'Detalles especiales nuevos para PHD',                      unidad:'detalles', rendimiento:5 },
+  { id:'cat_004', nombre:'Detalles especiales actualización para PHD',               unidad:'detalles', rendimiento:7 },
+  { id:'cat_005', nombre:'Detalles especiales nuevos para ADOSADO',                  unidad:'detalles', rendimiento:5 },
+  { id:'cat_006', nombre:'Detalles especiales actualización para ADOSADO',           unidad:'detalles', rendimiento:7 },
+  { id:'cat_007', nombre:'Levantamiento digital (infraestructura existente)',        unidad:'km',    rendimiento:8  },
+  { id:'cat_008', nombre:'Planimetría (350m a la redonda de la ruta)',               unidad:'km',    rendimiento:12 },
+  { id:'cat_009', nombre:'Factibilidad de ruta subterránea (kmz con punteo)',        unidad:'km',    rendimiento:17 },
+  { id:'cat_010', nombre:'Factibilidad de ruta aéreo (kmz con punteo)',              unidad:'km',    rendimiento:20 },
+  { id:'cat_011', nombre:'Factibilidad de ruta (kmz sin identificación)',             unidad:'km',    rendimiento:200},
+  { id:'cat_012', nombre:'Generación de perfiles de altimetría (Google Earth)',      unidad:'km',    rendimiento:15 },
+];
+
+const CRONO_KEY = 'c3ntro_cronograma_v1';
+const CRONO_CAT_KEY = 'c3ntro_crono_catalogo_v1';
+let CRONO_ITEMS = []; // actividades con cronograma
+let CRONO_CATALOGO = [];
+
+function cronoLoadCatalogo(){
+  try{
+    const raw = localStorage.getItem(CRONO_CAT_KEY);
+    if(raw){ CRONO_CATALOGO = JSON.parse(raw); }
+    else { CRONO_CATALOGO = [...CRONO_CATALOGO_DEFAULT]; cronoSaveCatalogo(); }
+  }catch(e){ CRONO_CATALOGO = [...CRONO_CATALOGO_DEFAULT]; }
+}
+function cronoSaveCatalogo(){
+  localStorage.setItem(CRONO_CAT_KEY, JSON.stringify(CRONO_CATALOGO));
+  if(_supa && SUPA_ONLINE) _supa.from('crono_catalogo').upsert(CRONO_CATALOGO, {onConflict:'id'}).catch(e=>console.warn(e));
+}
+function cronoLoad(){
+  try{ CRONO_ITEMS = JSON.parse(localStorage.getItem(CRONO_KEY)||'[]'); }catch(e){ CRONO_ITEMS=[]; }
+}
+function cronoSave(){
+  localStorage.setItem(CRONO_KEY, JSON.stringify(CRONO_ITEMS));
+  if(_supa && SUPA_ONLINE){
+    CRONO_ITEMS.forEach(item=>{
+      _supa.from('cronograma').upsert({
+        id: item.id,
+        actividad_id: item.actividadId,
+        responsable: item.responsable,
+        proyecto: item.proyecto,
+        tipo: item.tipo,
+        fecha_inicio: item.fechaInicio,
+        subtareas: JSON.stringify(item.subtareas),
+        reportes: JSON.stringify(item.reportes||[]),
+        updated_at: new Date().toISOString()
+      }, {onConflict:'id'}).catch(e=>console.warn(e));
+    });
+  }
+}
+
+// ── Calcular fecha pronóstico sumando días hábiles ──
+function cronoAddWorkdays(fechaStr, dias){
+  let d = new Date(fechaStr + 'T00:00:00');
+  let added = 0;
+  while(added < dias){
+    d.setDate(d.getDate() + 1);
+    const key = repDateKey(d);
+    if(!isWeekend(d) && !FESTIVOS.includes(key)) added++;
+  }
+  return repDateKey(d);
+}
+
+function cronoFmtDate(str){
+  if(!str) return '—';
+  const d = new Date(str+'T00:00:00');
+  return d.toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+function cronoFmtShort(str){
+  if(!str) return '—';
+  const d = new Date(str+'T00:00:00');
+  return `${d.getDate()}/${d.getMonth()+1}`;
+}
+
+// ── Calcular pronóstico de toda la actividad (suma de subtareas en cadena) ──
+function cronoCalcPronostico(subtareas, fechaInicio){
+  if(!subtareas||!subtareas.length||!fechaInicio) return null;
+  let cursor = fechaInicio;
+  subtareas.forEach(st=>{
+    const dias = Math.ceil((st.cantidad||1) / (st.rendimiento||1));
+    cursor = cronoAddWorkdays(cursor, dias);
+  });
+  return cursor;
+}
+
+// ── Días hábiles restantes entre hoy y fecha ──
+function cronoDiasRestantes(fechaStr){
+  if(!fechaStr) return null;
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const fin = new Date(fechaStr+'T00:00:00');
+  if(fin <= hoy) return 0;
+  let count = 0, cur = new Date(hoy);
+  while(cur < fin){
+    cur.setDate(cur.getDate()+1);
+    if(!isWeekend(cur) && !FESTIVOS.includes(repDateKey(cur))) count++;
+  }
+  return count;
+}
+
+// ── Avance general de una actividad (% subtareas completadas) ──
+function cronoAvance(subtareas){
+  if(!subtareas||!subtareas.length) return 0;
+  const done = subtareas.filter(st=>st.estatus==='completada').length;
+  return Math.round((done/subtareas.length)*100);
+}
+
+// ── Obtener o crear cronoItem para una actividad ──
+function cronoGetOrCreate(paItem){
+  cronoLoad();
+  let item = CRONO_ITEMS.find(x=>x.actividadId===paItem.id);
+  if(!item){
+    item = {
+      id: 'crono_'+paItem.id,
+      actividadId: paItem.id,
+      responsable: paItem.responsable||'',
+      proyecto: paItem.proyecto||'',
+      tipo: paItem.tipo||'',
+      fechaInicio: paItem.fechaAsig||repDateKey(new Date()),
+      subtareas: [],
+      reportes: []
+    };
+    CRONO_ITEMS.push(item);
+    cronoSave();
+  }
+  return item;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+//  RENDER PRINCIPAL
+// ──────────────────────────────────────────────────────────────────────────────
+let cronoExpandedId = null;
+let cronoSubTab = 'cronograma'; // 'csv' | 'cronograma'
+
 function renderReporteoView(){
   renderFestivos();
-  renderReporteo();
+  const mount = document.getElementById('segReporteoMount');
+  if(!mount) return;
+
+  cronoLoad(); cronoLoadCatalogo();
+
+  // Filtrar actividades relevantes (Proyecto, Trabajo Operativo, Impresiones)
+  const tiposValidos = ['Proyecto','Trabajo Operativo','Impresiones'];
+  let actItems = PA_ITEMS.filter(a=>tiposValidos.includes(a.tipo) && a.estatus !== 'Terminado');
+  if(_userRole==='proyectista' && _miNombre){
+    actItems = actItems.filter(a=>a.responsable===_miNombre);
+  }
+
+  let html = `
+  <div style="display:flex;gap:0;border-bottom:0.5px solid rgba(255,255,255,.08);margin-bottom:20px">
+    <button class="seg-subtab${cronoSubTab==='csv'?' on':''}" onclick="cronoSetSubTab('csv')">📅 Reporte CSV</button>
+    <button class="seg-subtab${cronoSubTab==='cronograma'?' on':''}" onclick="cronoSetSubTab('cronograma')">🗓 Cronograma</button>
+  </div>`;
+
+  if(cronoSubTab==='csv'){
+    // Montar la vista CSV original
+    html += `<div id="csvContent"></div>`;
+    mount.innerHTML = html;
+    const csvEl = document.getElementById('csvContent');
+    if(csvEl){
+      const orig = document.getElementById('v-reporteo');
+      if(orig) csvEl.innerHTML = orig.innerHTML;
+      else renderReporteo();
+    }
+    return;
+  }
+
+  // ── Vista Cronograma ──
+  // KPIs
+  const actConCrono = actItems.map(a=>({a, crono:CRONO_ITEMS.find(x=>x.actividadId===a.id)}));
+  const totalAct = actItems.length;
+  const conSubtareas = actConCrono.filter(({crono})=>crono&&crono.subtareas&&crono.subtareas.length).length;
+  let enTiempo=0, conRetraso=0;
+  actConCrono.forEach(({a,crono})=>{
+    if(!crono||!crono.subtareas||!crono.subtareas.length) return;
+    const pron = cronoCalcPronostico(crono.subtareas, crono.fechaInicio);
+    const hoy = repDateKey(new Date());
+    const termino = a.fechaTermino;
+    if(pron && termino){ if(pron<=termino) enTiempo++; else conRetraso++; }
+  });
+
+  html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:20px">
+    <div class="panel" style="padding:12px 14px"><div style="font-size:20px;font-weight:600;color:var(--text)">${totalAct}</div><div style="font-size:11px;color:var(--dim);margin-top:2px">Actividades activas</div></div>
+    <div class="panel" style="padding:12px 14px"><div style="font-size:20px;font-weight:600;color:var(--accent)">${conSubtareas}</div><div style="font-size:11px;color:var(--dim);margin-top:2px">Con cronograma</div></div>
+    <div class="panel" style="padding:12px 14px"><div style="font-size:20px;font-weight:600;color:var(--green)">${enTiempo}</div><div style="font-size:11px;color:var(--dim);margin-top:2px">En tiempo</div></div>
+    <div class="panel" style="padding:12px 14px"><div style="font-size:20px;font-weight:600;color:var(--amber)">${conRetraso}</div><div style="font-size:11px;color:var(--dim);margin-top:2px">Con retraso</div></div>
+  </div>`;
+
+  if(_userRole==='admin'||_userRole==='jefe'){
+    html += `<div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+      <button class="pa-btn pa-btn-ghost" onclick="cronoCatalogoModal()" style="font-size:12px">⚙️ Gestionar catálogo</button>
+    </div>`;
+  }
+
+  if(!actItems.length){
+    html += `<div style="padding:40px;text-align:center;color:var(--dim);font-size:13px">Sin actividades activas del tipo Proyecto, Trabajo Operativo o Impresiones.</div>`;
+    mount.innerHTML = html;
+    return;
+  }
+
+  actItems.forEach(a=>{
+    const crono = CRONO_ITEMS.find(x=>x.actividadId===a.id);
+    const subtareas = crono?.subtareas||[];
+    const reportes = crono?.reportes||[];
+    const avance = cronoAvance(subtareas);
+    const pron = crono ? cronoCalcPronostico(subtareas, crono.fechaInicio) : null;
+    const diasRest = pron ? cronoDiasRestantes(pron) : null;
+    const hoy = repDateKey(new Date());
+    let semaforo = 'neutral';
+    if(pron && a.fechaTermino){ semaforo = pron<=a.fechaTermino ? 'ok' : 'warn'; }
+    const isOpen = cronoExpandedId === a.id;
+    const avancePct = avance;
+    const barColor = semaforo==='warn' ? 'var(--amber)' : semaforo==='ok' ? 'var(--green)' : 'var(--accent)';
+    const semaforoLabel = semaforo==='ok'
+      ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(61,214,140,.12);color:var(--green);font-weight:500">✓ En tiempo</span>`
+      : semaforo==='warn'
+      ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(245,166,35,.1);color:var(--amber);font-weight:500">⚠ Retraso</span>`
+      : '';
+
+    html += `<div class="panel" style="margin-bottom:12px;padding:0;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;border-bottom:${isOpen?'0.5px solid rgba(255,255,255,.06)':'none'}"
+        onclick="cronoToggle('${a.id}')">
+        <span style="font-size:12px;color:var(--dim);transition:transform .2s;transform:rotate(${isOpen?'90':'0'}deg)">▶</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:13px;font-weight:600;color:var(--text)">${a.folio||a.actividad||'Sin folio'}</span>
+            <span style="font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(74,143,212,.12);color:var(--accent)">${a.tipo}</span>
+            ${semaforoLabel}
+          </div>
+          <div style="font-size:11px;color:var(--dim);margin-top:2px">${a.proyecto||''} · ${a.responsable?.split(' ').slice(0,2).join(' ')||'—'} · Inicio: ${cronoFmtShort(crono?.fechaInicio||a.fechaAsig)} ${pron?'· Pronóstico: '+cronoFmtShort(pron):''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <span style="font-size:11px;color:var(--dim)">${avancePct}%</span>
+          <div style="width:70px;height:4px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden">
+            <div style="width:${avancePct}%;height:100%;background:${barColor};border-radius:2px;transition:width .3s"></div>
+          </div>
+        </div>
+      </div>`;
+
+    if(isOpen){
+      html += `<div style="padding:16px">`;
+
+      // Tabla de subtareas
+      if(subtareas.length){
+        html += `<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px">
+          <thead><tr style="border-bottom:0.5px solid rgba(255,255,255,.08)">
+            <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Subtarea</th>
+            <th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Cantidad</th>
+            <th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Días est.</th>
+            <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Pronóstico</th>
+            <th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Avance</th>
+            <th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Estatus</th>
+            <th style="width:80px"></th>
+          </tr></thead><tbody>`;
+
+        let cursor = crono.fechaInicio;
+        subtareas.forEach((st,si)=>{
+          const dias = Math.ceil((st.cantidad||1)/(st.rendimiento||1));
+          const fechaFin = cronoAddWorkdays(cursor, dias);
+          const stColor = st.estatus==='completada'?'var(--green)':st.estatus==='en_progreso'?'var(--accent)':'var(--dim)';
+          const stLabel = st.estatus==='completada'?'✓ Completada':st.estatus==='en_progreso'?'↗ En progreso':'○ Pendiente';
+          const stBg = st.estatus==='completada'?'rgba(61,214,140,.1)':st.estatus==='en_progreso'?'rgba(74,143,212,.1)':'rgba(255,255,255,.04)';
+          const avanceSt = st.avanceAcum||0;
+          const pctSt = st.cantidad ? Math.min(100,Math.round((avanceSt/st.cantidad)*100)) : 0;
+          html += `<tr style="border-bottom:0.5px solid rgba(255,255,255,.05)">
+            <td style="padding:8px 8px"><div style="font-weight:500;color:var(--text)">${st.nombre}</div><div style="font-size:10px;color:var(--dim)">${st.unidad}</div></td>
+            <td style="padding:8px;text-align:center;color:var(--text)">${st.cantidad}</td>
+            <td style="padding:8px;text-align:center;color:var(--dim)">${dias}d</td>
+            <td style="padding:8px;font-size:11px;color:var(--dim)">${cronoFmtShort(cursor)}→${cronoFmtShort(fechaFin)}</td>
+            <td style="padding:8px;text-align:center">
+              <div style="font-size:11px;font-weight:500;color:${stColor}">${avanceSt}/${st.cantidad}</div>
+              <div style="width:50px;height:3px;background:rgba(255,255,255,.08);border-radius:2px;margin:3px auto 0">
+                <div style="width:${pctSt}%;height:100%;background:${stColor};border-radius:2px"></div>
+              </div>
+            </td>
+            <td style="padding:8px;text-align:center">
+              <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:${stBg};color:${stColor};white-space:nowrap">${stLabel}</span>
+            </td>
+            <td style="padding:8px;text-align:right">
+              <button class="et-act-btn" onclick="cronoReportarSubtarea('${a.id}','${st.id}')" title="Reportar avance" style="font-size:10px">+ Reportar</button>
+              <button class="et-act-btn del" onclick="cronoDeleteSubtarea('${a.id}','${st.id}')" title="Eliminar">✕</button>
+            </td>
+          </tr>`;
+          cursor = fechaFin;
+        });
+        html += `</tbody></table>`;
+
+        if(pron){
+          const diasR = cronoDiasRestantes(pron);
+          const pronColor = semaforo==='warn'?'var(--amber)':'var(--green)';
+          html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+            <span style="font-size:11px;padding:4px 12px;border-radius:20px;background:${semaforo==='warn'?'rgba(245,166,35,.1)':'rgba(61,214,140,.1)'};color:${pronColor}">
+              📅 Pronóstico de entrega: ${cronoFmtDate(pron)} ${diasR!==null?'· '+diasR+' días hábiles restantes':''}
+            </span>
+            ${a.fechaTermino?`<span style="font-size:11px;color:var(--dim)">Fecha límite: ${cronoFmtDate(a.fechaTermino)}</span>`:''}
+          </div>`;
+        }
+      } else {
+        html += `<div style="padding:16px;text-align:center;color:var(--dim);font-size:12px;border:0.5px dashed rgba(255,255,255,.1);border-radius:8px;margin-bottom:14px">Sin subtareas aún. Agrega una para generar el cronograma.</div>`;
+      }
+
+      html += `<div style="display:flex;gap:8px;margin-bottom:16px">
+        <button class="pa-btn" onclick="cronoAddSubtareaModal('${a.id}')" style="font-size:12px">+ Agregar subtarea</button>
+      </div>`;
+
+      // Historial de reportes
+      if(reportes.length){
+        html += `<div style="font-size:11px;font-weight:500;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Reportes del equipo</div>
+        <div style="max-height:200px;overflow-y:auto">`;
+        [...reportes].reverse().slice(0,10).forEach(r=>{
+          html += `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:0.5px solid rgba(255,255,255,.05)">
+            <span style="font-size:11px;color:var(--dim);white-space:nowrap;min-width:50px">${r.fecha||'—'}</span>
+            <span style="font-size:11px;font-weight:500;color:var(--accent);min-width:65px">${(r.quien||'').split(' ')[0]}</span>
+            <span style="font-size:12px;color:var(--text);flex:1">${r.subtareaNombre||''} — ${r.nota||''}</span>
+            ${r.cantidad?`<span style="font-size:11px;font-weight:500;color:var(--dim);white-space:nowrap">+${r.cantidad} ${r.unidad||''}</span>`:''}
+          </div>`;
+        });
+        html += `</div>`;
+      }
+      html += `</div>`;
+    }
+    html += `</div>`;
+  });
+
+  mount.innerHTML = html;
 }
+
+function cronoSetSubTab(tab){
+  cronoSubTab = tab;
+  renderReporteoView();
+}
+
+function cronoToggle(actId){
+  cronoExpandedId = cronoExpandedId===actId ? null : actId;
+  renderReporteoView();
+}
+
+// ── Modal agregar subtarea ──
+let cronoModalActId = null;
+function cronoAddSubtareaModal(actId){
+  cronoModalActId = actId;
+  cronoLoadCatalogo();
+  const catOpts = CRONO_CATALOGO.map(c=>`<option value="${c.id}">${c.nombre} (${c.rendimiento} ${c.unidad}/día)</option>`).join('');
+  const modal = document.getElementById('cronoSubtareaModalBg');
+  if(modal){ modal.classList.add('open'); return; }
+
+  const bg = document.createElement('div');
+  bg.id = 'cronoSubtareaModalBg';
+  bg.className = 'pa-modal-bg open';
+  bg.innerHTML = `<div class="pa-modal" style="max-width:480px" onclick="event.stopPropagation()">
+    <div class="pa-modal-title">Agregar subtarea</div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Desde catálogo (opcional)</label>
+      <select id="cronoStCat" onchange="cronoCatChange()" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px">
+        <option value="">— Personalizada —</option>
+        ${catOpts}
+      </select>
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Nombre de la subtarea</label>
+      <input id="cronoStNombre" type="text" placeholder="Ej. Levantamiento digital" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+      <div>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Unidad</label>
+        <input id="cronoStUnidad" type="text" placeholder="km, cortes..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Cantidad total</label>
+        <input id="cronoStCantidad" type="number" min="1" placeholder="0" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Rendimiento/día</label>
+        <input id="cronoStRend" type="number" min="0.1" step="0.1" placeholder="0" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+      </div>
+    </div>
+    <div id="cronoDiasEstimados" style="font-size:12px;color:var(--accent);margin-bottom:14px;min-height:18px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="pa-btn pa-btn-ghost" onclick="cronoCloseSubModal()">Cancelar</button>
+      <button class="pa-btn pa-btn-primary" onclick="cronoGuardarSubtarea()">Agregar</button>
+    </div>
+  </div>`;
+  bg.onclick = ()=>bg.classList.remove('open');
+  document.body.appendChild(bg);
+
+  // Actualizar días estimados al cambiar cantidad o rendimiento
+  ['cronoStCantidad','cronoStRend'].forEach(id=>{
+    document.getElementById(id)?.addEventListener('input', cronoDiasUpdate);
+  });
+}
+
+function cronoCatChange(){
+  const sel = document.getElementById('cronoStCat').value;
+  if(!sel) return;
+  const cat = CRONO_CATALOGO.find(c=>c.id===sel);
+  if(!cat) return;
+  document.getElementById('cronoStNombre').value = cat.nombre;
+  document.getElementById('cronoStUnidad').value = cat.unidad;
+  document.getElementById('cronoStRend').value = cat.rendimiento;
+  cronoDiasUpdate();
+}
+
+function cronoDiasUpdate(){
+  const cant = parseFloat(document.getElementById('cronoStCantidad')?.value)||0;
+  const rend = parseFloat(document.getElementById('cronoStRend')?.value)||0;
+  const el = document.getElementById('cronoDiasEstimados');
+  if(el && cant>0 && rend>0){
+    const dias = Math.ceil(cant/rend);
+    el.textContent = `→ Días estimados: ${dias} día${dias!==1?'s':''}`;
+  } else if(el){ el.textContent=''; }
+}
+
+function cronoCloseSubModal(){
+  document.getElementById('cronoSubtareaModalBg')?.classList.remove('open');
+}
+
+function cronoGuardarSubtarea(){
+  const nombre = document.getElementById('cronoStNombre')?.value.trim();
+  const unidad = document.getElementById('cronoStUnidad')?.value.trim();
+  const cantidad = parseFloat(document.getElementById('cronoStCantidad')?.value)||0;
+  const rendimiento = parseFloat(document.getElementById('cronoStRend')?.value)||0;
+  if(!nombre||!unidad||!cantidad||!rendimiento){ alert('Completa todos los campos'); return; }
+
+  cronoLoad();
+  let item = CRONO_ITEMS.find(x=>x.actividadId===cronoModalActId);
+  if(!item){
+    const pa = PA_ITEMS.find(x=>x.id===cronoModalActId);
+    if(!pa) return;
+    item = cronoGetOrCreate(pa);
+  }
+  if(!item.subtareas) item.subtareas=[];
+  item.subtareas.push({
+    id:'st_'+Date.now(),
+    nombre, unidad, cantidad, rendimiento,
+    estatus:'pendiente',
+    avanceAcum:0
+  });
+  cronoSave();
+  cronoCloseSubModal();
+  renderReporteoView();
+}
+
+function cronoDeleteSubtarea(actId, stId){
+  if(!confirm('¿Eliminar esta subtarea?')) return;
+  cronoLoad();
+  const item = CRONO_ITEMS.find(x=>x.actividadId===actId);
+  if(item){ item.subtareas = item.subtareas.filter(s=>s.id!==stId); cronoSave(); }
+  renderReporteoView();
+}
+
+// ── Modal reporte diario ──
+let cronoReportActId=null, cronoReportStId=null;
+function cronoReportarSubtarea(actId, stId){
+  cronoReportActId=actId; cronoReportStId=stId;
+  cronoLoad();
+  const item = CRONO_ITEMS.find(x=>x.actividadId===actId);
+  const st = item?.subtareas?.find(s=>s.id===stId);
+  if(!st) return;
+
+  const old = document.getElementById('cronoReporteModalBg');
+  if(old) old.remove();
+
+  const bg = document.createElement('div');
+  bg.id='cronoReporteModalBg';
+  bg.className='pa-modal-bg open';
+  bg.innerHTML=`<div class="pa-modal" style="max-width:440px" onclick="event.stopPropagation()">
+    <div class="pa-modal-title">Reportar avance diario</div>
+    <div style="font-size:12px;color:var(--accent);margin-bottom:14px;padding:8px 12px;background:rgba(74,143,212,.08);border-radius:6px">
+      ${st.nombre} · Acumulado: ${st.avanceAcum||0}/${st.cantidad} ${st.unidad}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Cantidad hoy (${st.unidad})</label>
+        <input id="cronoRepCant" type="number" min="0" step="0.1" placeholder="0" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Estatus</label>
+        <select id="cronoRepEstatus" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px">
+          <option value="en_progreso">En progreso</option>
+          <option value="completada">Completada</option>
+          <option value="bloqueada">Bloqueada</option>
+          <option value="pendiente">Pendiente</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Nota / comentario del día</label>
+      <textarea id="cronoRepNota" rows="3" placeholder="¿Qué avanzaste hoy? ¿Algún bloqueo o comentario?" style="width:100%;resize:vertical;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="pa-btn pa-btn-ghost" onclick="document.getElementById('cronoReporteModalBg').classList.remove('open')">Cancelar</button>
+      <button class="pa-btn pa-btn-primary" onclick="cronoGuardarReporte()">Guardar reporte</button>
+    </div>
+  </div>`;
+  bg.onclick=()=>bg.classList.remove('open');
+  document.body.appendChild(bg);
+}
+
+function cronoGuardarReporte(){
+  const cantidad = parseFloat(document.getElementById('cronoRepCant')?.value)||0;
+  const estatus = document.getElementById('cronoRepEstatus')?.value||'en_progreso';
+  const nota = document.getElementById('cronoRepNota')?.value.trim()||'';
+  if(!nota && !cantidad){ alert('Agrega al menos una cantidad o nota'); return; }
+
+  cronoLoad();
+  const item = CRONO_ITEMS.find(x=>x.actividadId===cronoReportActId);
+  const st = item?.subtareas?.find(s=>s.id===cronoReportStId);
+  if(!st||!item) return;
+
+  // Actualizar acumulado y estatus
+  st.avanceAcum = (st.avanceAcum||0) + cantidad;
+  st.estatus = estatus;
+
+  // Guardar reporte en historial
+  if(!item.reportes) item.reportes=[];
+  item.reportes.push({
+    id:'rep_'+Date.now(),
+    fecha: repDateKey(new Date()),
+    quien: _miNombre||'Admin',
+    subtareaId: st.id,
+    subtareaNombre: st.nombre,
+    unidad: st.unidad,
+    cantidad, nota, estatus
+  });
+
+  cronoSave();
+
+  // Notificar a Raquel si es proyectista
+  if(_userRole==='proyectista' && _miNombre && typeof notifAdd==='function'){
+    notifAdd('📋', `${_miNombre.split(' ')[0]} reportó avance`, `${st.nombre}: +${cantidad} ${st.unidad} — ${nota.slice(0,40)}`, 'avance', false);
+  }
+
+  document.getElementById('cronoReporteModalBg')?.classList.remove('open');
+  renderReporteoView();
+}
+
+// ── Modal gestión de catálogo ──
+function cronoCatalogoModal(){
+  cronoLoadCatalogo();
+  const old = document.getElementById('cronoCatModalBg');
+  if(old) old.remove();
+
+  const rows = CRONO_CATALOGO.map(c=>`
+    <tr style="border-bottom:0.5px solid rgba(255,255,255,.06)">
+      <td style="padding:8px;font-size:12px;color:var(--text)">${c.nombre}</td>
+      <td style="padding:8px;font-size:12px;color:var(--dim);text-align:center">${c.unidad}</td>
+      <td style="padding:8px;font-size:12px;color:var(--dim);text-align:center">${c.rendimiento}/día</td>
+      <td style="padding:8px;text-align:right">
+        <button class="et-act-btn del" onclick="cronoCatDelete('${c.id}')" title="Eliminar">✕</button>
+      </td>
+    </tr>`).join('');
+
+  const bg = document.createElement('div');
+  bg.id='cronoCatModalBg';
+  bg.className='pa-modal-bg open';
+  bg.innerHTML=`<div class="pa-modal" style="max-width:600px;max-height:80vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div class="pa-modal-title">Catálogo de subtareas</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px">
+      <thead><tr style="border-bottom:0.5px solid rgba(255,255,255,.1)">
+        <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500">Subtarea</th>
+        <th style="padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:center">Unidad</th>
+        <th style="padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:center">Rendimiento</th>
+        <th style="width:40px"></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="border-top:0.5px solid rgba(255,255,255,.08);padding-top:14px">
+      <div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:10px">Agregar al catálogo</div>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;align-items:end">
+        <div>
+          <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:3px">Nombre</label>
+          <input id="catNewNombre" type="text" placeholder="Nombre de la subtarea" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-family:var(--font);font-size:11px">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:3px">Unidad</label>
+          <input id="catNewUnidad" type="text" placeholder="km, cortes..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-family:var(--font);font-size:11px">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:3px">Rend./día</label>
+          <input id="catNewRend" type="number" min="0.1" step="0.1" placeholder="0" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-family:var(--font);font-size:11px">
+        </div>
+        <button class="pa-btn pa-btn-primary" onclick="cronoCatAdd()" style="font-size:11px;padding:5px 12px">+ Agregar</button>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px">
+      <button class="pa-btn pa-btn-ghost" onclick="document.getElementById('cronoCatModalBg').classList.remove('open')">Cerrar</button>
+    </div>
+  </div>`;
+  bg.onclick=()=>bg.classList.remove('open');
+  document.body.appendChild(bg);
+}
+
+function cronoCatDelete(id){
+  if(!confirm('¿Eliminar del catálogo?')) return;
+  CRONO_CATALOGO = CRONO_CATALOGO.filter(c=>c.id!==id);
+  cronoSaveCatalogo();
+  cronoCatalogoModal(); // refrescar
+}
+
+function cronoCatAdd(){
+  const nombre = document.getElementById('catNewNombre')?.value.trim();
+  const unidad = document.getElementById('catNewUnidad')?.value.trim();
+  const rendimiento = parseFloat(document.getElementById('catNewRend')?.value)||0;
+  if(!nombre||!unidad||!rendimiento){ alert('Completa todos los campos'); return; }
+  CRONO_CATALOGO.push({ id:'cat_'+Date.now(), nombre, unidad, rendimiento });
+  cronoSaveCatalogo();
+  cronoCatalogoModal();
+}
+
+try{ cronoLoad(); cronoLoadCatalogo(); }catch(e){}
+
 function uniqPeople(){
   return [...new Set(ROWS.map(r=>r.responsable).filter(Boolean))].sort();
 }
@@ -9788,7 +10405,30 @@ function enterDashboard(){
     orgLoadFromSupabase(),
     hoLoadSchedule(),
     loadProyNotifs(),
-    typeof supaLoadAll==='function' ? supaLoadAll() : Promise.resolve()
+    typeof supaLoadAll==='function' ? supaLoadAll() : Promise.resolve(),
+    (async()=>{
+      if(!_supa) return;
+      try{
+        // Cargar cronograma desde Supabase
+        const {data:cron} = await _supa.from('cronograma').select('*');
+        if(cron&&cron.length){
+          CRONO_ITEMS = cron.map(r=>({
+            id:r.id, actividadId:r.actividad_id, responsable:r.responsable||'',
+            proyecto:r.proyecto||'', tipo:r.tipo||'',
+            fechaInicio:r.fecha_inicio||'',
+            subtareas: typeof r.subtareas==='string'?JSON.parse(r.subtareas):r.subtareas||[],
+            reportes:  typeof r.reportes==='string'?JSON.parse(r.reportes):r.reportes||[]
+          }));
+          localStorage.setItem(CRONO_KEY, JSON.stringify(CRONO_ITEMS));
+        }
+        // Cargar catálogo desde Supabase
+        const {data:cat} = await _supa.from('crono_catalogo').select('*');
+        if(cat&&cat.length){
+          CRONO_CATALOGO = cat;
+          localStorage.setItem(CRONO_CAT_KEY, JSON.stringify(CRONO_CATALOGO));
+        }
+      }catch(e){ console.warn('crono load error',e); }
+    })()
   ]).then(()=>{
     if(typeof renderFestivos==='function') renderFestivos();
     if(typeof renderVacList==='function') renderVacList();
@@ -10894,10 +11534,22 @@ function proyNotaReabrir(id){
   n.done=false; proyNotasSave(); renderSegNotas();
 }
 
-function proyNotaDelete(id){
+async function proyNotaDelete(id){
   proyNotasLoad();
   PROY_NOTAS=PROY_NOTAS.filter(x=>x.id!==id);
-  proyNotasSave(); renderSegNotas();
+  // Guardar ID eliminado localmente para filtrar en recargas
+  try{
+    const delKey = 'proy_notas_deleted_'+((_miNombre||'proy').toLowerCase().replace(/\s+/g,'_').slice(0,20));
+    const deleted = JSON.parse(localStorage.getItem(delKey)||'[]');
+    if(!deleted.includes(id)) deleted.push(id);
+    localStorage.setItem(delKey, JSON.stringify(deleted));
+  }catch(e){}
+  proyNotasSave();
+  // Eliminar de Supabase
+  if(_supa && SUPA_ONLINE){
+    await _supa.from('notas_proyectista').delete().eq('id', id).catch(e=>console.warn(e));
+  }
+  renderSegNotas();
 }
 
 // ── Enviar nota desde Notas Rápidas de Raquel a un proyectista ──
@@ -12158,11 +12810,16 @@ async function supaLoadAll(){
     // 7. Notas proyectista
     const { data: pnotas } = await _supa.from('notas_proyectista').select('*').order('created_at', {ascending:false});
     if(pnotas && pnotas.length){
-      PROY_NOTAS = pnotas.map(n=>({
-        id:n.id, texto:n.texto||'', color:n.color||'#f5e642',
-        done:!!n.done, raquel:!!n.raquel, destinatario:n.destinatario||'',
-        createdAt:n.created_at,
-      }));
+      // Filtrar las que el usuario eliminó localmente
+      const _pnDelKey = 'proy_notas_deleted_'+((_miNombre||'proy').toLowerCase().replace(/\s+/g,'_').slice(0,20));
+      const _pnDeleted = JSON.parse(localStorage.getItem(_pnDelKey)||'[]');
+      PROY_NOTAS = pnotas
+        .filter(n=>!_pnDeleted.includes(n.id))
+        .map(n=>({
+          id:n.id, texto:n.texto||'', color:n.color||'#f5e642',
+          done:!!n.done, raquel:!!n.raquel, destinatario:n.destinatario||'',
+          createdAt:n.created_at,
+        }));
       localStorage.setItem(PROY_NOTAS_KEY, JSON.stringify(PROY_NOTAS));
       console.log('✅ Notas proyectista:', PROY_NOTAS.length);
     }
