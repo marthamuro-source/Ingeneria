@@ -5171,8 +5171,8 @@ function renderReporteoView(){
         <button class="pa-btn" onclick="cronoAddSubtareaModal('${a.id}')" style="font-size:12px">+ Agregar subtarea</button>
       </div>`;
 
-      // Historial de reportes
-      if(reportes.length){
+      // Historial de reportes (solo admin/jefe)
+      if(reportes.length && _userRole !== 'proyectista'){
         html += `<div style="font-size:11px;font-weight:500;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Reportes del equipo</div>
         <div style="max-height:200px;overflow-y:auto">`;
         [...reportes].reverse().slice(0,10).forEach(r=>{
@@ -5795,9 +5795,14 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
   if(repsExistentes.length){
     html+=`<div style="margin-bottom:14px">
       <div style="font-size:11px;color:var(--green);font-weight:500;margin-bottom:6px">✓ Ya reportaste ${repsExistentes.length} subtarea${repsExistentes.length!==1?'s':''} hoy</div>
-      ${repsExistentes.map(r=>`
-        <div style="font-size:11px;color:var(--dim);padding:4px 0;border-bottom:0.5px solid rgba(255,255,255,.05)">
-          <span style="color:var(--accent)">${r.subtareaNombre||'—'}</span> · +${r.cantidad||0} ${r.unidad||''} · ${r.nota||''}
+      ${repsExistentes.map((r,ri)=>`
+        <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim);padding:5px 0;border-bottom:0.5px solid rgba(255,255,255,.05)">
+          <div style="flex:1">
+            <span style="color:var(--accent)">${r.subtareaNombre||'—'}</span> · +${r.cantidad||0} ${r.unidad||''} · ${r.nota||''}
+          </div>
+          <button onclick="calProyEliminarReporte('${r.id||''}',this)" title="Eliminar reporte"
+            style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:13px;padding:2px 6px;border-radius:4px;flex-shrink:0"
+            onmouseover="this.style.color='#ff6b6b'" onmouseout="this.style.color='var(--dim)'">✕</button>
         </div>`).join('')}
     </div>`;
   }
@@ -5906,7 +5911,33 @@ function calProyGuardarReporte(subtareas, fecha){
       `${st.nombre}: +${cantidad} ${st.unidad}${nota?' — '+nota.slice(0,35):''}`, 'avance', false);
   }
 
-  // Refrescar
+  // Mostrar confirmación antes de refrescar
+  const btn = document.querySelector('#calProyPanelHoy .pa-btn-primary');
+  if(btn){
+    const orig = btn.innerHTML;
+    btn.innerHTML = '✓ Guardado';
+    btn.style.background = 'var(--green)';
+    btn.disabled = true;
+    setTimeout(()=>{ renderCronoCalProyectista(); }, 800);
+  } else {
+    renderCronoCalProyectista();
+  }
+}
+
+function calProyEliminarReporte(repId, btnEl){
+  if(!repId){ alert('No se puede identificar este reporte'); return; }
+  if(!confirm('¿Eliminar este reporte?')) return;
+  cronoLoad();
+  CRONO_ITEMS.forEach(item=>{
+    if(!item.reportes) return;
+    const rep = item.reportes.find(r=>r.id===repId);
+    if(!rep) return;
+    // Revertir avance acumulado en la subtarea
+    const st = (item.subtareas||[]).find(s=>s.id===rep.subtareaId);
+    if(st && rep.cantidad) st.avanceAcum = Math.max(0,(st.avanceAcum||0) - rep.cantidad);
+    item.reportes = item.reportes.filter(r=>r.id!==repId);
+  });
+  cronoSave();
   renderCronoCalProyectista();
 }
 
