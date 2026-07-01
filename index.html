@@ -5327,7 +5327,7 @@ function cronoAddSubtareaModal(actId){
       <input id="cronoStRend" type="number" min="0.1" step="0.1" placeholder="0"
         ${esProyectista?'':''}
         style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
-      ${esProyectista?`<div style="font-size:10px;color:var(--amber);margin-top:4px">⚠ Tu propuesta de rendimiento será validada por el administrador antes de incluirse en el cronograma.</div>`:''}
+      <div id="cronoValidacionAviso" style="font-size:10px;color:var(--amber);margin-top:4px;display:none">⚠ Tu propuesta de rendimiento será validada por el administrador antes de incluirse en el cronograma.</div>
     </div>
 
     <div id="cronoDiasEstimados" style="font-size:12px;color:var(--accent);margin-bottom:14px;min-height:18px"></div>
@@ -5383,6 +5383,8 @@ function cronoCatChange(){
     if(tipoWrap2) tipoWrap2.style.display='flex';
     if(tipoLabel2) tipoLabel2.style.display='block';
     if(rendLabel2) rendLabel2.style.display='block';
+    const aviso2 = document.getElementById('cronoValidacionAviso');
+    if(aviso2) aviso2.style.display = _userRole==='proyectista' ? 'block' : 'none';
     cronoSetTipo('unidades_por_dia');
     cronoDiasUpdate();
     return;
@@ -5403,9 +5405,11 @@ function cronoCatChange(){
   const tipoWrap = document.getElementById('cronoTipoWrap');
   const tipoLabel = document.getElementById('cronoTipoLabel');
   const rendLabel = document.getElementById('cronoRendLabel');
+  const avisoCat = document.getElementById('cronoValidacionAviso');
   if(tipoWrap) tipoWrap.style.display = 'none';
   if(tipoLabel) tipoLabel.style.display = 'none';
   if(rendLabel) rendLabel.style.display = _userRole==='proyectista' ? 'none' : 'block';
+  if(avisoCat) avisoCat.style.display = 'none'; // Del catálogo: no requiere validación
 
   // Si es del catálogo, rendimiento Y unidad son fijos para proyectistas
   const rendInput = document.getElementById('cronoStRend');
@@ -11221,22 +11225,15 @@ function enterDashboard(){
     (async()=>{
       if(!_supa) return;
       try{
-        // Cargar cronograma desde Supabase
-        const {data:cron} = await _supa.from('cronograma').select('*');
-        if(cron&&cron.length){
-          CRONO_ITEMS = cron.map(r=>({
-            id:r.id, actividadId:r.actividad_id, responsable:r.responsable||'',
-            proyecto:r.proyecto||'', tipo:r.tipo||'',
-            fechaInicio:r.fecha_inicio||'',
-            subtareas: typeof r.subtareas==='string'?JSON.parse(r.subtareas):r.subtareas||[],
-            reportes:  typeof r.reportes==='string'?JSON.parse(r.reportes):r.reportes||[]
-          }));
-          localStorage.setItem(CRONO_KEY, JSON.stringify(CRONO_ITEMS));
-        }
+        // Cargar cronograma desde Supabase — siempre Supabase es la fuente de verdad
+        await cronoRecargarDeSupabase();
         // Cargar catálogo desde Supabase
         const {data:cat} = await _supa.from('crono_catalogo').select('*');
         if(cat&&cat.length){
-          CRONO_CATALOGO = cat;
+          // Fusionar con defaults para no perder entradas
+          const ids = cat.map(c=>c.id);
+          const faltantes = CRONO_CATALOGO_DEFAULT.filter(c=>!ids.includes(c.id));
+          CRONO_CATALOGO = [...cat.map(c=>({...c, tipo:c.tipo||'unidades_por_dia'})), ...faltantes];
           localStorage.setItem(CRONO_CAT_KEY, JSON.stringify(CRONO_CATALOGO));
         }
       }catch(e){ console.warn('crono load error',e); }
