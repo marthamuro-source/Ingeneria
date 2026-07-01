@@ -4797,23 +4797,23 @@ function renderCalTable(rows){
 
 // ── Catálogo de subtareas predefinidas ──
 const CRONO_CATALOGO_DEFAULT = [
-  { id:'cat_001', nombre:'Cortes transversales nuevos',                              unidad:'cortes', rendimiento:6  },
-  { id:'cat_002', nombre:'Cortes transversales actualización',                       unidad:'cortes', rendimiento:9  },
-  { id:'cat_003', nombre:'Detalles especiales nuevos para PHD',                      unidad:'detalles', rendimiento:5 },
-  { id:'cat_004', nombre:'Detalles especiales actualización para PHD',               unidad:'detalles', rendimiento:7 },
-  { id:'cat_005', nombre:'Detalles especiales nuevos para ADOSADO',                  unidad:'detalles', rendimiento:5 },
-  { id:'cat_006', nombre:'Detalles especiales actualización para ADOSADO',           unidad:'detalles', rendimiento:7 },
-  { id:'cat_007', nombre:'Levantamiento digital (infraestructura existente)',        unidad:'km',    rendimiento:8  },
-  { id:'cat_008', nombre:'Planimetría (350m a la redonda de la ruta)',               unidad:'km',    rendimiento:12 },
-  { id:'cat_009', nombre:'Factibilidad de ruta subterránea (kmz con punteo)',        unidad:'km',    rendimiento:17 },
-  { id:'cat_010', nombre:'Factibilidad de ruta aéreo (kmz con punteo)',              unidad:'km',    rendimiento:20 },
-  { id:'cat_011', nombre:'Factibilidad de ruta (kmz sin identificación)',             unidad:'km',    rendimiento:200},
-  { id:'cat_012', nombre:'Generación de perfiles de altimetría (Google Earth)',      unidad:'km',    rendimiento:15 },
-  { id:'cat_013', nombre:'AP de conectividad (kmz, planos, volumétrico)',             unidad:'AP',    rendimiento:1,  tipo:'dias_por_unidad' },
-  { id:'cat_014', nombre:'Actualización SICT (planta y altimetría)',                  unidad:'km',    rendimiento:2.5,tipo:'unidades_por_dia' },
-  { id:'cat_015', nombre:'Nuevo proyecto SICT (planta y altimetría)',                 unidad:'km',    rendimiento:2.5,tipo:'unidades_por_dia' },
-  { id:'cat_016', nombre:'Cruce férreo (kmz, planos, señalización, memorias)',        unidad:'cruces',rendimiento:2,  tipo:'dias_por_unidad' },
-  { id:'cat_017', nombre:'Actualización de entregable (kmz, memorias, volumetría)',   unidad:'entregables',rendimiento:1,tipo:'dias_por_unidad' },
+  { id:'cat_001', nombre:'Cortes transversales nuevos',                              unidad:'cortes',      rendimiento:6,   tipo:'unidades_por_dia' },
+  { id:'cat_002', nombre:'Cortes transversales actualización',                       unidad:'cortes',      rendimiento:9,   tipo:'unidades_por_dia' },
+  { id:'cat_003', nombre:'Detalles especiales nuevos para PHD',                      unidad:'detalles',    rendimiento:5,   tipo:'unidades_por_dia' },
+  { id:'cat_004', nombre:'Detalles especiales actualización para PHD',               unidad:'detalles',    rendimiento:7,   tipo:'unidades_por_dia' },
+  { id:'cat_005', nombre:'Detalles especiales nuevos para ADOSADO',                  unidad:'detalles',    rendimiento:5,   tipo:'unidades_por_dia' },
+  { id:'cat_006', nombre:'Detalles especiales actualización para ADOSADO',           unidad:'detalles',    rendimiento:7,   tipo:'unidades_por_dia' },
+  { id:'cat_007', nombre:'Levantamiento digital (infraestructura existente)',        unidad:'km',          rendimiento:8,   tipo:'unidades_por_dia' },
+  { id:'cat_008', nombre:'Planimetría (350m a la redonda de la ruta)',               unidad:'km',          rendimiento:12,  tipo:'unidades_por_dia' },
+  { id:'cat_009', nombre:'Factibilidad de ruta subterránea (kmz con punteo)',        unidad:'km',          rendimiento:17,  tipo:'unidades_por_dia' },
+  { id:'cat_010', nombre:'Factibilidad de ruta aéreo (kmz con punteo)',              unidad:'km',          rendimiento:20,  tipo:'unidades_por_dia' },
+  { id:'cat_011', nombre:'Factibilidad de ruta (kmz sin identificación)',             unidad:'km',          rendimiento:200, tipo:'unidades_por_dia' },
+  { id:'cat_012', nombre:'Generación de perfiles de altimetría (Google Earth)',      unidad:'km',          rendimiento:15,  tipo:'unidades_por_dia' },
+  { id:'cat_013', nombre:'AP de conectividad (kmz, planos, volumétrico)',             unidad:'AP',          rendimiento:1,   tipo:'dias_por_unidad'  },
+  { id:'cat_014', nombre:'Actualización SICT (planta y altimetría)',                  unidad:'km',          rendimiento:2.5, tipo:'unidades_por_dia' },
+  { id:'cat_015', nombre:'Nuevo proyecto SICT (planta y altimetría)',                 unidad:'km',          rendimiento:2.5, tipo:'unidades_por_dia' },
+  { id:'cat_016', nombre:'Cruce férreo (kmz, planos, señalización, memorias)',        unidad:'cruces',      rendimiento:2,   tipo:'dias_por_unidad'  },
+  { id:'cat_017', nombre:'Actualización de entregable (kmz, memorias, volumetría)',   unidad:'entregables', rendimiento:1,   tipo:'dias_por_unidad'  },
 ];
 
 const CRONO_KEY = 'c3ntro_cronograma_v1';
@@ -4824,8 +4824,22 @@ let CRONO_CATALOGO = [];
 function cronoLoadCatalogo(){
   try{
     const raw = localStorage.getItem(CRONO_CAT_KEY);
-    if(raw){ CRONO_CATALOGO = JSON.parse(raw); }
-    else { CRONO_CATALOGO = [...CRONO_CATALOGO_DEFAULT]; cronoSaveCatalogo(); }
+    if(raw){
+      const parsed = JSON.parse(raw);
+      // Si el catálogo local tiene menos entradas que el default, fusionar
+      if(parsed.length < CRONO_CATALOGO_DEFAULT.length){
+        const ids = parsed.map(c=>c.id);
+        const faltantes = CRONO_CATALOGO_DEFAULT.filter(c=>!ids.includes(c.id));
+        CRONO_CATALOGO = [...parsed, ...faltantes];
+        cronoSaveCatalogo();
+      } else {
+        // Asegurar que todas tienen el campo tipo
+        CRONO_CATALOGO = parsed.map(c=>({...c, tipo: c.tipo||'unidades_por_dia'}));
+      }
+    } else {
+      CRONO_CATALOGO = [...CRONO_CATALOGO_DEFAULT];
+      cronoSaveCatalogo();
+    }
   }catch(e){ CRONO_CATALOGO = [...CRONO_CATALOGO_DEFAULT]; }
 }
 function cronoSaveCatalogo(){
