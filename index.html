@@ -5630,7 +5630,7 @@ function cronoReportarSubtarea(actId, stId){
       <button class="pa-btn pa-btn-primary" onclick="cronoGuardarReporte()">Guardar reporte</button>
     </div>
   </div>`;
-  bg.onclick=()=>bg.classList.remove('open');
+  bg.onclick=(e)=>{ if(e.target===bg) bg.classList.remove('open'); };
   document.body.appendChild(bg);
 }
 
@@ -5724,7 +5724,7 @@ function cronoCatalogoModal(){
       <button class="pa-btn pa-btn-ghost" onclick="document.getElementById('cronoCatModalBg').classList.remove('open')">Cerrar</button>
     </div>
   </div>`;
-  bg.onclick=()=>bg.classList.remove('open');
+  bg.onclick=(e)=>{ if(e.target===bg) bg.classList.remove('open'); };
   document.body.appendChild(bg);
 }
 
