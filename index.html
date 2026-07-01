@@ -4849,10 +4849,12 @@ function cronoSaveCatalogo(){
 function cronoLoad(){
   try{ CRONO_ITEMS = JSON.parse(localStorage.getItem(CRONO_KEY)||'[]'); }catch(e){ CRONO_ITEMS=[]; }
 }
-function cronoSave(){
+function cronoSave(itemsToSync){
   localStorage.setItem(CRONO_KEY, JSON.stringify(CRONO_ITEMS));
   if(_supa && SUPA_ONLINE){
-    CRONO_ITEMS.forEach(item=>{
+    // Solo sincronizar los items que cambiaron (o todos si no se especifica)
+    const toSync = itemsToSync || CRONO_ITEMS;
+    (Array.isArray(toSync)?toSync:[toSync]).forEach(item=>{
       _supa.from('cronograma').upsert({
         id: item.id,
         actividad_id: item.actividadId,
@@ -4866,6 +4868,13 @@ function cronoSave(){
       }, {onConflict:'id'}).catch(e=>console.warn(e));
     });
   }
+}
+
+// Helper para guardar solo un item específico
+function cronoSaveItem(actividadId){
+  const item = CRONO_ITEMS.find(x=>x.actividadId===actividadId);
+  if(item) cronoSave(item);
+  else cronoSave();
 }
 
 // ── Calcular días según tipo de rendimiento ──
@@ -5218,23 +5227,28 @@ function renderReporteoView(){
   mount.innerHTML = html;
 }
 
+async function cronoRecargarDeSupabase(){
+  if(!_supa || !SUPA_ONLINE) return;
+  try{
+    const {data:cron} = await _supa.from('cronograma').select('*');
+    if(cron && cron.length){
+      CRONO_ITEMS = cron.map(r=>({
+        id:r.id, actividadId:r.actividad_id, responsable:r.responsable||'',
+        proyecto:r.proyecto||'', tipo:r.tipo||'',
+        fechaInicio:r.fecha_inicio||'',
+        subtareas: typeof r.subtareas==='string'?JSON.parse(r.subtareas):r.subtareas||[],
+        reportes:  typeof r.reportes==='string'?JSON.parse(r.reportes):r.reportes||[]
+      }));
+      localStorage.setItem(CRONO_KEY, JSON.stringify(CRONO_ITEMS));
+    }
+  }catch(e){ console.warn('cronoRecargarDeSupabase error',e); }
+}
+
 async function cronoSetSubTab(tab){
   cronoSubTab = tab;
-  // Si abre Subtareas como admin, recargar cronogramas frescos de Supabase
-  if(tab==='cronograma' && _supa && SUPA_ONLINE && _userRole!=='proyectista'){
-    try{
-      const {data:cron} = await _supa.from('cronograma').select('*');
-      if(cron&&cron.length){
-        CRONO_ITEMS = cron.map(r=>({
-          id:r.id, actividadId:r.actividad_id, responsable:r.responsable||'',
-          proyecto:r.proyecto||'', tipo:r.tipo||'',
-          fechaInicio:r.fecha_inicio||'',
-          subtareas: typeof r.subtareas==='string'?JSON.parse(r.subtareas):r.subtareas||[],
-          reportes:  typeof r.reportes==='string'?JSON.parse(r.reportes):r.reportes||[]
-        }));
-        localStorage.setItem(CRONO_KEY, JSON.stringify(CRONO_ITEMS));
-      }
-    }catch(e){ console.warn('cronoSetSubTab reload error',e); }
+  // Siempre recargar de Supabase al cambiar de tab para tener datos frescos
+  if(tab==='cronograma' && _supa && SUPA_ONLINE){
+    await cronoRecargarDeSupabase();
   }
   renderReporteoView();
 }
@@ -5293,7 +5307,7 @@ function cronoAddSubtareaModal(actId){
     </div>
 
     <!-- Toggle tipo de rendimiento -->
-    <div style="margin-bottom:12px">
+    <div style="margin-bottom:12px" id="cronoTipoLabel">
       <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:6px">Tipo de rendimiento</label>
       <div style="display:flex;gap:0;border:0.5px solid var(--border);border-radius:6px;overflow:hidden" id="cronoTipoWrap">
         <button id="btnTipoUnidDia" onclick="cronoSetTipo('unidades_por_dia')"
@@ -5362,6 +5376,13 @@ function cronoCatChange(){
     // Botón cambia a "Proponer" si proyectista con personalizada
     const guardarBtn2 = document.getElementById('crono-guardar-btn');
     if(guardarBtn2) guardarBtn2.textContent = (_userRole==='proyectista') ? 'Proponer subtarea' : 'Agregar';
+    // Mostrar toggle tipo para personalizada
+    const tipoWrap2 = document.getElementById('cronoTipoWrap');
+    const tipoLabel2 = document.getElementById('cronoTipoLabel');
+    const rendLabel2 = document.getElementById('cronoRendLabel');
+    if(tipoWrap2) tipoWrap2.style.display='flex';
+    if(tipoLabel2) tipoLabel2.style.display='block';
+    if(rendLabel2) rendLabel2.style.display='block';
     cronoSetTipo('unidades_por_dia');
     cronoDiasUpdate();
     return;
@@ -5377,6 +5398,14 @@ function cronoCatChange(){
   // Actualizar texto del botón según origen
   const guardarBtn = document.getElementById('crono-guardar-btn');
   if(guardarBtn) guardarBtn.textContent = 'Agregar';
+
+  // Ocultar toggle de tipo cuando viene del catálogo (el tipo ya está definido)
+  const tipoWrap = document.getElementById('cronoTipoWrap');
+  const tipoLabel = document.getElementById('cronoTipoLabel');
+  const rendLabel = document.getElementById('cronoRendLabel');
+  if(tipoWrap) tipoWrap.style.display = 'none';
+  if(tipoLabel) tipoLabel.style.display = 'none';
+  if(rendLabel) rendLabel.style.display = _userRole==='proyectista' ? 'none' : 'block';
 
   // Si es del catálogo, rendimiento Y unidad son fijos para proyectistas
   const rendInput = document.getElementById('cronoStRend');
@@ -5436,6 +5465,8 @@ function cronoGuardarSubtarea(){
   if(!cantidad){ alert('Falta la cantidad total'); return; }
   if(!rendimiento){ alert('Falta el rendimiento'); return; }
   if(!cronoModalActId){ alert('Error: no se identificó la actividad. Cierra y vuelve a abrir.'); return; }
+  // Cerrar modal inmediatamente para dar feedback visual
+  cronoCloseSubModal();
 
   cronoLoad();
   let item = CRONO_ITEMS.find(x=>x.actividadId===cronoModalActId);
@@ -5460,8 +5491,7 @@ function cronoGuardarSubtarea(){
     estatus:'pendiente',
     avanceAcum:0
   });
-  cronoSave();
-  cronoCloseSubModal();
+  cronoSaveItem(cronoModalActId);
 
   // Notificar al admin si es proyectista con personalizada
   if(requiereValidacion && typeof notifAdd==='function'){
@@ -5495,7 +5525,7 @@ function cronoValidarSubtarea(actId, stId){
   st.pendienteValidacion = false;
   st.validadoPor = _miNombre||'Admin';
   st.validadoAt = repDateKey(new Date());
-  cronoSave();
+  cronoSaveItem(actId);
 
   // Ofrecer agregar al catálogo general
   if(confirm(`¿Agregar "${st.nombre}" al catálogo general para uso futuro?`)){
@@ -5536,7 +5566,7 @@ function cronoDeleteSubtarea(actId, stId){
   if(!confirm('¿Eliminar esta subtarea?')) return;
   cronoLoad();
   const item = CRONO_ITEMS.find(x=>x.actividadId===actId);
-  if(item){ item.subtareas = item.subtareas.filter(s=>s.id!==stId); cronoSave(); }
+  if(item){ item.subtareas = item.subtareas.filter(s=>s.id!==stId); cronoSaveItem(actId); }
   cronoSubTab = 'cronograma'; // Asegurar que estamos en el tab correcto
   cronoExpandedId = actId;   // Mantener la actividad expandida
   renderReporteoView();
