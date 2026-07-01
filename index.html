@@ -5372,7 +5372,8 @@ function cronoDiasUpdate(){
 }
 
 function cronoCloseSubModal(){
-  document.getElementById('cronoSubtareaModalBg')?.classList.remove('open');
+  const m = document.getElementById('cronoSubtareaModalBg');
+  if(m) m.remove();
 }
 
 function cronoGuardarSubtarea(){
@@ -5420,6 +5421,8 @@ function cronoGuardarSubtarea(){
       `"${nombre}" — ${cantidad} ${unidad} · Requiere validación`, 'avance', false);
   }
 
+  cronoSubTab = 'cronograma';
+  cronoExpandedId = cronoModalActId;
   renderReporteoView();
 }
 
@@ -5465,6 +5468,8 @@ function cronoDeleteSubtarea(actId, stId){
   cronoLoad();
   const item = CRONO_ITEMS.find(x=>x.actividadId===actId);
   if(item){ item.subtareas = item.subtareas.filter(s=>s.id!==stId); cronoSave(); }
+  cronoSubTab = 'cronograma'; // Asegurar que estamos en el tab correcto
+  cronoExpandedId = actId;   // Mantener la actividad expandida
   renderReporteoView();
 }
 
