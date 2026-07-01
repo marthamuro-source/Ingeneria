@@ -4844,7 +4844,10 @@ function cronoLoadCatalogo(){
 }
 function cronoSaveCatalogo(){
   localStorage.setItem(CRONO_CAT_KEY, JSON.stringify(CRONO_CATALOGO));
-  if(_supa && SUPA_ONLINE) _supa.from('crono_catalogo').upsert(CRONO_CATALOGO, {onConflict:'id'}).catch(e=>console.warn(e));
+  if(!_supa) return;
+  _supa.from('crono_catalogo').upsert(CRONO_CATALOGO, {onConflict:'id'})
+    .then(({error})=>{ if(error) console.error('❌ cronoSaveCatalogo:', error); else console.log('✅ catálogo guardado en Supabase'); })
+    .catch(e=>console.error('❌ cronoSaveCatalogo exception:', e));
 }
 function cronoLoad(){
   try{ CRONO_ITEMS = JSON.parse(localStorage.getItem(CRONO_KEY)||'[]'); }catch(e){ CRONO_ITEMS=[]; }
@@ -5722,8 +5725,12 @@ function cronoCatalogoModal(){
         <button class="pa-btn pa-btn-primary" onclick="cronoCatAdd()" style="font-size:11px;padding:5px 12px">+ Agregar</button>
       </div>
     </div>
-    <div style="display:flex;justify-content:flex-end;margin-top:14px">
-      <button class="pa-btn pa-btn-ghost" onclick="document.getElementById('cronoCatModalBg').classList.remove('open')">Cerrar</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+      <div style="display:flex;gap:8px">
+        <button class="pa-btn pa-btn-ghost" onclick="cronoCatExportCSV()" style="font-size:11px">⬇ CSV</button>
+        <button class="pa-btn pa-btn-ghost" onclick="cronoCatExportPDF()" style="font-size:11px">⬇ PDF</button>
+      </div>
+      <button class="pa-btn pa-btn-ghost" onclick="document.getElementById('cronoCatModalBg').remove()">Cerrar</button>
     </div>
   </div>`;
   bg.onclick=(e)=>{ if(e.target===bg) bg.classList.remove('open'); };
@@ -5747,6 +5754,88 @@ function cronoCatAdd(){
   // Cerrar modal y refrescar vista
   document.getElementById('cronoCatModalBg')?.remove();
   renderReporteoView();
+}
+
+
+// ── Exportar catálogo CSV ──
+function cronoCatExportCSV(){
+  cronoLoadCatalogo();
+  const rows = [['#','Subtarea','Unidad','Rendimiento','Tipo']];
+  CRONO_CATALOGO.forEach((c,i)=>{
+    const tipo = c.tipo==='dias_por_unidad' ? 'Días/unidad' : 'Unidades/día';
+    rows.push([i+1, c.nombre, c.unidad, c.rendimiento, tipo]);
+  });
+  const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Catalogo_Subtareas_C3NTRO.csv';
+  a.click();
+}
+
+// ── Exportar catálogo PDF ──
+function cronoCatExportPDF(){
+  cronoLoadCatalogo();
+  // Usar jsPDF si está disponible, si no generar HTML para imprimir
+  const fecha = new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'});
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Catálogo de Subtareas — C3NTRO</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1a2e; margin: 40px; }
+  h1 { font-size: 18px; color: #1a1a2e; margin-bottom: 4px; }
+  .sub { font-size: 11px; color: #666; margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { background: #1a1a2e; color: #fff; }
+  th { padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  td { padding: 9px 12px; border-bottom: 1px solid #e5e7eb; }
+  tr:nth-child(even) td { background: #f9fafb; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; }
+  .badge-u { background: #dbeafe; color: #1d4ed8; }
+  .badge-d { background: #fef3c7; color: #92400e; }
+  .footer { margin-top: 24px; font-size: 10px; color: #999; text-align: right; }
+  @media print { body { margin: 20px; } }
+</style>
+</head>
+<body>
+  <h1>Catálogo de Subtareas</h1>
+  <div class="sub">C3NTRO Telecom · Coordinación de Ingeniería · Generado el ${fecha}</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:30px">#</th>
+        <th>Subtarea</th>
+        <th>Unidad</th>
+        <th>Rendimiento</th>
+        <th>Tipo</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${CRONO_CATALOGO.map((c,i)=>{
+        const tipo = c.tipo==='dias_por_unidad' ? 'Días/unidad' : 'Unidades/día';
+        const badgeCls = c.tipo==='dias_por_unidad' ? 'badge-d' : 'badge-u';
+        const rendStr = c.tipo==='dias_por_unidad' ? c.rendimiento+' días/'+c.unidad : c.rendimiento+' '+c.unidad+'/día';
+        return `<tr>
+          <td style="color:#999">${i+1}</td>
+          <td><b>${c.nombre}</b></td>
+          <td>${c.unidad}</td>
+          <td>${rendStr}</td>
+          <td><span class="badge ${badgeCls}">${tipo}</span></td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>
+  <div class="footer">${CRONO_CATALOGO.length} subtareas en el catálogo</div>
+</body>
+</html>`;
+
+  const win = window.open('','_blank','width=900,height=700');
+  win.document.write(html);
+  win.document.close();
+  setTimeout(()=>win.print(), 500);
 }
 
 try{ cronoLoad(); cronoLoadCatalogo(); }catch(e){}
