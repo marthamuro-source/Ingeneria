@@ -4930,6 +4930,7 @@ function cronoGetOrCreate(paItem){
 // ──────────────────────────────────────────────────────────────────────────────
 let cronoExpandedId = null;
 let cronoSubTab = 'cronograma'; // 'csv' | 'cronograma'
+let cronoFiltroProyectista = ''; // '' = todos, o nombre del proyectista
 
 function renderReporteoView(){
   renderFestivos();
@@ -4965,6 +4966,31 @@ function renderReporteoView(){
   }
 
   // ── Vista Cronograma ──
+
+  // Selector de proyectista para admin
+  if(_userRole !== 'proyectista'){
+    const proyectistas = [...new Set(actItems.map(a=>a.responsable).filter(Boolean))].sort();
+    html += `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--dim)">Ver proyectista:</span>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button onclick="cronoFiltroProyectista='';renderReporteoView()"
+          style="font-size:11px;padding:4px 12px;border-radius:20px;border:0.5px solid ${!cronoFiltroProyectista?'var(--accent)':'rgba(255,255,255,.15)'};background:${!cronoFiltroProyectista?'rgba(74,143,212,.15)':'transparent'};color:${!cronoFiltroProyectista?'var(--accent)':'var(--muted)'};cursor:pointer">
+          Todos
+        </button>
+        ${proyectistas.map(p=>`
+        <button onclick="cronoFiltroProyectista='${p.replace(/'/g,"\'")}';renderReporteoView()"
+          style="font-size:11px;padding:4px 12px;border-radius:20px;border:0.5px solid ${'${cronoFiltroProyectista===p?"var(--accent)":"rgba(255,255,255,.15)"}'};background:${'${cronoFiltroProyectista===p?"rgba(74,143,212,.15)":"transparent"}'};color:${'${cronoFiltroProyectista===p?"var(--accent)":"var(--muted)"}'};cursor:pointer">
+          ${p.split(' ').slice(0,2).join(' ')}
+        </button>`).join('')}
+      </div>
+    </div>`;
+
+    // Aplicar filtro
+    if(cronoFiltroProyectista){
+      actItems = actItems.filter(a=>a.responsable===cronoFiltroProyectista);
+    }
+  }
+
   // KPIs
   const actConCrono = actItems.map(a=>({a, crono:CRONO_ITEMS.find(x=>x.actividadId===a.id)}));
   const totalAct = actItems.length;
@@ -5054,7 +5080,8 @@ function renderReporteoView(){
 
         let cursor = crono.fechaInicio;
         subtareas.forEach((st,si)=>{
-          const dias = Math.ceil((st.cantidad||1)/(st.rendimiento||1));
+          const diasRaw = (st.cantidad||1)/(st.rendimiento||1);
+          const dias = diasRaw % 1 === 0 ? diasRaw : parseFloat(diasRaw.toFixed(2));
           const fechaFin = cronoAddWorkdays(cursor, dias);
           const stColor = st.estatus==='completada'?'var(--green)':st.estatus==='en_progreso'?'var(--accent)':'var(--dim)';
           const stLabel = st.estatus==='completada'?'✓ Completada':st.estatus==='en_progreso'?'↗ En progreso':'○ Pendiente';
@@ -5064,7 +5091,7 @@ function renderReporteoView(){
           html += `<tr style="border-bottom:0.5px solid rgba(255,255,255,.05)">
             <td style="padding:8px 8px"><div style="font-weight:500;color:var(--text)">${st.nombre}</div><div style="font-size:10px;color:var(--dim)">${st.unidad}</div></td>
             <td style="padding:8px;text-align:center;color:var(--text)">${st.cantidad}</td>
-            <td style="padding:8px;text-align:center;color:var(--dim)">${dias}d</td>
+            <td style="padding:8px;text-align:center;color:var(--dim)" title="${(st.cantidad||1)/(st.rendimiento||1) < 1 ? 'Menos de una jornada' : ''}">${dias}d</td>
             <td style="padding:8px;font-size:11px;color:var(--dim)">${cronoFmtShort(cursor)}→${cronoFmtShort(fechaFin)}</td>
             <td style="padding:8px;text-align:center">
               <div style="font-size:11px;font-weight:500;color:${stColor}">${avanceSt}/${st.cantidad}</div>
@@ -5140,8 +5167,9 @@ function cronoAddSubtareaModal(actId){
   cronoModalActId = actId;
   cronoLoadCatalogo();
   const catOpts = CRONO_CATALOGO.map(c=>`<option value="${c.id}">${c.nombre} (${c.rendimiento} ${c.unidad}/día)</option>`).join('');
-  const modal = document.getElementById('cronoSubtareaModalBg');
-  if(modal){ modal.classList.add('open'); return; }
+  // Siempre eliminar y recrear para actualizar catálogo y actId
+  const old = document.getElementById('cronoSubtareaModalBg');
+  if(old) old.remove();
 
   const bg = document.createElement('div');
   bg.id = 'cronoSubtareaModalBg';
@@ -5204,8 +5232,9 @@ function cronoDiasUpdate(){
   const rend = parseFloat(document.getElementById('cronoStRend')?.value)||0;
   const el = document.getElementById('cronoDiasEstimados');
   if(el && cant>0 && rend>0){
-    const dias = Math.ceil(cant/rend);
-    el.textContent = `→ Días estimados: ${dias} día${dias!==1?'s':''}`;
+    const dias = cant/rend;
+    const diasStr = dias % 1 === 0 ? `${dias} día${dias!==1?'s':''}` : `${dias.toFixed(2)} días (${Math.floor(dias)}d ${Math.round((dias%1)*8)}h aprox.)`;
+    el.textContent = `→ Jornadas estimadas: ${diasStr}`;
   } else if(el){ el.textContent=''; }
 }
 
