@@ -5938,6 +5938,10 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
   }
 
   // Formulario de reporte
+  // Guardar en variables globales para acceso desde los handlers
+  window._calProySubtareas = subtareasDisponibles;
+  window._calProyFechaHoy = fecha;
+
   const stOpts = subtareasDisponibles.map((x,i)=>
     `<option value="${i}">${x.folio||x.proyecto} — ${x.st.nombre} (${x.st.unidad})</option>`
   ).join('');
@@ -5945,7 +5949,7 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
   html+=`
     <div style="margin-bottom:10px">
       <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Subtarea a reportar</label>
-      <select id="calProyStSel" onchange="calProyStChange(${JSON.stringify(subtareasDisponibles.map(x=>({actividadId:x.actividadId,stId:x.st.id,unidad:x.st.unidad,nombre:x.st.nombre,cant:x.st.cantidad,acum:x.st.avanceAcum||0})))})"
+      <select id="calProyStSel" onchange="calProyStChangeHoy()"
         style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px">
         <option value="">— Selecciona una subtarea —</option>
         ${stOpts}
@@ -5975,7 +5979,7 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
       <textarea id="calProyNota" rows="2" placeholder="¿Qué avanzaste hoy? ¿Algún bloqueo?" 
         style="width:100%;resize:vertical;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px"></textarea>
     </div>
-    <button class="pa-btn pa-btn-primary" onclick="calProyGuardarReporte(${JSON.stringify(subtareasDisponibles.map(x=>({actividadId:x.actividadId,stId:x.st.id,unidad:x.st.unidad,nombre:x.st.nombre})))},'${fecha}')" style="width:100%">
+    <button class="pa-btn pa-btn-primary" onclick="calProyGuardarReporteHoy()" style="width:100%">
       💾 Guardar reporte del día
     </button>
   </div>`;
@@ -5983,18 +5987,26 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
   panel.innerHTML=html;
 }
 
-function calProyStChange(subtareas){
+function calProyStChangeHoy(){
+  const subtareas = window._calProySubtareas||[];
   const sel = document.getElementById('calProyStSel');
   const idx = parseInt(sel?.value);
   const unidEl = document.getElementById('calProyUnidad');
   const infoEl = document.getElementById('calProyStInfo');
   if(isNaN(idx)||idx<0||!subtareas[idx]){ if(unidEl) unidEl.textContent='—'; return; }
-  const st = subtareas[idx];
-  if(unidEl) unidEl.textContent = st.unidad;
-  if(infoEl) infoEl.textContent = `Acumulado: ${st.acum}/${st.cant} ${st.unidad}`;
+  const x = subtareas[idx];
+  if(unidEl) unidEl.textContent = x.st.unidad;
+  if(infoEl) infoEl.textContent = `Acumulado: ${x.st.avanceAcum||0}/${x.st.cantidad} ${x.st.unidad}`;
 }
 
-function calProyGuardarReporte(subtareas, fecha){
+// Mantener también la versión original por compatibilidad
+function calProyStChange(subtareas){
+  calProyStChangeHoy();
+}
+
+function calProyGuardarReporteHoy(){
+  const subtareas = window._calProySubtareas||[];
+  const fecha = window._calProyFechaHoy||repDateKey(new Date());
   const sel = document.getElementById('calProyStSel');
   const idx = parseInt(sel?.value);
   if(isNaN(idx)||idx<0||!subtareas[idx]){ alert('Selecciona una subtarea'); return; }
@@ -6006,7 +6018,7 @@ function calProyGuardarReporte(subtareas, fecha){
 
   cronoLoad();
   const item = CRONO_ITEMS.find(x=>x.actividadId===stData.actividadId);
-  const st = item?.subtareas?.find(s=>s.id===stData.stId);
+  const st = item?.subtareas?.find(s=>s.id===stData.st.id);
   if(!st||!item){ alert('No se encontró la subtarea'); return; }
 
   st.avanceAcum = (st.avanceAcum||0) + cantidad;
@@ -6021,7 +6033,7 @@ function calProyGuardarReporte(subtareas, fecha){
     unidad: st.unidad,
     cantidad, nota, estatus
   });
-  cronoSave();
+  cronoSaveItem(item.actividadId);
 
   // Notificar a Raquel
   if(typeof notifAdd==='function'){
@@ -6029,10 +6041,9 @@ function calProyGuardarReporte(subtareas, fecha){
       `${st.nombre}: +${cantidad} ${st.unidad}${nota?' — '+nota.slice(0,35):''}`, 'avance', false);
   }
 
-  // Mostrar confirmación antes de refrescar
+  // Confirmación visual y refrescar
   const btn = document.querySelector('#calProyPanelHoy .pa-btn-primary');
   if(btn){
-    const orig = btn.innerHTML;
     btn.innerHTML = '✓ Guardado';
     btn.style.background = 'var(--green)';
     btn.disabled = true;
@@ -6040,6 +6051,13 @@ function calProyGuardarReporte(subtareas, fecha){
   } else {
     renderCronoCalProyectista();
   }
+}
+
+function calProyGuardarReporte(subtareas, fecha){
+  // Compatibilidad con llamadas anteriores
+  window._calProySubtareas = subtareas;
+  window._calProyFechaHoy = fecha;
+  calProyGuardarReporteHoy();
 }
 
 function calProyEliminarReporte(repId, btnEl){
