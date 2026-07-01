@@ -4851,29 +4851,32 @@ function cronoLoad(){
 }
 function cronoSave(itemsToSync){
   localStorage.setItem(CRONO_KEY, JSON.stringify(CRONO_ITEMS));
-  if(_supa && SUPA_ONLINE){
-    // Solo sincronizar los items que cambiaron (o todos si no se especifica)
-    const toSync = itemsToSync || CRONO_ITEMS;
-    (Array.isArray(toSync)?toSync:[toSync]).forEach(item=>{
-      _supa.from('cronograma').upsert({
-        id: item.id,
-        actividad_id: item.actividadId,
-        responsable: item.responsable,
-        proyecto: item.proyecto,
-        tipo: item.tipo,
-        fecha_inicio: item.fechaInicio,
-        subtareas: JSON.stringify(item.subtareas),
-        reportes: JSON.stringify(item.reportes||[]),
-        updated_at: new Date().toISOString()
-      }, {onConflict:'id'}).catch(e=>console.warn(e));
-    });
-  }
+  if(!_supa) return; // Sin verificar SUPA_ONLINE — _supa es suficiente
+  const toSync = itemsToSync ? (Array.isArray(itemsToSync)?itemsToSync:[itemsToSync]) : CRONO_ITEMS;
+  toSync.forEach(item=>{
+    console.log('💾 Guardando cronograma en Supabase:', item.id, 'subtareas:', item.subtareas?.length);
+    _supa.from('cronograma').upsert({
+      id: item.id,
+      actividad_id: item.actividadId,
+      responsable: item.responsable,
+      proyecto: item.proyecto,
+      tipo: item.tipo,
+      fecha_inicio: item.fechaInicio,
+      subtareas: JSON.stringify(item.subtareas||[]),
+      reportes: JSON.stringify(item.reportes||[]),
+      updated_at: new Date().toISOString()
+    }, {onConflict:'id'})
+    .then(({error})=>{ 
+      if(error) console.error('❌ cronoSave error:', error);
+      else console.log('✅ cronograma guardado en Supabase:', item.id);
+    })
+    .catch(e=>console.error('❌ cronoSave exception:', e));
+  });
 }
 
-// Helper para guardar solo un item específico
 function cronoSaveItem(actividadId){
   const item = CRONO_ITEMS.find(x=>x.actividadId===actividadId);
-  if(item) cronoSave(item);
+  if(item) cronoSave([item]);
   else cronoSave();
 }
 
