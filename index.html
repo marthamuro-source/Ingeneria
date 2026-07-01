@@ -5280,7 +5280,7 @@ function cronoAddSubtareaModal(actId){
       <button class="pa-btn pa-btn-primary" onclick="cronoGuardarSubtarea()">${esProyectista?'Proponer subtarea':'Agregar'}</button>
     </div>
   </div>`;
-  bg.onclick = ()=>bg.classList.remove('open');
+  bg.onclick = (e)=>{ if(e.target===bg) bg.classList.remove('open'); };
   document.body.appendChild(bg);
 
   // Actualizar días estimados al cambiar cantidad o rendimiento
@@ -5310,7 +5310,17 @@ function cronoSetTipo(tipo){
 
 function cronoCatChange(){
   const sel = document.getElementById('cronoStCat').value;
-  if(!sel) return;
+  if(!sel){
+    // Personalizada — habilitar rendimiento para todos
+    [document.getElementById('cronoStRend'), document.getElementById('cronoStUnidad')].forEach(inp=>{
+      if(inp){ inp.readOnly=false; inp.style.opacity='1'; inp.style.cursor=''; inp.title=''; inp.value=''; }
+    });
+    document.getElementById('cronoStNombre').value='';
+    document.getElementById('cronoStUnidad').value='';
+    cronoSetTipo('unidades_por_dia');
+    cronoDiasUpdate();
+    return;
+  }
   const cat = CRONO_CATALOGO.find(c=>c.id===sel);
   if(!cat) return;
   document.getElementById('cronoStNombre').value = cat.nombre;
@@ -5319,11 +5329,22 @@ function cronoCatChange(){
   // Setear tipo del catálogo y bloquear rendimiento si es del catálogo
   const tipo = cat.tipo||'unidades_por_dia';
   cronoSetTipo(tipo);
-  // Si es del catálogo, el rendimiento es fijo para proyectistas
+  // Si es del catálogo, rendimiento Y unidad son fijos para proyectistas
+  const rendInput = document.getElementById('cronoStRend');
+  const unidInput = document.getElementById('cronoStUnidad');
   if(_userRole==='proyectista'){
-    const rendInput = document.getElementById('cronoStRend');
-    if(rendInput) rendInput.readOnly = true;
-    if(rendInput) rendInput.style.opacity='.6';
+    [rendInput, unidInput].forEach(inp=>{
+      if(inp){
+        inp.readOnly = true;
+        inp.style.opacity = '.5';
+        inp.style.cursor = 'not-allowed';
+        inp.title = 'Este campo es fijo para subtareas del catálogo';
+      }
+    });
+  } else {
+    [rendInput, unidInput].forEach(inp=>{
+      if(inp){ inp.readOnly=false; inp.style.opacity='1'; inp.style.cursor=''; inp.title=''; }
+    });
   }
   cronoDiasUpdate();
 }
@@ -5360,7 +5381,11 @@ function cronoGuardarSubtarea(){
   const rendimiento = parseFloat(document.getElementById('cronoStRend')?.value)||0;
   const tipo = document.getElementById('cronoStTipo')?.value||'unidades_por_dia';
   const catId = document.getElementById('cronoStCat')?.value||'';
-  if(!nombre||!unidad||!cantidad||!rendimiento){ alert('Completa todos los campos'); return; }
+  if(!nombre){ alert('Falta el nombre de la subtarea'); return; }
+  if(!unidad){ alert('Falta la unidad'); return; }
+  if(!cantidad){ alert('Falta la cantidad total'); return; }
+  if(!rendimiento){ alert('Falta el rendimiento'); return; }
+  if(!cronoModalActId){ alert('Error: no se identificó la actividad. Cierra y vuelve a abrir.'); return; }
 
   cronoLoad();
   let item = CRONO_ITEMS.find(x=>x.actividadId===cronoModalActId);
