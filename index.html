@@ -5742,7 +5742,9 @@ function cronoCatAdd(){
   if(!nombre||!unidad||!rendimiento){ alert('Completa todos los campos'); return; }
   CRONO_CATALOGO.push({ id:'cat_'+Date.now(), nombre, unidad, rendimiento });
   cronoSaveCatalogo();
-  cronoCatalogoModal();
+  // Cerrar modal y refrescar vista
+  document.getElementById('cronoCatModalBg')?.remove();
+  renderReporteoView();
 }
 
 try{ cronoLoad(); cronoLoadCatalogo(); }catch(e){}
