@@ -5467,7 +5467,7 @@ function cronoCloseSubModal(){
   if(m) m.remove();
 }
 
-function cronoGuardarSubtarea(){
+async function cronoGuardarSubtarea(){
   const nombre = document.getElementById('cronoStNombre')?.value.trim();
   const unidad = document.getElementById('cronoStUnidad')?.value.trim();
   const cantidad = parseFloat(document.getElementById('cronoStCantidad')?.value)||0;
@@ -5482,7 +5482,9 @@ function cronoGuardarSubtarea(){
   // Cerrar modal inmediatamente para dar feedback visual
   cronoCloseSubModal();
 
-  cronoLoad();
+  // Siempre recargar de Supabase antes de modificar para no pisar datos de otros
+  await cronoRecargarDeSupabase();
+
   let item = CRONO_ITEMS.find(x=>x.actividadId===cronoModalActId);
   if(!item){
     const pa = PA_ITEMS.find(x=>x.id===cronoModalActId);
@@ -6006,7 +6008,7 @@ function calProyStChange(subtareas){
   calProyStChangeHoy();
 }
 
-function calProyGuardarReporteHoy(){
+async function calProyGuardarReporteHoy(){
   const subtareas = window._calProySubtareas||[];
   const fecha = window._calProyFechaHoy||repDateKey(new Date());
   const sel = document.getElementById('calProyStSel');
@@ -6018,7 +6020,8 @@ function calProyGuardarReporteHoy(){
   const nota = document.getElementById('calProyNota')?.value.trim()||'';
   if(!nota&&!cantidad){ alert('Agrega al menos una cantidad o nota'); return; }
 
-  cronoLoad();
+  // Recargar de Supabase antes de guardar para no pisar datos
+  await cronoRecargarDeSupabase();
   const item = CRONO_ITEMS.find(x=>x.actividadId===stData.actividadId);
   const st = item?.subtareas?.find(s=>s.id===stData.st.id);
   if(!st||!item){ alert('No se encontró la subtarea'); return; }
