@@ -1181,7 +1181,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
     <div id="roleBadge" style="display:none;font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;background:rgba(74,143,212,.15);color:var(--accent);text-align:center;margin-bottom:6px"></div>
     <div style="display:flex;align-items:center;gap:6px;">
       <span id="supaIndicator" style="font-size:12px;padding:2px 7px;border-radius:5px;cursor:help;transition:all .3s;background:rgba(100,100,120,.15);color:var(--dim);flex-shrink:0" title="Verificando conexión…">💾</span>
-      <button id="supaMigrateBtn" onclick="supaMigrateFromLocal()" style="flex:1;font-size:10px;padding:4px 8px;border-radius:5px;background:rgba(74,143,212,.12);border:1px solid rgba(74,143,212,.2);color:var(--muted);cursor:pointer;white-space:nowrap">☁️ Migrar datos</button>
+      <button id="supaMigrateBtn" onclick="supaMigrateFromLocal()" style="flex:1;font-size:10px;padding:4px 8px;border-radius:5px;background:rgba(74,143,212,.12);border:1px solid rgba(74,143,212,.2);color:var(--muted);cursor:pointer;white-space:nowrap;display:none">☁️ Migrar datos</button>
     </div>
   </div>
 </aside>
@@ -5414,27 +5414,29 @@ function cronoCatChange(){
   const guardarBtn = document.getElementById('crono-guardar-btn');
   if(guardarBtn) guardarBtn.textContent = 'Agregar';
 
-  // Ocultar toggle de tipo cuando viene del catálogo (el tipo ya está definido)
+  // Para proyectistas: ocultar toggle (tipo fijo del catálogo)
+  // Para admin: mostrar toggle pero ya con el tipo del catálogo preseleccionado
   const tipoWrap = document.getElementById('cronoTipoWrap');
   const tipoLabel = document.getElementById('cronoTipoLabel');
   const rendLabel = document.getElementById('cronoRendLabel');
   const avisoCat = document.getElementById('cronoValidacionAviso');
-  if(tipoWrap) tipoWrap.style.display = 'none';
-  if(tipoLabel) tipoLabel.style.display = 'none';
-  if(rendLabel) rendLabel.style.display = _userRole==='proyectista' ? 'none' : 'block';
-  if(avisoCat) avisoCat.style.display = 'none'; // Del catálogo: no requiere validación
+  if(_userRole === 'proyectista'){
+    if(tipoWrap) tipoWrap.style.display = 'none';
+    if(tipoLabel) tipoLabel.style.display = 'none';
+    if(rendLabel) rendLabel.style.display = 'none';
+  } else {
+    if(tipoWrap) tipoWrap.style.display = 'flex';
+    if(tipoLabel) tipoLabel.style.display = 'block';
+    if(rendLabel) rendLabel.style.display = 'block';
+  }
+  if(avisoCat) avisoCat.style.display = 'none';
 
-  // Si es del catálogo, rendimiento Y unidad son fijos para proyectistas
+  // Solo bloquear rendimiento y unidad para proyectistas (no para admin)
   const rendInput = document.getElementById('cronoStRend');
   const unidInput = document.getElementById('cronoStUnidad');
   if(_userRole==='proyectista'){
     [rendInput, unidInput].forEach(inp=>{
-      if(inp){
-        inp.readOnly = true;
-        inp.style.opacity = '.5';
-        inp.style.cursor = 'not-allowed';
-        inp.title = 'Este campo es fijo para subtareas del catálogo';
-      }
+      if(inp){ inp.readOnly=true; inp.style.opacity='.5'; inp.style.cursor='not-allowed'; inp.title='Campo fijo del catálogo'; }
     });
   } else {
     [rendInput, unidInput].forEach(inp=>{
@@ -5741,7 +5743,10 @@ function cronoCatDelete(id){
   if(!confirm('¿Eliminar del catálogo?')) return;
   CRONO_CATALOGO = CRONO_CATALOGO.filter(c=>c.id!==id);
   cronoSaveCatalogo();
-  cronoCatalogoModal(); // refrescar
+  // Eliminar de Supabase también
+  if(_supa) _supa.from('crono_catalogo').delete().eq('id',id).catch(e=>console.warn(e));
+  document.getElementById('cronoCatModalBg')?.remove();
+  cronoCatalogoModal(); // reabrir actualizado
 }
 
 function cronoCatAdd(){
@@ -5749,10 +5754,11 @@ function cronoCatAdd(){
   const unidad = document.getElementById('catNewUnidad')?.value.trim();
   const rendimiento = parseFloat(document.getElementById('catNewRend')?.value)||0;
   if(!nombre||!unidad||!rendimiento){ alert('Completa todos los campos'); return; }
-  CRONO_CATALOGO.push({ id:'cat_'+Date.now(), nombre, unidad, rendimiento });
+  CRONO_CATALOGO.push({ id:'cat_'+Date.now(), nombre, unidad, rendimiento, tipo:'unidades_por_dia' });
   cronoSaveCatalogo();
-  // Cerrar modal y refrescar vista
+  // Cerrar modal y refrescar inmediatamente con datos locales
   document.getElementById('cronoCatModalBg')?.remove();
+  localStorage.setItem(CRONO_CAT_KEY, JSON.stringify(CRONO_CATALOGO));
   renderReporteoView();
 }
 
@@ -11248,6 +11254,10 @@ function applyRole(role, nombre){
     badge.textContent = labels[role]||role;
     badge.style.display = 'inline-block';
   }
+
+  // Botón migrar datos solo visible para admin
+  var migrateBtn = document.getElementById('supaMigrateBtn');
+  if(migrateBtn) migrateBtn.style.display = (role==='admin') ? '' : 'none';
 }
 
 // goView con bloqueo para proyectistas
