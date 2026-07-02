@@ -5880,23 +5880,33 @@ function cronoCatExportPDF(){
 var PUM_DATA = [];
 var PUM_FILTRO_RESP = '';
 
+function pumParseRowCSV(line) {
+  // Parser robusto de CSV que maneja campos con comas y saltos dentro de comillas
+  var cols = [], f = '', q = false;
+  for (var ci = 0; ci <= line.length; ci++) {
+    var ch = ci < line.length ? line[ci] : ',';
+    if (ch === '"') { q = !q; }
+    else if (ch === ',' && !q) { cols.push(f.trim()); f = ''; }
+    else { f += ch; }
+  }
+  return cols;
+}
+
 function pumParseCSV(txt) {
   var rows = [];
   try {
-    var lines = txt.replace(/\r/g,'').split('\n');
-    // headers en línea 1 (índice 1), datos desde línea 2
+    // Normalizar saltos de línea
+    var lines = txt.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+    // Línea 0: grupos, Línea 1: headers, Línea 2+: datos
     for (var li = 2; li < lines.length; li++) {
-      var line = lines[li].trim();
-      if (!line) continue;
-      // parse respetando comillas
-      var cols = [], f = '', q = false;
-      for (var ci = 0; ci <= line.length; ci++) {
-        var ch = ci < line.length ? line[ci] : ',';
-        if (ch === '"') { q = !q; }
-        else if (ch === ',' && !q) { cols.push(f.trim()); f = ''; }
-        else { f += ch; }
-      }
+      var line = lines[li];
+      if (!line || !line.trim()) continue;
+      var cols = pumParseRowCSV(line);
+      // Verificar que tenga datos en prioridad o proyecto
       if (!cols[0] && !cols[2]) continue;
+      // Responsable en col 10 — verificar que existe
+      var resp = (cols[10] || '').split('(')[0].trim();
+      if (!resp && !cols[0]) continue;
       rows.push({
         prioridad:    cols[0]  || '',
         proyecto:     cols[2]  || '',
@@ -5946,12 +5956,13 @@ function pumLoadCSV(inp) {
 }
 
 function pumNormResp(r) {
-  var v = (r || '').toLowerCase();
+  var v = (r || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   if (v.indexOf('hazael') >= 0) return 'Hazael';
   if (v.indexOf('francisco') >= 0) return 'Francisco';
   if (v.indexOf('raquel') >= 0) return 'Raquel';
-  if (v.indexOf('equipo') >= 0 || v.indexOf('construccion') >= 0 || v.indexOf('construcción') >= 0) return 'Equipo Constr.';
-  return r.split(' ')[0] || '—';
+  if (v.indexOf('equipo') >= 0 || v.indexOf('construccion') >= 0) return 'Equipo Constr.';
+  var first = (r || '').split(/[\s(]/)[0].trim();
+  return first || '—';
 }
 
 function pumNormEstatus(e) {
