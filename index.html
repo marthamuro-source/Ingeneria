@@ -6130,34 +6130,30 @@ function pumRender(){
   if(fp) rows=rows.filter(d=>d.prioridad===fp);
   if(fr) rows=rows.filter(d=>d.responsable.startsWith(fr));
 
-  const bdgStyle=r=>PUM_BDGE[r]||PUM_BDGE.Baja;
-  document.getElementById('pumTBody').innerHTML=rows.map(d=>{
-    const pct=parseFloat(d.avance)||0;
-    const col=pct>=80?'#1baf7a':pct>=50?'#eda100':'#e34948';
-    return `<tr style="border-bottom:0.5px solid rgba(255,255,255,.05)">
-      <td style="padding:7px 8px"><span style="font-size:10px;padding:2px 7px;border-radius:20px;background:${bdgStyle(d.prioridad)};font-weight:500">${d.prioridad}</span></td>
-      <td style="padding:7px 8px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.proyecto}">${d.proyecto}</td>
-      <td style="padding:7px 8px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.tipo}">${d.tipo}</td>
-      <td style="padding:7px 8px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.responsable}">${d.responsable.split(' ')[0]}</td>
-      <td style="padding:7px 8px;text-align:center">
-        <div style="display:flex;align-items:center;gap:4px;justify-content:center">
-          <div style="width:40px;height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden">
-            <div style="width:${pct}%;height:100%;background:${col};border-radius:3px"></div>
-          </div>
-          <span style="font-size:10px;color:var(--dim)">${d.avance}</span>
-        </div>
-      </td>
-      <td style="padding:7px 8px;text-align:center;font-size:11px;color:var(--dim)">${d.km||'—'}</td>
-      <td style="padding:7px 8px;text-align:center">${pumChipDep(d.topo)}</td>
-      <td style="padding:7px 8px;text-align:center">${pumChipDep(d.geo)}</td>
-      <td style="padding:7px 8px;text-align:center">${pumChipDep(d.solEsp)}</td>
-      <td style="padding:7px 8px;text-align:center">${pumChipDep(d.depAuto)}</td>
-      <td style="padding:7px 8px;text-align:center">${pumChipDep(d.carretera)}</td>
-      <td style="padding:7px 8px;text-align:center">${pumChipDep(d.firmas)}</td>
-      <td style="padding:7px 8px;text-align:center">${pumChipDep(d.alcance)}</td>
-      <td style="padding:7px 8px;font-size:10px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.comentario}">${d.comentario}</td>
-    </tr>`;
-  }).join('');
+  const bdgStyle=function(r){ return PUM_BDGE[r]||PUM_BDGE.Baja; };
+  var pumHtml='';
+  rows.forEach(function(d){
+    var pct=parseFloat(d.avance)||0;
+    var col=pct>=80?'#1baf7a':pct>=50?'#eda100':'#e34948';
+    var bw='width:'+pct+'%;height:100%;background:'+col+';border-radius:3px';
+    pumHtml+='<tr style="border-bottom:0.5px solid rgba(255,255,255,.05)">';
+    pumHtml+='<td style="padding:7px 8px"><span style="font-size:10px;padding:2px 7px;border-radius:20px;background:'+bdgStyle(d.prioridad)+';font-weight:500">'+d.prioridad+'</span></td>';
+    pumHtml+='<td style="padding:7px 8px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+d.proyecto+'">'+d.proyecto+'</td>';
+    pumHtml+='<td style="padding:7px 8px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+d.tipo+'</td>';
+    pumHtml+='<td style="padding:7px 8px;color:var(--dim)">'+d.responsable.split(' ')[0]+'</td>';
+    pumHtml+='<td style="padding:7px 8px;text-align:center"><div style="display:flex;align-items:center;gap:4px;justify-content:center"><div style="width:40px;height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden"><div style="'+bw+'"></div></div><span style="font-size:10px;color:var(--dim)">'+d.avance+'</span></div></td>';
+    pumHtml+='<td style="padding:7px 8px;text-align:center;font-size:11px;color:var(--dim)">'+(d.km||'—')+'</td>';
+    pumHtml+='<td style="padding:7px 8px;text-align:center">'+pumChipDep(d.topo)+'</td>';
+    pumHtml+='<td style="padding:7px 8px;text-align:center">'+pumChipDep(d.geo)+'</td>';
+    pumHtml+='<td style="padding:7px 8px;text-align:center">'+pumChipDep(d.solEsp)+'</td>';
+    pumHtml+='<td style="padding:7px 8px;text-align:center">'+pumChipDep(d.depAuto)+'</td>';
+    pumHtml+='<td style="padding:7px 8px;text-align:center">'+pumChipDep(d.carretera)+'</td>';
+    pumHtml+='<td style="padding:7px 8px;text-align:center">'+pumChipDep(d.firmas)+'</td>';
+    pumHtml+='<td style="padding:7px 8px;text-align:center">'+pumChipDep(d.alcance)+'</td>';
+    pumHtml+='<td style="padding:7px 8px;font-size:10px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+d.comentario+'">'+d.comentario+'</td>';
+    pumHtml+='</tr>';
+  });
+  document.getElementById('pumTBody').innerHTML=pumHtml;
 }
 
 try{
@@ -7708,6 +7704,10 @@ function dashOpenTablero(id){
 }
 function dashBackToGaleria(){
   dashShowGaleria();
+  // Asegurar que el view de dashboards está activo
+  goView('dashboards');
+  // Luego mostrar galería (goView puede haber ocultado todo)
+  setTimeout(()=>dashShowGaleria(), 10);
 }
 
 function dashSubtab(tab){
