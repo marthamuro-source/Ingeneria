@@ -1927,8 +1927,26 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           <span id="pumFecha" style="font-size:11px;color:var(--dim)"></span>
         </div>
       </div>
-      <div class="content" style="padding-top:0" id="pumContent">
-        <div style="padding:60px;text-align:center;color:var(--dim)">Carga el CSV para ver el dashboard</div>
+      <div class="content" style="padding-top:0">
+        <!-- Filtro responsable -->
+        <div id="pumFiltros" style="display:none;margin-bottom:1.25rem">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <span style="font-size:11px;color:var(--dim);margin-right:4px">Vista:</span>
+            <button id="pumBtn-todos" onclick="pumSetVista('todos')" style="font-size:11px;padding:5px 14px;border-radius:20px;border:0.5px solid;cursor:pointer;transition:all .15s">Todos</button>
+            <button id="pumBtn-Raquel" onclick="pumSetVista('Raquel')" style="font-size:11px;padding:5px 14px;border-radius:20px;border:0.5px solid;cursor:pointer;transition:all .15s">Raquel</button>
+            <button id="pumBtn-Francisco" onclick="pumSetVista('Francisco')" style="font-size:11px;padding:5px 14px;border-radius:20px;border:0.5px solid;cursor:pointer;transition:all .15s">Francisco</button>
+            <button id="pumBtn-Hazael" onclick="pumSetVista('Hazael')" style="font-size:11px;padding:5px 14px;border-radius:20px;border:0.5px solid;cursor:pointer;transition:all .15s">Hazael</button>
+            <button id="pumBtn-Equipo" onclick="pumSetVista('Equipo')" style="font-size:11px;padding:5px 14px;border-radius:20px;border:0.5px solid;cursor:pointer;transition:all .15s">Equipo Constr.</button>
+          </div>
+        </div>
+        <!-- Contenido dinámico -->
+        <div id="pumMain">
+          <div style="padding:60px;text-align:center;color:var(--dim)">
+            <div style="font-size:32px;margin-bottom:12px">📂</div>
+            <div style="font-size:14px;font-weight:500;margin-bottom:6px">Sin datos cargados</div>
+            <div style="font-size:12px">Usa el botón "Cargar CSV" para importar el seguimiento de Permisos UM</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -5875,67 +5893,95 @@ function cronoCatExportPDF(){
 
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  DASHBOARD PERMISOS UM v3
+//  DASHBOARD PERMISOS UM v4
 // ══════════════════════════════════════════════════════════════════════════════
 var PUM_DATA = [];
-var PUM_FILTRO_RESP = '';
-
-function pumParseRowCSV(line) {
-  // Parser robusto de CSV que maneja campos con comas y saltos dentro de comillas
-  var cols = [], f = '', q = false;
-  for (var ci = 0; ci <= line.length; ci++) {
-    var ch = ci < line.length ? line[ci] : ',';
-    if (ch === '"') { q = !q; }
-    else if (ch === ',' && !q) { cols.push(f.trim()); f = ''; }
-    else { f += ch; }
-  }
-  return cols;
-}
+var PUM_VISTA = 'todos';
+var PUM_RESP_COLORS = {'Raquel':'#2a78d6','Francisco':'#1baf7a','Hazael':'#eda100','Equipo':'#9b59b6'};
+var PUM_PRIO_COLORS = {'Critica':'#e24b4a','Alta':'#eda100','Media':'#2a78d6','Baja':'#888'};
+var PUM_EST_COLORS  = {'En proceso':'#1baf7a','Sin Iniciar':'#eda100','Sin gestionar':'#555'};
 
 function pumParseCSV(txt) {
   var rows = [];
-  try {
-    // Normalizar saltos de línea
-    var lines = txt.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
-    // Línea 0: grupos, Línea 1: headers, Línea 2+: datos
-    for (var li = 2; li < lines.length; li++) {
-      var line = lines[li];
-      if (!line || !line.trim()) continue;
-      var cols = pumParseRowCSV(line);
-      // Verificar que tenga datos en prioridad o proyecto
-      if (!cols[0] && !cols[2]) continue;
-      // Responsable en col 10 — verificar que existe
-      var resp = (cols[10] || '').split('(')[0].trim();
-      if (!resp && !cols[0]) continue;
-      rows.push({
-        prioridad:    cols[0]  || '',
-        proyecto:     cols[2]  || '',
-        bc:           cols[3]  || '',
-        folioM:       cols[4]  || '',
-        folioP:       cols[5]  || '',
-        tipo:         cols[6]  || '',
-        cantIngreso:  cols[7]  || '',
-        metodo:       cols[8]  || '',
-        km:           cols[9]  || '',
-        responsable:  (cols[10] || '').split('(')[0].trim().split(' ')[0],
-        proyectista:  cols[12] || '',
-        drive:        cols[14] || '',
-        estatus:      cols[16] || '',
-        topo:         cols[17] || '',
-        geo:          cols[18] || '',
-        solEsp:       cols[19] || '',
-        respPermisos: cols[20] || '',
-        tipoOficial:  cols[21] || '',
-        autoridad:    cols[22] || '',
-        carretera:    cols[23] || '',
-        tramo:        cols[24] || '',
-        firmas:       cols[25] || '',
-        alcance:      cols[26] || '',
-        kmz:          cols[27] || ''
-      });
+  var raw = txt.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  var lines = raw.split('\n');
+  // Col indices (0-based): 0=Prioridad,1=%Avance,2=#ILA,3=Proyecto,4=BC,5=FolioM,
+  // 6=FolioP,7=Tipo,8=CantIngreso,9=Metodo,10=Km,11=Responsable,12=Comentario,
+  // 13=Proyectista,14=FechaEntrega,15=Correo,16=Drive,17=Imagen,18=Estatus,
+  // 19=Topo,20=Geo,21=SolEsp,22=RespPermisos,23=TipoOficial,24=Autoridad,
+  // 25=Carretera,26=Tramo,27=Firmas,28=Alcance,29=KMZ
+  for (var li = 2; li < lines.length; li++) {
+    var line = lines[li];
+    if (!line.trim()) continue;
+    var cols = [], f = '', q = false;
+    for (var ci = 0; ci <= line.length; ci++) {
+      var ch = ci < line.length ? line[ci] : ',';
+      if (ch === '"') { q = !q; }
+      else if (ch === ',' && !q) { cols.push(f.trim()); f = ''; }
+      else { f += ch; }
     }
-  } catch(ex) { console.error('pumParseCSV error', ex); }
+    var prio = cols[0] || '';
+    var proy = cols[3] || '';
+    if (!prio && !proy) continue;
+    var resp = (cols[11] || '').split('(')[0].trim();
+    var respNorm = pumNormResp(resp);
+    var folioP = cols[6] || '';
+    var estRaw = cols[18] || '';
+    var est = folioP ? (estRaw || 'Sin Iniciar') : 'Sin gestionar';
+    rows.push({
+      prioridad:    prio,
+      avanceIL:     cols[1]  || '',
+      numILA:       cols[2]  || '',
+      proyecto:     proy,
+      bc:           cols[4]  || '',
+      folioM:       cols[5]  || '',
+      folioP:       folioP,
+      tipo:         cols[7]  || '',
+      cantIngreso:  cols[8]  || '',
+      metodo:       cols[9]  || '',
+      km:           cols[10] || '',
+      responsable:  resp,
+      respNorm:     respNorm,
+      comentario:   cols[12] || '',
+      proyectista:  cols[13] || '',
+      fechaEntrega: cols[14] || '',
+      correo:       cols[15] || '',
+      drive:        cols[16] || '',
+      estatus:      est,
+      topo:         cols[19] || '',
+      geo:          cols[20] || '',
+      solEsp:       cols[21] || '',
+      respPermisos: cols[22] || '',
+      tipoOficial:  cols[23] || '',
+      autoridad:    cols[24] || '',
+      firmas:       cols[27] || '',
+      alcance:      cols[28] || '',
+      kmz:          cols[29] || ''
+    });
+  }
   return rows;
+}
+
+function pumNormResp(r) {
+  var v = (r || '').toLowerCase();
+  if (v.indexOf('hazael') >= 0) return 'Hazael';
+  if (v.indexOf('francisco') >= 0) return 'Francisco';
+  if (v.indexOf('raquel') >= 0) return 'Raquel';
+  if (v.indexOf('equipo') >= 0 || v.indexOf('construc') >= 0) return 'Equipo';
+  return (r || '').split(' ')[0] || '—';
+}
+
+function pumFechaUrgencia(f) {
+  if (!f || !f.trim()) return 'none';
+  var parts = f.split('/');
+  if (parts.length < 3) return 'none';
+  var d = new Date(parseInt(parts[2]), parseInt(parts[1])-1, parseInt(parts[0]));
+  var hoy = new Date(); hoy.setHours(0,0,0,0);
+  var diff = Math.round((d - hoy) / 86400000);
+  if (diff < 0) return 'vencido';
+  if (diff <= 7) return 'urgente';
+  if (diff <= 21) return 'proximo';
+  return 'ok';
 }
 
 function pumLoadCSV(inp) {
@@ -5944,206 +5990,269 @@ function pumLoadCSV(inp) {
   r.onload = function(e) {
     PUM_DATA = pumParseCSV(e.target.result);
     var fecha = new Date().toLocaleString('es-MX');
-    try {
-      localStorage.setItem('pum_v3', JSON.stringify(PUM_DATA));
-      localStorage.setItem('pum_v3_fecha', fecha);
-    } catch(ex) {}
+    try { localStorage.setItem('pum_v4', JSON.stringify(PUM_DATA)); localStorage.setItem('pum_v4_fecha', fecha); } catch(ex) {}
     var fe = document.getElementById('pumFecha');
     if (fe) fe.textContent = 'Actualizado: ' + fecha;
-    pumRenderAll();
+    pumSetVista('todos');
   };
   r.readAsText(f, 'UTF-8');
 }
 
-function pumNormResp(r) {
-  var v = (r || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  if (v.indexOf('hazael') >= 0) return 'Hazael';
-  if (v.indexOf('francisco') >= 0) return 'Francisco';
-  if (v.indexOf('raquel') >= 0) return 'Raquel';
-  if (v.indexOf('equipo') >= 0 || v.indexOf('construccion') >= 0) return 'Equipo Constr.';
-  var first = (r || '').split(/[\s(]/)[0].trim();
-  return first || '—';
-}
-
-function pumNormEstatus(e) {
-  var v = (e || '').toLowerCase();
-  if (v.indexOf('proceso') >= 0) return 'En proceso';
-  if (v.indexOf('sin') >= 0) return 'Sin iniciar';
-  return 'Pendiente';
-}
-
-var PUM_RESP_COLORS = { 'Raquel':'#2a78d6', 'Francisco':'#1baf7a', 'Hazael':'#eda100', 'Equipo Constr.':'#4a3aa7' };
-var PUM_EST_COLORS  = { 'En proceso':'#1baf7a', 'Sin iniciar':'#eda100', 'Pendiente':'#888' };
-var PUM_PRIO_COLORS = { 'Critica':'#e24b4a', 'Alta':'#eda100', 'Media':'#2a78d6', 'Baja':'#888' };
-
-function pumBar(data, colorMap, defaultColor) {
-  var max = 1;
-  for (var i = 0; i < data.length; i++) if (data[i].v > max) max = data[i].v;
-  var h = '';
-  for (var i = 0; i < data.length; i++) {
-    var pct = Math.round(data[i].v / max * 100);
-    var col = (colorMap && colorMap[data[i].k]) || defaultColor || '#2a78d6';
-    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">';
-    h += '<div style="font-size:12px;color:var(--text);width:130px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + data[i].k + '">' + data[i].k + '</div>';
-    h += '<div style="flex:1;height:10px;background:rgba(255,255,255,.07);border-radius:5px;overflow:hidden">';
-    h += '<div style="width:' + pct + '%;height:100%;background:' + col + ';border-radius:5px;transition:width .4s"></div></div>';
-    h += '<div style="font-size:12px;font-weight:600;color:var(--text);min-width:24px;text-align:right">' + data[i].v + '</div>';
-    h += '</div>';
-  }
-  return h;
-}
-
-function pumChip(val) {
-  var v = (val || '').toLowerCase().trim();
-  if (v === 'si' || v === 'sí') return '<span style="color:#1baf7a;font-weight:700;font-size:13px">✓</span>';
-  if (v === 'no') return '<span style="color:#e24b4a;font-size:13px">✗</span>';
-  if (v === '-' || v === '') return '<span style="color:var(--dim)">—</span>';
-  return '<span style="font-size:10px;color:var(--dim)">' + val + '</span>';
-}
-
-function pumRenderAll() {
-  if (!PUM_DATA.length) return;
-  var el = document.getElementById('pumContent');
-  if (!el) return;
-  PUM_FILTRO_RESP = PUM_FILTRO_RESP || '';
-
-  // Normalizar datos
-  var rows = PUM_DATA.map(function(d) {
-    return Object.assign({}, d, {
-      resp: pumNormResp(d.responsable),
-      est:  pumNormEstatus(d.estatus)
-    });
+function pumSetVista(vista) {
+  PUM_VISTA = vista;
+  // Actualizar botones
+  var btns = ['todos','Raquel','Francisco','Hazael','Equipo'];
+  btns.forEach(function(b) {
+    var el = document.getElementById('pumBtn-' + b);
+    if (!el) return;
+    var col = b === 'todos' ? 'var(--accent)' : (PUM_RESP_COLORS[b] || '#888');
+    var active = PUM_VISTA === b;
+    el.style.borderColor = active ? col : 'rgba(255,255,255,.15)';
+    el.style.background  = active ? col + '22' : 'transparent';
+    el.style.color = active ? col : 'var(--dim)';
   });
+  document.getElementById('pumFiltros').style.display = 'flex';
+  pumRender();
+}
 
-  // Conteos globales
-  var totalPermisos = rows.length;
-  var byResp = {}, byEst = {}, byPrior = {};
-  var RESPS = ['Raquel','Francisco','Hazael','Equipo Constr.'];
-  var PORDER = ['Critica','Alta','Media','Baja'];
+function pumRender() {
+  var el = document.getElementById('pumMain'); if (!el) return;
+  var data = PUM_VISTA === 'todos' ? PUM_DATA : PUM_DATA.filter(function(d){ return d.respNorm === PUM_VISTA; });
+
+  // ── KPIs ──
+  var totalILAs = {};
+  var byResp = {}, byEst = {}, byPrior = {}, conFecha = 0, vencidos = 0, urgentes = 0;
+  var RESPS = ['Raquel','Francisco','Hazael','Equipo'];
   RESPS.forEach(function(r){ byResp[r] = 0; });
-  rows.forEach(function(d) {
-    byResp[d.resp] = (byResp[d.resp] || 0) + 1;
-    byEst[d.est]   = (byEst[d.est]   || 0) + 1;
+
+  data.forEach(function(d) {
+    totalILAs[d.folioM] = true;
+    byResp[d.respNorm] = (byResp[d.respNorm] || 0) + 1;
+    byEst[d.estatus]   = (byEst[d.estatus]   || 0) + 1;
     byPrior[d.prioridad] = (byPrior[d.prioridad] || 0) + 1;
+    var urg = pumFechaUrgencia(d.fechaEntrega);
+    if (urg !== 'none') conFecha++;
+    if (urg === 'vencido') vencidos++;
+    if (urg === 'urgente') urgentes++;
   });
 
-  // Filas filtradas para tabla
-  var filtered = PUM_FILTRO_RESP ? rows.filter(function(d){ return d.resp === PUM_FILTRO_RESP; }) : rows;
-
-  // Render
   var h = '';
 
-  // ── KPIs totales ──
-  h += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:1.5rem">';
-  h += pumKPI('Total permisos', totalPermisos, 'var(--accent)', '');
-  RESPS.forEach(function(r) {
-    h += pumKPI(r, byResp[r]||0, PUM_RESP_COLORS[r]||'#888', r);
-  });
+  // KPIs
+  h += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:1.25rem">';
+  h += pumKPIcard('ILAs', Object.keys(totalILAs).length, 'var(--accent)');
+  h += pumKPIcard('Permisos', data.length, 'var(--text)');
+  h += pumKPIcard('En proceso', byEst['En proceso'] || 0, '#1baf7a');
+  h += pumKPIcard('Sin iniciar', byEst['Sin Iniciar'] || 0, '#eda100');
+  h += pumKPIcard('Sin gestionar', byEst['Sin gestionar'] || 0, '#666');
   h += '</div>';
 
-  // ── Gráficas ──
-  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:1.5rem">';
+  // Semáforo fecha + gráficas
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:1.25rem">';
 
-  // Por responsable
-  h += '<div class="panel" style="padding:16px">';
-  h += '<div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px">Permisos por responsable</div>';
-  var respData = RESPS.filter(function(r){return byResp[r];}).map(function(r){return{k:r,v:byResp[r]};});
-  h += pumBar(respData, PUM_RESP_COLORS, null);
-  h += '</div>';
-
-  // Por estatus
-  h += '<div class="panel" style="padding:16px">';
-  h += '<div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px">Por estatus</div>';
-  var estData = Object.keys(byEst).sort().map(function(k){return{k:k,v:byEst[k]};});
-  h += pumBar(estData, PUM_EST_COLORS, null);
-  h += '</div>';
-
-  // Por prioridad
-  h += '<div class="panel" style="padding:16px">';
-  h += '<div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px">Por prioridad</div>';
-  var priorData = PORDER.filter(function(p){return byPrior[p];}).map(function(p){return{k:p,v:byPrior[p]};});
-  h += pumBar(priorData, PUM_PRIO_COLORS, null);
-  h += '</div>';
-
-  h += '</div>'; // fin gráficas
-
-  // ── Filtro responsable ──
-  h += '<div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap">';
-  h += '<span style="font-size:11px;color:var(--dim)">Ver detalle de:</span>';
-  h += '<button onclick="pumSetFiltro(\'\')" style="font-size:11px;padding:5px 14px;border-radius:20px;border:0.5px solid ' + (!PUM_FILTRO_RESP?'var(--accent)':'rgba(255,255,255,.15)') + ';background:' + (!PUM_FILTRO_RESP?'rgba(74,143,212,.15)':'transparent') + ';color:' + (!PUM_FILTRO_RESP?'var(--accent)':'var(--dim)') + ';cursor:pointer">Todos</button>';
-  RESPS.forEach(function(r) {
-    var active = PUM_FILTRO_RESP === r;
-    var col = PUM_RESP_COLORS[r] || '#888';
-    h += '<button onclick="pumSetFiltro(\'' + r + '\')" style="font-size:11px;padding:5px 14px;border-radius:20px;border:0.5px solid ' + (active?col:'rgba(255,255,255,.15)') + ';background:' + (active?col+'22':'transparent') + ';color:' + (active?col:'var(--dim)') + ';cursor:pointer">' + r + ' (' + (byResp[r]||0) + ')</button>';
-  });
-  h += '</div>';
-
-  // ── Tabla ──
+  // Gráfica responsable
   h += '<div class="panel" style="padding:14px 16px">';
-  if (PUM_FILTRO_RESP) {
-    h += '<div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:12px">Permisos de <span style="color:' + (PUM_RESP_COLORS[PUM_FILTRO_RESP]||'var(--accent)') + '">' + PUM_FILTRO_RESP + '</span> <span style="color:var(--dim);font-size:11px">(' + filtered.length + ' registros)</span></div>';
+  h += '<div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Por responsable</div>';
+  var maxR = Math.max.apply(null, RESPS.map(function(r){ return byResp[r]||0; })) || 1;
+  RESPS.forEach(function(r) {
+    if (!byResp[r]) return;
+    var col = PUM_RESP_COLORS[r] || '#888';
+    var pct = Math.round((byResp[r]/maxR)*100);
+    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
+    h += '<div style="font-size:11px;color:var(--text);width:90px;flex-shrink:0">' + r + '</div>';
+    h += '<div style="flex:1;height:9px;background:rgba(255,255,255,.07);border-radius:5px;overflow:hidden"><div style="width:' + pct + '%;height:100%;background:' + col + ';border-radius:5px"></div></div>';
+    h += '<div style="font-size:11px;font-weight:600;color:' + col + ';min-width:20px;text-align:right">' + byResp[r] + '</div>';
+    h += '</div>';
+  });
+  h += '</div>';
+
+  // Gráfica prioridad
+  h += '<div class="panel" style="padding:14px 16px">';
+  h += '<div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Por prioridad</div>';
+  var PORDER = ['Critica','Alta','Media','Baja'];
+  var maxP = Math.max.apply(null, PORDER.map(function(p){ return byPrior[p]||0; })) || 1;
+  PORDER.forEach(function(p) {
+    if (!byPrior[p]) return;
+    var col = PUM_PRIO_COLORS[p] || '#888';
+    var pct = Math.round((byPrior[p]/maxP)*100);
+    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
+    h += '<div style="font-size:11px;color:var(--text);width:90px;flex-shrink:0">' + p + '</div>';
+    h += '<div style="flex:1;height:9px;background:rgba(255,255,255,.07);border-radius:5px;overflow:hidden"><div style="width:' + pct + '%;height:100%;background:' + col + ';border-radius:5px"></div></div>';
+    h += '<div style="font-size:11px;font-weight:600;color:' + col + ';min-width:20px;text-align:right">' + byPrior[p] + '</div>';
+    h += '</div>';
+  });
+  h += '</div>';
+
+  // Semáforo fechas
+  h += '<div class="panel" style="padding:14px 16px">';
+  h += '<div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Semáforo de entrega</div>';
+  if (conFecha === 0) {
+    h += '<div style="font-size:12px;color:var(--dim);padding:16px 0;text-align:center">Sin fechas registradas</div>';
+  } else {
+    var semItems = [
+      {lbl:'🔴 Vencido',    val:vencidos,           col:'#e24b4a'},
+      {lbl:'🟡 Esta semana', val:urgentes,           col:'#eda100'},
+      {lbl:'🟢 En tiempo',  val:conFecha-vencidos-urgentes, col:'#1baf7a'},
+      {lbl:'⚪ Sin fecha',  val:data.length-conFecha, col:'#555'}
+    ];
+    semItems.forEach(function(s) {
+      h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid rgba(255,255,255,.06);font-size:12px">';
+      h += '<span style="color:var(--text)">' + s.lbl + '</span>';
+      h += '<span style="font-size:13px;font-weight:700;color:' + s.col + '">' + s.val + '</span>';
+      h += '</div>';
+    });
   }
-  h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">';
-  h += '<thead><tr style="border-bottom:0.5px solid var(--border)">';
-  ['Prior.','Proyecto','Folio Maestro','Tipo','Cant. ingreso','Método','Responsable','Estatus','Topo','Geo','Resp.Permisos','Autoridad','Firmas','Alcance','KMZ'].forEach(function(col) {
-    h += '<th style="padding:7px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;white-space:nowrap;text-align:left">' + col + '</th>';
-  });
-  h += '</tr></thead><tbody>';
+  h += '</div>';
+  h += '</div>'; // fin grid 3
 
-  filtered.forEach(function(d) {
-    var pc = PUM_PRIO_COLORS[d.prioridad] || '#888';
-    var ec = PUM_EST_COLORS[d.est] || '#888';
-    var rc = PUM_RESP_COLORS[d.resp] || 'var(--dim)';
-    h += '<tr style="border-bottom:0.5px solid rgba(255,255,255,.04)">';
-    h += '<td style="padding:7px 8px;white-space:nowrap"><span style="font-size:10px;padding:2px 7px;border-radius:20px;background:' + pc + '22;color:' + pc + ';font-weight:500">' + d.prioridad + '</span></td>';
-    h += '<td style="padding:7px 8px;font-weight:500;color:var(--text);white-space:nowrap">' + d.proyecto + '</td>';
-    h += '<td style="padding:7px 8px;font-size:10px;color:var(--accent);font-family:var(--mono);white-space:nowrap">';
-    if (d.drive) h += '<a href="https://drive.google.com" target="_blank" title="Drive: ' + d.drive + '" style="color:var(--accent);margin-right:4px">🔗</a>';
-    h += d.folioM + '</td>';
-    h += '<td style="padding:7px 8px;color:var(--dim);white-space:nowrap">' + (d.tipo||'—') + '</td>';
-    h += '<td style="padding:7px 8px;color:var(--dim);white-space:nowrap">' + (d.cantIngreso||'—') + '</td>';
-    h += '<td style="padding:7px 8px;color:var(--dim);white-space:nowrap">' + (d.metodo||'—') + '</td>';
-    h += '<td style="padding:7px 8px;white-space:nowrap"><span style="color:' + rc + ';font-weight:500">' + d.resp + '</span></td>';
-    h += '<td style="padding:7px 8px;white-space:nowrap"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:' + ec + '22;color:' + ec + ';font-weight:500">' + d.est + '</span></td>';
-    h += '<td style="padding:7px 8px;text-align:center">' + pumChip(d.topo) + '</td>';
-    h += '<td style="padding:7px 8px;text-align:center">' + pumChip(d.geo) + '</td>';
-    h += '<td style="padding:7px 8px;color:var(--dim);white-space:nowrap">' + (d.respPermisos||'—') + '</td>';
-    h += '<td style="padding:7px 8px;color:var(--dim);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + d.autoridad + '">' + (d.autoridad||'—') + '</td>';
-    h += '<td style="padding:7px 8px;text-align:center">' + pumChip(d.firmas) + '</td>';
-    h += '<td style="padding:7px 8px;text-align:center">' + pumChip(d.alcance) + '</td>';
-    h += '<td style="padding:7px 8px;text-align:center">' + pumChip(d.kmz) + '</td>';
-    h += '</tr>';
+  // ── ILAs agrupadas ──
+  var ilaMap = {};
+  data.forEach(function(d) {
+    var key = d.folioM || d.proyecto;
+    if (!ilaMap[key]) {
+      ilaMap[key] = {
+        numILA: d.numILA, proyecto: d.proyecto, folioM: d.folioM,
+        avanceIL: d.avanceIL, prioridad: d.prioridad, permisos: []
+      };
+    }
+    ilaMap[key].permisos.push(d);
   });
 
-  h += '</tbody></table></div></div>';
+  // Ordenar ILAs por prioridad
+  var PRIO_ORDER = {Critica:0,Alta:1,Media:2,Baja:3};
+  var ilaList = Object.values(ilaMap).sort(function(a,b){
+    return (PRIO_ORDER[a.prioridad]||9) - (PRIO_ORDER[b.prioridad]||9);
+  });
 
+  h += '<div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Detalle por ILA</div>';
+  h += '<div style="display:flex;flex-direction:column;gap:10px">';
+
+  ilaList.forEach(function(ila) {
+    var pc = PUM_PRIO_COLORS[ila.prioridad] || '#888';
+    var avPct = parseFloat(ila.avanceIL) || 0;
+    var avCol = avPct >= 80 ? '#1baf7a' : avPct >= 50 ? '#eda100' : '#e24b4a';
+    var totalP = ila.permisos.length;
+    var conFolio = ila.permisos.filter(function(p){ return p.folioP; }).length;
+    var enProceso = ila.permisos.filter(function(p){ return p.estatus === 'En proceso'; }).length;
+
+    h += '<div class="panel" style="padding:0;overflow:hidden">';
+    // Cabecera ILA
+    h += '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:0.5px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02)">';
+    h += '<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:' + pc + '22;color:' + pc + ';font-weight:600;white-space:nowrap">' + (ila.prioridad||'—') + '</span>';
+    if (ila.numILA) h += '<span style="font-size:11px;color:var(--dim);font-family:var(--mono)">#' + ila.numILA + '</span>';
+    h += '<div style="flex:1">';
+    h += '<div style="font-size:13px;font-weight:600;color:var(--text)">' + ila.proyecto + '</div>';
+    h += '<div style="font-size:10px;color:var(--dim);margin-top:1px;font-family:var(--mono)">' + ila.folioM + '</div>';
+    h += '</div>';
+    // Avance IL
+    h += '<div style="text-align:right;flex-shrink:0">';
+    h += '<div style="font-size:11px;color:var(--dim);margin-bottom:3px">Avance IL</div>';
+    h += '<div style="display:flex;align-items:center;gap:6px">';
+    h += '<div style="width:60px;height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden"><div style="width:' + avPct + '%;height:100%;background:' + avCol + ';border-radius:3px"></div></div>';
+    h += '<span style="font-size:12px;font-weight:600;color:' + avCol + '">' + ila.avanceIL + '</span>';
+    h += '</div></div>';
+    // Stats permisos
+    h += '<div style="display:flex;gap:10px;flex-shrink:0">';
+    h += '<div style="text-align:center"><div style="font-size:16px;font-weight:700;color:var(--text)">' + totalP + '</div><div style="font-size:9px;color:var(--dim)">permisos</div></div>';
+    h += '<div style="text-align:center"><div style="font-size:16px;font-weight:700;color:#1baf7a">' + conFolio + '</div><div style="font-size:9px;color:var(--dim)">con folio</div></div>';
+    h += '<div style="text-align:center"><div style="font-size:16px;font-weight:700;color:#eda100">' + enProceso + '</div><div style="font-size:9px;color:var(--dim)">en proceso</div></div>';
+    h += '</div>';
+    h += '</div>'; // fin cabecera
+
+    // Permisos de esta ILA
+    h += '<div style="padding:10px 16px">';
+    ila.permisos.forEach(function(p) {
+      var rc = PUM_RESP_COLORS[p.respNorm] || 'var(--dim)';
+      var ec, ebg;
+      if (p.estatus === 'En proceso')     { ec = '#1baf7a'; ebg = 'rgba(61,214,140,.1)'; }
+      else if (p.estatus === 'Sin Iniciar') { ec = '#eda100'; ebg = 'rgba(237,161,0,.1)'; }
+      else                                  { ec = '#555';    ebg = 'rgba(255,255,255,.05)'; }
+
+      // Fecha urgencia
+      var urg = pumFechaUrgencia(p.fechaEntrega);
+      var fechaTag = '';
+      if (p.fechaEntrega) {
+        var urgCol = urg==='vencido'?'#e24b4a':urg==='urgente'?'#eda100':'#1baf7a';
+        var urgIcon = urg==='vencido'?'🔴':urg==='urgente'?'🟡':'🟢';
+        fechaTag = '<span style="font-size:10px;color:' + urgCol + ';margin-left:6px">' + urgIcon + ' ' + p.fechaEntrega + '</span>';
+      }
+
+      h += '<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:0.5px solid rgba(255,255,255,.04)">';
+      // Icono sin gestionar
+      if (!p.folioP) {
+        h += '<div style="width:7px;height:7px;border-radius:50%;background:#444;margin-top:4px;flex-shrink:0"></div>';
+      } else {
+        h += '<div style="width:7px;height:7px;border-radius:50%;background:' + ec + ';margin-top:4px;flex-shrink:0"></div>';
+      }
+      h += '<div style="flex:1;min-width:0">';
+      h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">';
+      h += '<span style="font-size:12px;font-weight:500;color:var(--text)">' + (p.tipo||'Sin tipo') + '</span>';
+      if (p.cantIngreso) h += '<span style="font-size:10px;color:var(--dim);background:rgba(255,255,255,.06);padding:1px 6px;border-radius:10px">' + p.cantIngreso + '</span>';
+      if (p.metodo) h += '<span style="font-size:10px;color:var(--dim)">' + p.metodo + '</span>';
+      fechaTag && (h += fechaTag);
+      h += '</div>';
+      // Folio permiso
+      if (p.folioP) {
+        h += '<div style="font-size:10px;color:var(--accent);font-family:var(--mono);margin-bottom:3px">' + p.folioP.replace(/\n/g,' · ') + '</div>';
+      } else {
+        h += '<div style="font-size:10px;color:#555;font-style:italic">Sin gestionar</div>';
+      }
+      // Topo/Geo chips
+      if (p.folioP) {
+        h += '<div style="display:flex;gap:6px;margin-top:3px">';
+        h += pumDepChip('Topo', p.topo);
+        h += pumDepChip('Geo', p.geo);
+        if (p.respPermisos) h += '<span style="font-size:10px;color:var(--dim);padding:1px 6px;border-radius:10px;background:rgba(255,255,255,.06)">Resp: ' + p.respPermisos + '</span>';
+        if (p.autoridad) h += '<span style="font-size:10px;color:var(--dim)">' + p.autoridad + '</span>';
+        h += '</div>';
+      }
+      if (p.comentario) h += '<div style="font-size:10px;color:var(--dim);margin-top:2px;font-style:italic">' + p.comentario + '</div>';
+      h += '</div>'; // fin info permiso
+      // Responsable + estatus
+      h += '<div style="text-align:right;flex-shrink:0;min-width:90px">';
+      h += '<div style="font-size:11px;font-weight:500;color:' + rc + ';margin-bottom:4px">' + p.respNorm + '</div>';
+      h += '<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:' + ebg + ';color:' + ec + ';font-weight:500">' + p.estatus + '</span>';
+      if (p.proyectista) h += '<div style="font-size:10px;color:var(--dim);margin-top:3px">' + p.proyectista + '</div>';
+      h += '</div>';
+      h += '</div>'; // fin permiso
+    });
+    h += '</div>'; // fin permisos
+    h += '</div>'; // fin panel ILA
+  });
+
+  h += '</div>'; // fin lista ILAs
   el.innerHTML = h;
 }
 
-function pumKPI(lbl, val, col, filtro) {
-  var active = filtro && PUM_FILTRO_RESP === filtro;
-  return '<div class="panel" onclick="pumSetFiltro(\'' + filtro + '\')" style="padding:14px 16px;border-left:3px solid ' + col + ';cursor:' + (filtro?'pointer':'default') + ';' + (active?'background:' + col + '18;':'') + 'transition:background .15s">' +
+function pumKPIcard(lbl, val, col) {
+  return '<div class="panel" style="padding:14px 16px;border-left:3px solid ' + col + '">' +
     '<div style="font-size:26px;font-weight:700;color:' + col + ';line-height:1.1">' + val + '</div>' +
     '<div style="font-size:11px;color:var(--dim);margin-top:4px">' + lbl + '</div>' +
     '</div>';
 }
 
-function pumSetFiltro(resp) {
-  PUM_FILTRO_RESP = resp;
-  pumRenderAll();
+function pumDepChip(lbl, val) {
+  var v = (val || '').toLowerCase().trim();
+  var ok = v === 'si' || v === 'sí';
+  var no = v === 'no';
+  var col = ok ? '#1baf7a' : no ? '#e24b4a' : '#555';
+  var icon = ok ? '✓' : no ? '✗' : '—';
+  return '<span style="font-size:10px;padding:1px 7px;border-radius:10px;background:' + col + '22;color:' + col + '">' + icon + ' ' + lbl + '</span>';
 }
 
-// Inicializar al abrir
-try {
-  var _s = localStorage.getItem('pum_v3');
-  if (_s) PUM_DATA = JSON.parse(_s);
-  var _f = localStorage.getItem('pum_v3_fecha');
-  setTimeout(function(){
-    var fe = document.getElementById('pumFecha');
-    if (_f && fe) fe.textContent = 'Actualizado: ' + _f;
-    if (PUM_DATA.length) pumRenderAll();
-  }, 100);
-} catch(ex) {}
+// Inicializar
+(function() {
+  try {
+    var s = localStorage.getItem('pum_v4');
+    if (s) { PUM_DATA = JSON.parse(s); }
+    var f = localStorage.getItem('pum_v4_fecha');
+    setTimeout(function() {
+      var fe = document.getElementById('pumFecha');
+      if (f && fe) fe.textContent = 'Actualizado: ' + f;
+      if (PUM_DATA.length) pumSetVista('todos');
+    }, 150);
+  } catch(ex) {}
+})();
 
 try{ cronoLoad(); cronoLoadCatalogo(); }catch(e){}
 
