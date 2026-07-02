@@ -1917,12 +1917,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <div class="topbar">
         <div>
           <div class="dash-back" onclick="dashBackToGaleria()">← Dashboards</div>
-          <h1 style="margin-top:4px">📋 Permisos UM</h1>
+          <h1 style="margin-top:4px">📋 Permisos UM — Últimas Millas</h1>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
-          <label style="font-size:11px;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer">
+          <label style="font-size:11px;padding:6px 14px;border-radius:var(--radius);border:0.5px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:6px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Cargar CSV
             <input type="file" id="pumCsvInput" accept=".csv" style="display:none" onchange="pumLoadCSV(this)">
-            ⬆ Cargar CSV
           </label>
           <span id="pumFecha" style="font-size:11px;color:var(--dim)"></span>
         </div>
@@ -1931,56 +1932,61 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 
         <!-- KPIs -->
         <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:1.25rem">
-          <div class="panel" style="padding:12px 14px"><div id="pumKTot" style="font-size:22px;font-weight:600;color:var(--text)">—</div><div style="font-size:11px;color:var(--dim);margin-top:2px">Total permisos</div></div>
-          <div class="panel" style="padding:12px 14px"><div id="pumKCrit" style="font-size:22px;font-weight:600;color:#e24b4a">—</div><div style="font-size:11px;color:var(--dim);margin-top:2px">Prioridad crítica</div></div>
-          <div class="panel" style="padding:12px 14px"><div id="pumKProy" style="font-size:22px;font-weight:600;color:var(--text)">—</div><div style="font-size:11px;color:var(--dim);margin-top:2px">Proyectos activos</div></div>
-          <div class="panel" style="padding:12px 14px"><div id="pumKAvg" style="font-size:22px;font-weight:600;color:var(--accent)">—</div><div style="font-size:11px;color:var(--dim);margin-top:2px">Avance prom. IL</div></div>
-          <div class="panel" style="padding:12px 14px"><div id="pumKKm" style="font-size:22px;font-weight:600;color:var(--text)">—</div><div style="font-size:11px;color:var(--dim);margin-top:2px">Km totales</div></div>
+          <div class="panel" style="padding:14px 16px;border-left:3px solid var(--accent)">
+            <div id="pumKTot" style="font-size:26px;font-weight:700;color:var(--text)">—</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:3px">Total permisos</div>
+          </div>
+          <div class="panel" style="padding:14px 16px;border-left:3px solid #e24b4a">
+            <div id="pumKCrit" style="font-size:26px;font-weight:700;color:#e24b4a">—</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:3px">Prioridad crítica</div>
+          </div>
+          <div class="panel" style="padding:14px 16px;border-left:3px solid #1baf7a">
+            <div id="pumKEnProceso" style="font-size:26px;font-weight:700;color:#1baf7a">—</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:3px">En proceso</div>
+          </div>
+          <div class="panel" style="padding:14px 16px;border-left:3px solid #eda100">
+            <div id="pumKSinIniciar" style="font-size:26px;font-weight:700;color:#eda100">—</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:3px">Sin iniciar</div>
+          </div>
+          <div class="panel" style="padding:14px 16px;border-left:3px solid var(--dim)">
+            <div id="pumKPendiente" style="font-size:26px;font-weight:700;color:var(--dim)">—</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:3px">Pendiente gestión</div>
+          </div>
         </div>
 
         <!-- Gráficas -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.25rem">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:1.25rem">
           <div class="panel" style="padding:14px 16px">
-            <div style="font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Por responsable</div>
+            <div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Responsable</div>
             <div id="pumGResp"></div>
           </div>
           <div class="panel" style="padding:14px 16px">
-            <div style="font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Por tipo de permiso</div>
-            <div id="pumGTipo"></div>
-          </div>
-          <div class="panel" style="padding:14px 16px">
-            <div style="font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Por prioridad</div>
+            <div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Prioridad</div>
             <div id="pumGPrior"></div>
           </div>
           <div class="panel" style="padding:14px 16px">
-            <div style="font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Avance IL por proyecto</div>
-            <div id="pumGProy"></div>
+            <div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Método constructivo</div>
+            <div id="pumGMetodo"></div>
           </div>
         </div>
 
         <!-- Dependencias -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.25rem">
           <div class="panel" style="padding:14px 16px">
-            <div style="font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Dependencia — Información preliminar</div>
-            <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px;font-size:10px;color:var(--dim);font-weight:600;padding-bottom:6px;border-bottom:0.5px solid var(--border);margin-bottom:4px">
-              <span>Campo</span><span style="text-align:center;width:40px">✓ Sí</span><span style="text-align:center;width:40px">✗ No</span><span style="text-align:center;width:40px">— N/A</span>
-            </div>
+            <div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Info preliminar</div>
             <div id="pumDepPrelim"></div>
           </div>
           <div class="panel" style="padding:14px 16px">
-            <div style="font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Dependencia — Censo de afectación</div>
-            <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px;font-size:10px;color:var(--dim);font-weight:600;padding-bottom:6px;border-bottom:0.5px solid var(--border);margin-bottom:4px">
-              <span>Campo</span><span style="text-align:center;width:40px">✓ Sí</span><span style="text-align:center;width:40px">✗ No</span><span style="text-align:center;width:40px">— N/A</span>
-            </div>
+            <div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Censo de afectación</div>
             <div id="pumDepCenso"></div>
           </div>
         </div>
 
-        <!-- Tabla completitud dependencias -->
+        <!-- Tabla principal -->
         <div class="panel" style="padding:14px 16px;margin-bottom:1.25rem">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-            <div style="font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.05em">Completitud por permiso</div>
-            <div style="display:flex;gap:8px">
+            <div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em">Detalle de permisos</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
               <select id="pumFPrior" onchange="pumRender()" style="font-size:11px;padding:4px 8px;border-radius:6px;border:0.5px solid var(--border);background:var(--surface);color:var(--text)">
                 <option value="">Todas las prioridades</option>
                 <option>Critica</option><option>Alta</option><option>Media</option><option>Baja</option>
@@ -1988,34 +1994,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
               <select id="pumFResp" onchange="pumRender()" style="font-size:11px;padding:4px 8px;border-radius:6px;border:0.5px solid var(--border);background:var(--surface);color:var(--text)">
                 <option value="">Todos los responsables</option>
               </select>
+              <select id="pumFEst" onchange="pumRender()" style="font-size:11px;padding:4px 8px;border-radius:6px;border:0.5px solid var(--border);background:var(--surface);color:var(--text)">
+                <option value="">Todos los estatus</option>
+                <option>En proceso</option><option>Sin Iniciar</option><option>Pendiente</option>
+              </select>
             </div>
           </div>
           <div style="overflow-x:auto">
-            <table style="width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed">
-              <colgroup>
-                <col style="width:70px"><col style="width:120px"><col style="width:110px">
-                <col style="width:80px"><col style="width:60px"><col style="width:60px">
-                <col style="width:45px"><col style="width:45px"><col style="width:55px">
-                <col style="width:65px"><col style="width:70px"><col style="width:50px"><col style="width:50px"><col style="width:55px">
-              </colgroup>
-              <thead>
-                <tr style="border-bottom:0.5px solid var(--border)">
-                  <th style="padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:left;text-transform:uppercase">Prior.</th>
-                  <th style="padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:left;text-transform:uppercase">Proyecto</th>
-                  <th style="padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:left;text-transform:uppercase">Tipo permiso</th>
-                  <th style="padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:left;text-transform:uppercase">Responsable</th>
-                  <th style="padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:center;text-transform:uppercase">% IL</th>
-                  <th style="padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:center;text-transform:uppercase">Km</th>
-                  <th style="padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:center;text-transform:uppercase" title="Topografía">Topo</th>
-                  <th style="padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:center;text-transform:uppercase" title="Geotecnia">Geo</th>
-                  <th style="padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:center;text-transform:uppercase" title="Solicitud especial">Sol.esp</th>
-                  <th style="padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:center;text-transform:uppercase" title="Dependencia/Autoridad">Dep/Auto</th>
-                  <th style="padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:center;text-transform:uppercase" title="Nombre de Carretera">Carretera</th>
-                  <th style="padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:center;text-transform:uppercase" title="Cuadro de firmas">Firmas</th>
-                  <th style="padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:center;text-transform:uppercase" title="Lista de alcance">Alcance</th>
-                  <th style="padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:left;text-transform:uppercase">Comentario</th>
-                </tr>
-              </thead>
+            <table id="pumTable" style="width:100%;border-collapse:collapse;font-size:11px">
+              <thead id="pumTHead"></thead>
               <tbody id="pumTBody"></tbody>
             </table>
           </div>
@@ -5964,202 +5951,323 @@ function cronoCatExportPDF(){
 }
 
 
-// ══════════════════════════════════════════════════════════════════════════════
-//  DASHBOARD PERMISOS UM
-// ══════════════════════════════════════════════════════════════════════════════
-const PUM_KEY = 'pum_data_v2';
-const PUM_FECHA_KEY = 'pum_fecha_v2';
-let PUM_DATA = [];
 
-const PUM_SAMPLE = [
-  {prioridad:'Critica',avance:'99%',proyecto:'Sombrerete',folioM:'2025-ZAC-UM-SOM-025',folioP:'',tipo:'Municipal',km:'',responsable:'Francisco',comentario:'Entregar permiso municipal impreso',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-  {prioridad:'Critica',avance:'99%',proyecto:'Aguascalientes',folioM:'2025-AGS-UM-AGS-029',folioP:'',tipo:'Municipal (Subidas a poste)',km:'',responsable:'Francisco',comentario:'Gestionar permiso',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-  {prioridad:'Critica',avance:'92%',proyecto:'Venustiano Carranza',folioM:'2025-SON-UM-VCA-013',folioP:'',tipo:'Municipal',km:'',responsable:'Francisco',comentario:'Gestionar permiso municipal',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-  {prioridad:'Critica',avance:'92%',proyecto:'Venustiano Carranza',folioM:'2025-SON-UM-VCA-013',folioP:'2025-SON-UM-VCA-013',tipo:'Federal Libre',km:'',responsable:'Raquel',comentario:'Gestionar permiso federal libre',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-  {prioridad:'Critica',avance:'85%',proyecto:'Vicam',folioM:'2025-SON-UM-VIC-010',folioP:'',tipo:'Municipal',km:'',responsable:'Francisco',comentario:'Gestionar permiso municipal',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-  {prioridad:'Critica',avance:'85%',proyecto:'Vicam',folioM:'2025-SON-UM-VIC-010',folioP:'2025-SON-UM-VIC-010',tipo:'SICT',km:'',responsable:'Raquel',comentario:'Gestionar permiso SICT',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-  {prioridad:'Critica',avance:'85%',proyecto:'Navojoa',folioM:'2025-SON-UM-NAV-012',folioP:'',tipo:'Definición de ruta',km:'',responsable:'Equipo de Construcción',comentario:'Definir ruta para continuar permisos',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-  {prioridad:'Alta',avance:'75%',proyecto:'Amado Nervo',folioM:'2025-DGO-UM-AMN-024',folioP:'2025-DGO-UM-AMN-024',tipo:'Federal',km:'',responsable:'Raquel',comentario:'Gestionar permiso federal',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-  {prioridad:'Alta',avance:'75%',proyecto:'Amado Nervo',folioM:'2025-DGO-UM-AMN-024',folioP:'2025-DGO-UM-AMN-024',tipo:'Estatal',km:'',responsable:'Raquel',comentario:'Gestionar permiso estatal',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-  {prioridad:'Alta',avance:'75%',proyecto:'Amado Nervo',folioM:'2025-DGO-UM-AMN-024',folioP:'',tipo:'Municipal',km:'',responsable:'Francisco',comentario:'Gestionar permiso municipal',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-  {prioridad:'Media',avance:'54%',proyecto:'Lagos de Moreno',folioM:'2025-JAL-UM-LDM-030',folioP:'',tipo:'Entrega Municipio',km:'',responsable:'Hazael',comentario:'Entrego permiso en ap municipal de LD',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-  {prioridad:'Media',avance:'42%',proyecto:'Celaya',folioM:'2025-GTO-UM-CEL-033',folioP:'',tipo:'Municipal',km:'',responsable:'Francisco',comentario:'Gestionar permiso municipal',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-  {prioridad:'Media',avance:'38%',proyecto:'León',folioM:'2025-GTO-UM-LEO-031',folioP:'',tipo:'Municipal',km:'',responsable:'Hazael',comentario:'Gestionar permiso municipal',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-  {prioridad:'Baja',avance:'16%',proyecto:'Irapuato',folioM:'2025-GTO-UM-IRA-032',folioP:'2025-GTO-UM-IRA-032',tipo:'Proyecto Federal',km:'',responsable:'Raquel',comentario:'Elaborar proyecto para permiso federal',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-  {prioridad:'Baja',avance:'14%',proyecto:'Culiacán',folioM:'2025-SIN-UM-CUL-017',folioP:'',tipo:'Municipal',km:'',responsable:'Hazael',comentario:'Gestionar permiso municipal',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-  {prioridad:'Baja',avance:'14%',proyecto:'Culiacán',folioM:'2025-SIN-UM-CUL-017',folioP:'2025-SIN-UM-CUL-017',tipo:'Federal',km:'',responsable:'Raquel',comentario:'Gestionar permiso federal',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-  {prioridad:'Baja',avance:'14%',proyecto:'Higuerrilla',folioM:'2025-SIN-UM-HIG-018',folioP:'',tipo:'Federal Libre',km:'',responsable:'Francisco',comentario:'Gestionar permiso federal libre',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-  {prioridad:'Baja',avance:'14%',proyecto:'Higuerrilla',folioM:'2025-SIN-UM-HIG-018',folioP:'',tipo:'Municipal',km:'',responsable:'Francisco',comentario:'Gestionar permiso municipal',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-  {prioridad:'Baja',avance:'0%',proyecto:'Guaymas',folioM:'2025-SON-UM-GYM-009',folioP:'2025-SON-UM-GYM-009',tipo:'SICT',km:'',responsable:'Raquel (pendiente por topografía)',comentario:'Gestionar permiso SICT',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-  {prioridad:'Baja',avance:'0%',proyecto:'Guaymas',folioM:'2025-SON-UM-GYM-009',folioP:'',tipo:'Ejido',km:'',responsable:'Francisco (enviado)',comentario:'Seguimiento al permiso de ejido',proyectista:'',estatus:'',topo:'',geo:'',solEsp:'',depAuto:'',carretera:'',tramo:'',firmas:'',alcance:''},
-];
+// ══════════════════════════════════════════════════════════════════════════════
+//  DASHBOARD PERMISOS UM v2
+// ══════════════════════════════════════════════════════════════════════════════
+const PUM_KEY = 'pum_data_v3';
+const PUM_FECHA_KEY = 'pum_fecha_v3';
+var PUM_DATA = [];
 
-function pumParseCSV(txt){
-  const lines = txt.split(/\r?\n/).filter(l=>l.trim());
-  const rows = [];
-  for(let i=2;i<lines.length;i++){
-    const c = lines[i].split(',');
-    if(!c[0]&&!c[2]) continue;
-    rows.push({
-      prioridad:c[0]?.trim()||'', avance:c[1]?.trim()||'',
-      proyecto:c[2]?.trim()||'', folioM:c[3]?.trim()||'',
-      folioP:c[4]?.trim()||'', tipo:c[5]?.trim()||'',
-      km:c[6]?.trim()||'', responsable:c[7]?.trim()||'',
-      comentario:c[8]?.trim()||'', proyectista:c[9]?.trim()||'',
-      estatus:c[10]?.trim()||'',
-      topo:c[11]?.trim()||'', geo:c[12]?.trim()||'',
-      solEsp:c[13]?.trim()||'', depAuto:c[14]?.trim()||'',
-      carretera:c[15]?.trim()||'', tramo:c[16]?.trim()||'',
-      firmas:c[17]?.trim()||'', alcance:c[18]?.trim()||''
-    });
+// Columnas: [0]Prioridad [1]%Avance [2]Proyecto [3]BC [4]FolioM [5]FolioP
+// [6]Tipo [7]CantIngreso [8]Metodo [9]Km [10]Responsable [11]Comentario
+// [12]Proyectista [13]Correo [14]Drive [15]Imagen [16]Estatus
+// [17]Topo [18]Geo [19]SolEsp [20]RespPermisos [21]TipoOficial
+// [22]Autoridad [23]Carretera [24]Tramo [25]Firmas [26]Alcance [27]KMZ
+
+function pumParseCSV(txt) {
+  var lines = txt.split(/\r?\n/);
+  var rows = [];
+  var inQuote = false, cur = [], field = '';
+  var dataLines = [];
+  // Saltar primeras 2 filas (headers de grupo y headers de columna)
+  var lineCount = 0;
+  for (var li = 0; li < lines.length; li++) {
+    if (lineCount < 2) { lineCount++; continue; }
+    var line = lines[li];
+    // Parse CSV con manejo de comillas
+    var cols = [];
+    var f = '', q = false;
+    for (var ci = 0; ci < line.length; ci++) {
+      var ch = line[ci];
+      if (ch === '"') { q = !q; }
+      else if (ch === ',' && !q) { cols.push(f.trim()); f = ''; }
+      else { f += ch; }
+    }
+    cols.push(f.trim());
+    if (cols.length > 2 && (cols[0] || cols[2])) {
+      rows.push({
+        prioridad:   cols[0]  || '',
+        avance:      cols[1]  || '',
+        proyecto:    cols[2]  || '',
+        bc:          cols[3]  || '',
+        folioM:      cols[4]  || '',
+        folioP:      cols[5]  || '',
+        tipo:        cols[6]  || '',
+        cantIngreso: cols[7]  || '',
+        metodo:      cols[8]  || '',
+        km:          cols[9]  || '',
+        responsable: cols[10] || '',
+        proyectista: cols[12] || '',
+        drive:       cols[14] || '',
+        estatus:     cols[16] || '',
+        topo:        cols[17] || '',
+        geo:         cols[18] || '',
+        solEsp:      cols[19] || '',
+        respPermisos:cols[20] || '',
+        tipoOficial: cols[21] || '',
+        autoridad:   cols[22] || '',
+        carretera:   cols[23] || '',
+        tramo:       cols[24] || '',
+        firmas:      cols[25] || '',
+        alcance:     cols[26] || '',
+        kmz:         cols[27] || ''
+      });
+    }
   }
   return rows;
 }
 
-function pumLoadCSV(inp){
-  const f = inp.files[0]; if(!f) return;
-  const r = new FileReader();
-  r.onload = e=>{
+function pumLoadCSV(inp) {
+  var f = inp.files[0]; if (!f) return;
+  var r = new FileReader();
+  r.onload = function(e) {
     PUM_DATA = pumParseCSV(e.target.result);
-    const fecha = new Date().toLocaleString('es-MX');
-    try{
-      localStorage.setItem(PUM_KEY, JSON.stringify(PUM_DATA));
-      localStorage.setItem(PUM_FECHA_KEY, fecha);
-    }catch(e){}
-    document.getElementById('pumFecha').textContent = 'Actualizado: '+fecha;
+    var fecha = new Date().toLocaleString('es-MX');
+    try { localStorage.setItem(PUM_KEY, JSON.stringify(PUM_DATA)); localStorage.setItem(PUM_FECHA_KEY, fecha); } catch(ex) {}
+    var fe = document.getElementById('pumFecha');
+    if (fe) fe.textContent = 'Actualizado: ' + fecha;
     pumRender();
   };
-  r.readAsText(f);
+  r.readAsText(f, 'UTF-8');
 }
 
-function pumBarChart(elId, data, colorFn){
-  const el = document.getElementById(elId); if(!el) return;
-  const max = Math.max(...data.map(d=>d.v), 1);
-  el.innerHTML = data.map((d,i)=>`
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
-      <div style="font-size:11px;color:var(--dim);width:110px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${d.k}">${d.k}</div>
-      <div style="flex:1;height:8px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden">
-        <div style="width:${Math.round(d.v/max*100)}%;height:100%;background:${colorFn(i,d)};border-radius:4px"></div>
-      </div>
-      <div style="font-size:11px;color:var(--dim);min-width:24px;text-align:right">${d.v}</div>
-    </div>`).join('');
-}
-
-function pumDepRow(lbl, ok, no){
-  return `<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px;align-items:center;padding:6px 0;border-bottom:0.5px solid rgba(255,255,255,.06);font-size:12px">
-    <span style="color:var(--text)">${lbl}</span>
-    <span style="width:40px;text-align:center"><span style="font-size:10px;padding:2px 6px;border-radius:20px;background:rgba(61,214,140,.12);color:var(--green);font-weight:500">${ok}</span></span>
-    <span style="width:40px;text-align:center"><span style="font-size:10px;padding:2px 6px;border-radius:20px;background:rgba(255,92,92,.1);color:#ff6b6b;font-weight:500">${no}</span></span>
-    <span style="width:40px;text-align:center"><span style="font-size:10px;padding:2px 6px;border-radius:20px;background:rgba(255,255,255,.06);color:var(--dim)">${0}</span></span>
-  </div>`;
-}
-
-function pumChipDep(val){
-  return val&&val.trim()
-    ? `<span style="color:var(--green);font-size:12px">✓</span>`
-    : `<span style="color:rgba(255,92,92,.7);font-size:12px">✗</span>`;
-}
-
-const PUM_COLORS = ['#2a78d6','#1baf7a','#eda100','#4a3aa7','#e34948','#e87ba4','#eb6834','#888780'];
-const PUM_PCOLS = {Critica:'#e24b4a',Alta:'#eda100',Media:'#2a78d6',Baja:'#888780'};
-const PUM_PORDER = ['Critica','Alta','Media','Baja'];
-const PUM_BDGE = {Critica:'rgba(226,75,74,.12);color:#e24b4a',Alta:'rgba(237,161,0,.1);color:#eda100',Media:'rgba(42,120,214,.12);color:#2a78d6',Baja:'rgba(255,255,255,.06);color:var(--dim)'};
-
-function pumRender(){
-  // Cargar de localStorage si no hay datos
-  if(!PUM_DATA.length){
-    try{
-      const s=localStorage.getItem(PUM_KEY);
-      if(s) PUM_DATA=JSON.parse(s);
-      else PUM_DATA=[...PUM_SAMPLE];
-    }catch(e){ PUM_DATA=[...PUM_SAMPLE]; }
+function pumBar(elId, data, colorFn) {
+  var el = document.getElementById(elId); if (!el) return;
+  var max = 1;
+  for (var i = 0; i < data.length; i++) if (data[i].v > max) max = data[i].v;
+  var h = '';
+  for (var i = 0; i < data.length; i++) {
+    var pct = Math.round(data[i].v / max * 100);
+    var col = typeof colorFn === 'function' ? colorFn(i, data[i]) : colorFn;
+    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
+    h += '<div style="font-size:11px;color:var(--dim);width:120px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + data[i].k + '">' + data[i].k + '</div>';
+    h += '<div style="flex:1;height:8px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden">';
+    h += '<div style="width:' + pct + '%;height:100%;background:' + col + ';border-radius:4px"></div></div>';
+    h += '<div style="font-size:11px;color:var(--dim);min-width:20px;text-align:right">' + data[i].v + '</div>';
+    h += '</div>';
   }
-  const fecha=localStorage.getItem(PUM_FECHA_KEY);
-  const fechaEl=document.getElementById('pumFecha');
-  if(fecha&&fechaEl) fechaEl.textContent='Actualizado: '+fecha;
+  el.innerHTML = h;
+}
 
-  const fp=document.getElementById('pumFPrior')?.value||'';
-  const fr=document.getElementById('pumFResp')?.value||'';
+function pumDepStat(field) {
+  var ok = 0, no = 0;
+  for (var i = 0; i < PUM_DATA.length; i++) {
+    var v = (PUM_DATA[i][field] || '').toLowerCase().trim();
+    if (v === 'si' || v === 'sí' || v === 'yes') ok++;
+    else if (v === 'no') no++;
+  }
+  return { ok: ok, no: no, empty: PUM_DATA.length - ok - no };
+}
+
+function pumDepRowHtml(lbl, ok, no, empty) {
+  return '<div style="display:flex;align-items:center;gap:6px;padding:7px 0;border-bottom:0.5px solid rgba(255,255,255,.06);font-size:12px">' +
+    '<span style="flex:1;color:var(--text)">' + lbl + '</span>' +
+    '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:rgba(61,214,140,.1);color:var(--green);font-weight:500">✓ ' + ok + '</span>' +
+    '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:rgba(255,92,92,.1);color:#ff6b6b;font-weight:500">✗ ' + no + '</span>' +
+    '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:rgba(255,255,255,.06);color:var(--dim)">— ' + empty + '</span>' +
+    '</div>';
+}
+
+function pumEstatusColor(e) {
+  var v = (e || '').toLowerCase();
+  if (v.indexOf('proceso') >= 0) return '#1baf7a';
+  if (v.indexOf('sin') >= 0) return '#eda100';
+  return 'var(--dim)';
+}
+function pumEstatusBg(e) {
+  var v = (e || '').toLowerCase();
+  if (v.indexOf('proceso') >= 0) return 'rgba(61,214,140,.1)';
+  if (v.indexOf('sin') >= 0) return 'rgba(237,161,0,.1)';
+  return 'rgba(255,255,255,.06)';
+}
+function pumPriorBg(p) {
+  if (p==='Critica') return 'rgba(226,75,74,.12)';
+  if (p==='Alta') return 'rgba(237,161,0,.1)';
+  if (p==='Media') return 'rgba(42,120,214,.12)';
+  return 'rgba(255,255,255,.06)';
+}
+function pumPriorColor(p) {
+  if (p==='Critica') return '#e24b4a';
+  if (p==='Alta') return '#eda100';
+  if (p==='Media') return '#2a78d6';
+  return 'var(--dim)';
+}
+
+function pumChip(val) {
+  var v = (val || '').toLowerCase().trim();
+  if (v === 'si' || v === 'sí') return '<span style="color:var(--green);font-weight:600">✓</span>';
+  if (v === 'no') return '<span style="color:#ff6b6b">✗</span>';
+  if (v === '-' || v === '') return '<span style="color:var(--dim)">—</span>';
+  return '<span style="color:var(--dim);font-size:10px">' + val + '</span>';
+}
+
+function pumRender() {
+  if (!PUM_DATA.length) {
+    try {
+      var s = localStorage.getItem(PUM_KEY);
+      if (s) PUM_DATA = JSON.parse(s);
+    } catch(ex) {}
+  }
+  if (!PUM_DATA.length) {
+    var el = document.getElementById('pumTBody');
+    if (el) el.innerHTML = '<tr><td colspan="15" style="padding:40px;text-align:center;color:var(--dim)">Carga el CSV para ver los datos</td></tr>';
+    return;
+  }
+
+  var fecha = localStorage.getItem(PUM_FECHA_KEY);
+  var fe = document.getElementById('pumFecha');
+  if (fecha && fe) fe.textContent = 'Actualizado: ' + fecha;
+
+  var fp = (document.getElementById('pumFPrior') || {}).value || '';
+  var fr = (document.getElementById('pumFResp') || {}).value || '';
+  var fest = (document.getElementById('pumFEst') || {}).value || '';
 
   // KPIs
-  document.getElementById('pumKTot').textContent=PUM_DATA.length;
-  document.getElementById('pumKCrit').textContent=PUM_DATA.filter(d=>d.prioridad==='Critica').length;
-  document.getElementById('pumKProy').textContent=new Set(PUM_DATA.map(d=>d.proyecto)).size;
-  const avgs=PUM_DATA.map(d=>parseFloat(d.avance)||0);
-  document.getElementById('pumKAvg').textContent=Math.round(avgs.reduce((a,b)=>a+b,0)/Math.max(avgs.length,1))+'%';
-  const kms=PUM_DATA.map(d=>parseFloat(d.km)||0).reduce((a,b)=>a+b,0);
-  document.getElementById('pumKKm').textContent=kms>0?kms.toFixed(1)+' km':'—';
+  var tot = PUM_DATA.length;
+  var crit = 0, enProceso = 0, sinIniciar = 0, pendiente = 0;
+  for (var i = 0; i < PUM_DATA.length; i++) {
+    var d = PUM_DATA[i];
+    if (d.prioridad === 'Critica') crit++;
+    var est = (d.estatus || '').toLowerCase();
+    if (est.indexOf('proceso') >= 0) enProceso++;
+    else if (est.indexOf('sin') >= 0) sinIniciar++;
+    else pendiente++;
+  }
+  document.getElementById('pumKTot').textContent = tot;
+  document.getElementById('pumKCrit').textContent = crit;
+  document.getElementById('pumKEnProceso').textContent = enProceso;
+  document.getElementById('pumKSinIniciar').textContent = sinIniciar;
+  document.getElementById('pumKPendiente').textContent = pendiente;
 
   // Gráficas
-  const byR={};PUM_DATA.forEach(d=>{const r=(d.responsable||'—').split(' ')[0];byR[r]=(byR[r]||0)+1;});
-  pumBarChart('pumGResp',Object.entries(byR).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({k,v})),(i)=>PUM_COLORS[i%PUM_COLORS.length]);
+  var byR = {}, byP = {}, byM = {};
+  var PORDER = ['Critica','Alta','Media','Baja'];
+  for (var i = 0; i < PUM_DATA.length; i++) {
+    var d = PUM_DATA[i];
+    var r = (d.responsable || '—').split(' ')[0].split('(')[0].trim();
+    byR[r] = (byR[r] || 0) + 1;
+    byP[d.prioridad] = (byP[d.prioridad] || 0) + 1;
+    var m = d.metodo || '—';
+    if (m) byM[m] = (byM[m] || 0) + 1;
+  }
+  var respData = Object.keys(byR).sort(function(a,b){ return byR[b]-byR[a]; }).map(function(k){ return {k:k,v:byR[k]}; });
+  var COLS = ['#2a78d6','#1baf7a','#eda100','#4a3aa7','#e34948','#e87ba4'];
+  pumBar('pumGResp', respData, function(i){ return COLS[i % COLS.length]; });
 
-  const byT={};PUM_DATA.forEach(d=>{byT[d.tipo]=(byT[d.tipo]||0)+1;});
-  pumBarChart('pumGTipo',Object.entries(byT).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v])=>({k,v})),()=>'#2a78d6');
+  var priorData = PORDER.filter(function(p){ return byP[p]; }).map(function(p){ return {k:p,v:byP[p]}; });
+  pumBar('pumGPrior', priorData, function(i,d){ return pumPriorColor(d.k); });
 
-  const byP={};PUM_DATA.forEach(d=>{byP[d.prioridad]=(byP[d.prioridad]||0)+1;});
-  pumBarChart('pumGPrior',PUM_PORDER.filter(p=>byP[p]).map(p=>({k:p,v:byP[p]})),(i,d)=>PUM_PCOLS[d.k]||'#888');
+  var metData = Object.keys(byM).filter(function(k){ return k && k !== '—'; }).sort(function(a,b){ return byM[b]-byM[a]; }).map(function(k){ return {k:k,v:byM[k]}; });
+  pumBar('pumGMetodo', metData, function(i){ return ['#4a3aa7','#eb6834','#2a78d6'][i % 3]; });
 
-  const byPy={};PUM_DATA.forEach(d=>{if(byPy[d.proyecto]===undefined)byPy[d.proyecto]=parseFloat(d.avance)||0;});
-  pumBarChart('pumGProy',Object.entries(byPy).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v])=>({k,v})),(i,d)=>d.v>=80?'#1baf7a':d.v>=50?'#eda100':'#e34948');
+  // Dependencias Info Preliminar
+  var prelim = [['Topografía','topo'],['Geotecnia','geo'],['Solicitud especial','solEsp']];
+  var hPrelim = '';
+  for (var i = 0; i < prelim.length; i++) {
+    var s = pumDepStat(prelim[i][1]);
+    hPrelim += pumDepRowHtml(prelim[i][0], s.ok, s.no, s.empty);
+  }
+  var dpEl = document.getElementById('pumDepPrelim');
+  if (dpEl) dpEl.innerHTML = hPrelim;
 
-  // Dependencias preliminar
-  const prelim=[['Topografía','topo'],['Geotecnia','geo'],['Solicitud especial','solEsp']];
-  document.getElementById('pumDepPrelim').innerHTML=prelim.map(([lbl,f])=>{
-    const ok=PUM_DATA.filter(d=>d[f]&&d[f].trim()).length;
-    return pumDepRow(lbl,ok,PUM_DATA.length-ok);
-  }).join('');
+  // Dependencias Censo
+  var censo = [['Cuadro de firmas','firmas'],['Lista de alcance','alcance'],['KMZ dividido','kmz'],['Carretera','carretera'],['Tramo','tramo']];
+  var hCenso = '';
+  for (var i = 0; i < censo.length; i++) {
+    var s = pumDepStat(censo[i][1]);
+    hCenso += pumDepRowHtml(censo[i][0], s.ok, s.no, s.empty);
+  }
+  var dcEl = document.getElementById('pumDepCenso');
+  if (dcEl) dcEl.innerHTML = hCenso;
 
-  // Dependencias censo
-  const censo=[['Dependencia/Autoridad','depAuto'],['Nombre de carretera','carretera'],['Tramo','tramo'],['Cuadro de firmas','firmas'],['Lista de alcance','alcance']];
-  document.getElementById('pumDepCenso').innerHTML=censo.map(([lbl,f])=>{
-    const ok=PUM_DATA.filter(d=>d[f]&&d[f].trim()).length;
-    return pumDepRow(lbl,ok,PUM_DATA.length-ok);
-  }).join('');
-
-  // Filtros
-  const resps=[...new Set(PUM_DATA.map(d=>d.responsable.split(' ')[0]))].sort();
-  const fRSel=document.getElementById('pumFResp');
-  if(fRSel){
-    const cur=fRSel.value;
-    fRSel.innerHTML='<option value="">Todos los responsables</option>'+resps.map(r=>`<option${r===cur?' selected':''}>${r}</option>`).join('');
+  // Filtros responsable
+  var resps = [];
+  for (var i = 0; i < PUM_DATA.length; i++) {
+    var r = PUM_DATA[i].responsable.split(' ')[0].split('(')[0].trim();
+    if (resps.indexOf(r) < 0) resps.push(r);
+  }
+  resps.sort();
+  var fRSel = document.getElementById('pumFResp');
+  if (fRSel) {
+    var cur = fRSel.value;
+    var opts = '<option value="">Todos los responsables</option>';
+    for (var i = 0; i < resps.length; i++) opts += '<option' + (resps[i]===cur?' selected':'') + '>' + resps[i] + '</option>';
+    fRSel.innerHTML = opts;
   }
 
   // Tabla
-  let rows=PUM_DATA;
-  if(fp) rows=rows.filter(d=>d.prioridad===fp);
-  if(fr) rows=rows.filter(d=>d.responsable.startsWith(fr));
+  var rows = PUM_DATA;
+  if (fp) rows = rows.filter(function(d){ return d.prioridad === fp; });
+  if (fr) rows = rows.filter(function(d){ return d.responsable.indexOf(fr) >= 0; });
+  if (fest) {
+    rows = rows.filter(function(d){
+      var e = (d.estatus || '').toLowerCase();
+      if (fest === 'En proceso') return e.indexOf('proceso') >= 0;
+      if (fest === 'Sin Iniciar') return e.indexOf('sin') >= 0;
+      if (fest === 'Pendiente') return !e || (e.indexOf('proceso') < 0 && e.indexOf('sin') < 0);
+      return true;
+    });
+  }
 
-  const bdgStyle=function(r){ return PUM_BDGE[r]||PUM_BDGE.Baja; };
-  var pumHtml='';
-  rows.forEach(function(d){
-    var pct=parseFloat(d.avance)||0;
-    var col=pct>=80?'#1baf7a':pct>=50?'#eda100':'#e34948';
-    var bw='width:'+pct+'%;height:100%;background:'+col+';border-radius:3px';
-    pumHtml+='<tr style="border-bottom:0.5px solid rgba(255,255,255,.05)">';
-    pumHtml+='<td style="padding:7px 8px"><span style="font-size:10px;padding:2px 7px;border-radius:20px;background:'+bdgStyle(d.prioridad)+';font-weight:500">'+d.prioridad+'</span></td>';
-    pumHtml+='<td style="padding:7px 8px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+d.proyecto+'">'+d.proyecto+'</td>';
-    pumHtml+='<td style="padding:7px 8px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+d.tipo+'</td>';
-    pumHtml+='<td style="padding:7px 8px;color:var(--dim)">'+d.responsable.split(' ')[0]+'</td>';
-    pumHtml+='<td style="padding:7px 8px;text-align:center"><div style="display:flex;align-items:center;gap:4px;justify-content:center"><div style="width:40px;height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden"><div style="'+bw+'"></div></div><span style="font-size:10px;color:var(--dim)">'+d.avance+'</span></div></td>';
-    pumHtml+='<td style="padding:7px 8px;text-align:center;font-size:11px;color:var(--dim)">'+(d.km||'—')+'</td>';
-    pumHtml+='<td style="padding:7px 8px;text-align:center">'+pumChipDep(d.topo)+'</td>';
-    pumHtml+='<td style="padding:7px 8px;text-align:center">'+pumChipDep(d.geo)+'</td>';
-    pumHtml+='<td style="padding:7px 8px;text-align:center">'+pumChipDep(d.solEsp)+'</td>';
-    pumHtml+='<td style="padding:7px 8px;text-align:center">'+pumChipDep(d.depAuto)+'</td>';
-    pumHtml+='<td style="padding:7px 8px;text-align:center">'+pumChipDep(d.carretera)+'</td>';
-    pumHtml+='<td style="padding:7px 8px;text-align:center">'+pumChipDep(d.firmas)+'</td>';
-    pumHtml+='<td style="padding:7px 8px;text-align:center">'+pumChipDep(d.alcance)+'</td>';
-    pumHtml+='<td style="padding:7px 8px;font-size:10px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+d.comentario+'">'+d.comentario+'</td>';
-    pumHtml+='</tr>';
-  });
-  document.getElementById('pumTBody').innerHTML=pumHtml;
+  // Header
+  var thead = document.getElementById('pumTHead');
+  if (thead) {
+    thead.innerHTML = '<tr style="border-bottom:0.5px solid var(--border)">' +
+      '<th style="padding:7px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:left;text-transform:uppercase;white-space:nowrap">Prior.</th>' +
+      '<th style="padding:7px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:left;text-transform:uppercase;white-space:nowrap">Proyecto</th>' +
+      '<th style="padding:7px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:left;text-transform:uppercase;white-space:nowrap">Folio Maestro</th>' +
+      '<th style="padding:7px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:left;text-transform:uppercase;white-space:nowrap">Tipo permiso</th>' +
+      '<th style="padding:7px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:left;text-transform:uppercase;white-space:nowrap">Cant. ingreso</th>' +
+      '<th style="padding:7px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:left;text-transform:uppercase;white-space:nowrap">Método</th>' +
+      '<th style="padding:7px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:left;text-transform:uppercase;white-space:nowrap">Responsable</th>' +
+      '<th style="padding:7px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:center;text-transform:uppercase;white-space:nowrap">Estatus</th>' +
+      '<th style="padding:7px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:center;text-transform:uppercase;white-space:nowrap" title="Topografía">Topo</th>' +
+      '<th style="padding:7px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:center;text-transform:uppercase;white-space:nowrap" title="Geotecnia">Geo</th>' +
+      '<th style="padding:7px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:left;text-transform:uppercase;white-space:nowrap">Resp. Permisos</th>' +
+      '<th style="padding:7px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:left;text-transform:uppercase;white-space:nowrap">Autoridad</th>' +
+      '<th style="padding:7px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:center;text-transform:uppercase;white-space:nowrap" title="Cuadro de firmas">Firmas</th>' +
+      '<th style="padding:7px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:center;text-transform:uppercase;white-space:nowrap" title="Lista de alcance">Alcance</th>' +
+      '<th style="padding:7px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:center;text-transform:uppercase;white-space:nowrap" title="KMZ dividido">KMZ</th>' +
+      '</tr>';
+  }
+
+  var tbody = document.getElementById('pumTBody');
+  if (!tbody) return;
+  var html = '';
+  for (var i = 0; i < rows.length; i++) {
+    var d = rows[i];
+    var estVal = d.estatus || 'Pendiente';
+    var estColor = pumEstatusColor(d.estatus);
+    var estBg = pumEstatusBg(d.estatus);
+    var prColor = pumPriorColor(d.prioridad);
+    var prBg = pumPriorBg(d.prioridad);
+    var driveLink = d.drive ? '<a href="https://drive.google.com/drive/search?q=' + encodeURIComponent(d.drive) + '" target="_blank" style="color:var(--accent);font-size:10px;text-decoration:none" title="Abrir Drive">🔗</a> ' : '';
+    html += '<tr style="border-bottom:0.5px solid rgba(255,255,255,.04)">';
+    html += '<td style="padding:8px 8px;white-space:nowrap"><span style="font-size:10px;padding:2px 7px;border-radius:20px;background:' + prBg + ';color:' + prColor + ';font-weight:500">' + d.prioridad + '</span></td>';
+    html += '<td style="padding:8px 8px;font-weight:500;color:var(--text);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + d.proyecto + '">' + d.proyecto + '</td>';
+    html += '<td style="padding:8px 8px;font-size:10px;color:var(--accent);font-family:var(--mono);white-space:nowrap">' + driveLink + d.folioM + '</td>';
+    html += '<td style="padding:8px 8px;color:var(--dim);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + d.tipo + '">' + d.tipo + '</td>';
+    html += '<td style="padding:8px 8px;color:var(--dim);white-space:nowrap">' + (d.cantIngreso || '—') + '</td>';
+    html += '<td style="padding:8px 8px;color:var(--dim);white-space:nowrap">' + (d.metodo || '—') + '</td>';
+    html += '<td style="padding:8px 8px;color:var(--text);white-space:nowrap">' + d.responsable.split('(')[0].trim() + '</td>';
+    html += '<td style="padding:8px 8px;text-align:center;white-space:nowrap"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:' + estBg + ';color:' + estColor + ';font-weight:500">' + estVal + '</span></td>';
+    html += '<td style="padding:8px 8px;text-align:center">' + pumChip(d.topo) + '</td>';
+    html += '<td style="padding:8px 8px;text-align:center">' + pumChip(d.geo) + '</td>';
+    html += '<td style="padding:8px 8px;color:var(--dim);white-space:nowrap">' + (d.respPermisos || '—') + '</td>';
+    html += '<td style="padding:8px 8px;color:var(--dim);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + d.autoridad + '">' + (d.autoridad || '—') + '</td>';
+    html += '<td style="padding:8px 8px;text-align:center">' + pumChip(d.firmas) + '</td>';
+    html += '<td style="padding:8px 8px;text-align:center">' + pumChip(d.alcance) + '</td>';
+    html += '<td style="padding:8px 8px;text-align:center">' + pumChip(d.kmz) + '</td>';
+    html += '</tr>';
+  }
+  tbody.innerHTML = html;
 }
 
-try{
-  const s=localStorage.getItem(PUM_KEY);
-  if(s) PUM_DATA=JSON.parse(s);
-}catch(e){}
+try {
+  var _pumSaved = localStorage.getItem(PUM_KEY);
+  if (_pumSaved) PUM_DATA = JSON.parse(_pumSaved);
+} catch(ex) {}
 
 try{ cronoLoad(); cronoLoadCatalogo(); }catch(e){}
 
