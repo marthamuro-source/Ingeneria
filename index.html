@@ -7837,7 +7837,7 @@ function paRenderTipo(tipo){
         ? `<td style="padding-left:14px;text-align:center;cursor:pointer;font-weight:600;color:var(--accent)" onclick="paInlineNumBobina('${a.id}','${a.numBobina||''}',this)" title="Clic para editar">${a.numBobina?'#'+a.numBobina:'<span style="color:var(--dim);font-weight:400">+ agregar</span>'}</td>`
         : '';
       // Header orden: #Bobina | Folio | Actividad | Proyecto | Propietario | Responsable | F.Asig | F.Término | F.Final Real | Km | Estatus | D.Est | D.Real | Notas | 🔗 | Acciones
-      const folioTd = `<td style="white-space:nowrap"><div class="cs" style="white-space:nowrap;cursor:help;color:var(--accent);font-family:var(--mono);font-size:11px" title="Actividad: ${(a.actividad||'Sin descripción').replace(/"/g,'&quot;')}">${a.folio||'—'}</div></td>`;
+      const folioTd = `<td style="max-width:180px"><div class="cs" style="white-space:normal;word-break:break-word;cursor:help;color:var(--accent);font-family:var(--mono);font-size:11px;line-height:1.4" title="Actividad: ${(a.actividad||'Sin descripción').replace(/"/g,'&quot;')}">${a.folio||'—'}</div></td>`;
       const actividadTd = tipo==='Planos de Conectividad'
         ? `<td style="max-width:140px"><div class="cs" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--muted)" title="${(a.actividad||'').replace(/"/g,'&quot;')}">${a.actividad||'—'}</div></td>`
         : '';
