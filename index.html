@@ -14139,7 +14139,15 @@ function supaStartRealtime(){
         if(idx>=0) CRONO_ITEMS[idx]=parsed;
         else CRONO_ITEMS.push(parsed);
         localStorage.setItem(CRONO_KEY, JSON.stringify(CRONO_ITEMS));
-        if(curView==='seguimiento' && cronoSubTab==='cronograma') renderReporteoView();
+        if(curView==='seguimiento'){
+          // Actualizar cualquier subtab activo del reporteo
+          if(cronoSubTab==='cronograma') renderReporteoView();
+          else if(cronoSubTab==='csv'){
+            // Recargar calendario del admin o del proyectista
+            if(_userRole==='proyectista') renderCronoCalProyectista();
+            else renderCronoCalendario();
+          }
+        }
       })
     .subscribe();
 
