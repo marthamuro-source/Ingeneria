@@ -2034,7 +2034,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           </div>
           <div class="pa-table-wrap">
             <table class="et">
-              <thead><tr><th style="cursor:pointer;padding-left:14px" onclick="paSortTipo('Proyecto','proyecto')"><span class="pa-th-inner">Proyecto <span id="paS-Proyecto-proyecto" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','folio')"><span class="pa-th-inner">Folio <span id="paS-Proyecto-folio" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','responsable')"><span class="pa-th-inner">Responsable <span id="paS-Proyecto-responsable" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','fechaAsig')"><span class="pa-th-inner">F. Asig. <span id="paS-Proyecto-fechaAsig" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','fechaTermino')"><span class="pa-th-inner">F. Término <span id="paS-Proyecto-fechaTermino" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','fechaReal')" title="Fecha en la que realmente se entregó"><span class="pa-th-inner">F. Final Real <span id="paS-Proyecto-fechaReal" class="pa-sort-icon"></span></span></th><th style="text-align:right">Km</th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','estatus')"><span class="pa-th-inner">Estatus <span id="paS-Proyecto-estatus" class="pa-sort-icon"></span></span></th><th style="text-align:center;white-space:nowrap">D.Est</th><th style="text-align:center;white-space:nowrap">D.Real</th><th style="min-width:110px">Notas</th><th style="width:32px;text-align:center">🔗</th><th style="width:56px;padding-right:12px"></th></tr></thead>
+              <thead><tr><th style="cursor:pointer;padding-left:14px" onclick="paSortTipo('Proyecto','proyecto')"><span class="pa-th-inner">Folio <span id="paS-Proyecto-proyecto" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','folio')"><span class="pa-th-inner">Proyecto <span id="paS-Proyecto-folio" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','responsable')"><span class="pa-th-inner">Responsable <span id="paS-Proyecto-responsable" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','fechaAsig')"><span class="pa-th-inner">F. Asig. <span id="paS-Proyecto-fechaAsig" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','fechaTermino')"><span class="pa-th-inner">F. Término <span id="paS-Proyecto-fechaTermino" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','fechaReal')" title="Fecha en la que realmente se entregó"><span class="pa-th-inner">F. Final Real <span id="paS-Proyecto-fechaReal" class="pa-sort-icon"></span></span></th><th style="text-align:right">Km</th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','estatus')"><span class="pa-th-inner">Estatus <span id="paS-Proyecto-estatus" class="pa-sort-icon"></span></span></th><th style="text-align:center;white-space:nowrap">D.Est</th><th style="text-align:center;white-space:nowrap">D.Real</th><th style="min-width:110px">Notas</th><th style="width:32px;text-align:center">🔗</th><th style="width:56px;padding-right:12px"></th></tr></thead>
               <tbody id="paTbody-Proyecto"><tr><td colspan="15" class="pa-empty"><p>Cargando…</p></td></tr></tbody>
             </table>
           </div>
@@ -7732,7 +7732,17 @@ function paRenderTipo(tipo){
     return true;
   });
 
+  // Orden primario: activas primero, luego terminadas
+  const estatusPrioridad = {'En progreso':0,'Sin iniciar':1,'En pausa':2,'En revisión':3,'Terminado':4};
   items.sort((a,b)=>{
+    const pa = estatusPrioridad[a.estatus]??3;
+    const pb = estatusPrioridad[b.estatus]??3;
+    if(pa !== pb) return pa - pb;
+    // Mismo grupo: orden por fecha de asignación descendente (más reciente primero)
+    const fa = a.fechaAsig||'';
+    const fb = b.fechaAsig||'';
+    if(fa !== fb) return fb.localeCompare(fa);
+    // Si hay columna seleccionada manualmente, aplicarla dentro del grupo
     let va=a[s.col]||'', vb=b[s.col]||'';
     if(s.col==='km'){ va=parseFloat(va)||0; vb=parseFloat(vb)||0; return (va-vb)*s.dir; }
     return va.localeCompare(vb,'es')*s.dir;
