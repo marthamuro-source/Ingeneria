@@ -12292,6 +12292,7 @@ function renderSegAvance(){
   html+=`<th>Estatus</th>`;
   html+=`<th>Nota de avance</th>`;
   if(!isOp && !isImp) html+=`<th style="text-align:right">Km act.</th>`;
+  html+=`<th style="text-align:center;width:32px">🔗</th>`;
   html+=`</tr></thead><tbody>`;
 
   items.forEach(a=>{
@@ -12321,6 +12322,7 @@ function renderSegAvance(){
     html+=`<td style="cursor:pointer" onclick="avanceInlineStatus('${a.id}','${estAct}',this)" title="Clic para actualizar estatus"><span class="badge ${sc.cls}">${estAct}</span></td>`;
     html+=`<td style="cursor:pointer;min-width:120px" onclick="avanceInlineNota('${a.id}','${nota.replace(/'/g,"\'")}',this)" title="Clic para agregar nota de avance">${notaDisplay}</td>`;
     if(!isOp && !isImp) html+=`<td style="text-align:right;cursor:pointer" onclick="avanceInlineKm('${a.id}','${kmAct}',this)" title="Clic para actualizar km"><span style="font-size:11px;font-family:var(--mono);color:${kmAct?'var(--text)':'var(--dim)'}">${kmAct||'+ km'}</span></td>`;
+    html+=`<td style="text-align:center;width:32px">${a.enlace?`<a href="${a.enlace}" target="_blank" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none" title="Abrir enlace"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></a>`:'—'}</td>`;
     html+=`</tr>`;
   });
 
