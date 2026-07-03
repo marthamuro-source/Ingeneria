@@ -6002,8 +6002,11 @@ function pumLoadCSV(inp) {
   var f = inp.files[0]; if (!f) return;
   var r = new FileReader();
   r.onload = function(e) {
+    // Limpiar datos anteriores antes de parsear
+    try { localStorage.removeItem('pum_v5_rows'); localStorage.removeItem('pum_v5_fecha'); } catch(ex) {}
     PUM_ROWS = pumParseCSV(e.target.result);
     PUM_ILAS = pumAgrupar(PUM_ROWS);
+    PUM_ILA_OPEN = {}; // resetear ILAs abiertas
     var fecha = new Date().toLocaleString('es-MX');
     try { localStorage.setItem('pum_v5_rows', JSON.stringify(PUM_ROWS));
           localStorage.setItem('pum_v5_fecha', fecha); } catch(ex) {}
