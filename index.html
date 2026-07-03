@@ -6269,22 +6269,13 @@ function pumFechaBadge(f) {
   return '<span style="font-size:11px;color:'+col+'">'+icon+' '+f+'</span>';
 }
 
-// Inicializar desde localStorage
+// Limpiar TODO el localStorage de PUM al cargar
 (function(){
   try {
-    // Limpiar versiones anteriores
-    ['pum_v3','pum_v3_fecha','pum_v4','pum_v4_fecha','pum_v5_rows','pum_v5_fecha'].forEach(function(k){ localStorage.removeItem(k); });
-    var s = localStorage.getItem('pum_v6_rows');
-    if (s) {
-      PUM_ROWS = JSON.parse(s);
-      PUM_ILAS = pumAgrupar(PUM_ROWS);
-    }
-    var f = localStorage.getItem('pum_v6_fecha');
-    setTimeout(function(){
-      var fe = document.getElementById('pumFecha');
-      if (f&&fe) fe.textContent='Actualizado: '+f;
-      if (PUM_ILAS.length) pumSetResp('');
-    }, 150);
+    ['pum_v3','pum_v3_fecha','pum_v4','pum_v4_fecha',
+     'pum_v5_rows','pum_v5_fecha','pum_v6_rows','pum_v6_fecha'].forEach(function(k){
+      localStorage.removeItem(k);
+    });
   } catch(ex){}
 })();
 
