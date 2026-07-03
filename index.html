@@ -6003,13 +6003,13 @@ function pumLoadCSV(inp) {
   var r = new FileReader();
   r.onload = function(e) {
     // Limpiar datos anteriores antes de parsear
-    try { localStorage.removeItem('pum_v5_rows'); localStorage.removeItem('pum_v5_fecha'); } catch(ex) {}
+    try { localStorage.removeItem('pum_v6_rows'); localStorage.removeItem('pum_v6_fecha'); } catch(ex) {}
     PUM_ROWS = pumParseCSV(e.target.result);
     PUM_ILAS = pumAgrupar(PUM_ROWS);
     PUM_ILA_OPEN = {}; // resetear ILAs abiertas
     var fecha = new Date().toLocaleString('es-MX');
-    try { localStorage.setItem('pum_v5_rows', JSON.stringify(PUM_ROWS));
-          localStorage.setItem('pum_v5_fecha', fecha); } catch(ex) {}
+    try { localStorage.setItem('pum_v6_rows', JSON.stringify(PUM_ROWS));
+          localStorage.setItem('pum_v6_fecha', fecha); } catch(ex) {}
     var fe = document.getElementById('pumFecha');
     if (fe) fe.textContent = 'Actualizado: '+fecha;
     pumSetResp('');
@@ -6272,12 +6272,14 @@ function pumFechaBadge(f) {
 // Inicializar desde localStorage
 (function(){
   try {
-    var s = localStorage.getItem('pum_v5_rows');
+    // Limpiar versiones anteriores
+    ['pum_v3','pum_v3_fecha','pum_v4','pum_v4_fecha','pum_v5_rows','pum_v5_fecha'].forEach(function(k){ localStorage.removeItem(k); });
+    var s = localStorage.getItem('pum_v6_rows');
     if (s) {
       PUM_ROWS = JSON.parse(s);
       PUM_ILAS = pumAgrupar(PUM_ROWS);
     }
-    var f = localStorage.getItem('pum_v5_fecha');
+    var f = localStorage.getItem('pum_v6_fecha');
     setTimeout(function(){
       var fe = document.getElementById('pumFecha');
       if (f&&fe) fe.textContent='Actualizado: '+f;
