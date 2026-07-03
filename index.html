@@ -5977,24 +5977,18 @@ function pumParseCSV(txt) {
   return rows;
 }
 
-// Agrupar filas en ILAs
+// Agrupar filas en ILAs — usar Folio Maestro como clave principal
 function pumAgrupar(rows) {
   var ilaMap = {}, ilaOrder = [];
-  var proyToKey = {};
   rows.forEach(function(r) {
+    // Clave = Folio Maestro (siempre único por ILA)
     var key = r.folioM || r.proyecto;
     if (!ilaMap[key]) {
-      // Si el proyecto ya existe con otro folio, asociar
-      if (proyToKey[r.proyecto]) { key = proyToKey[r.proyecto]; }
-      else {
-        ilaMap[key] = { numILA:r.numILA, proyecto:r.proyecto, folioM:r.folioM,
-          avanceIL:r.avanceIL, prioridad:r.prioridad, permisos:[] };
-        proyToKey[r.proyecto] = key;
-        ilaOrder.push(key);
-      }
+      ilaMap[key] = { numILA:r.numILA, proyecto:r.proyecto, folioM:r.folioM,
+        avanceIL:r.avanceIL, prioridad:r.prioridad, permisos:[] };
+      ilaOrder.push(key);
     }
-    if (!ilaMap[key]) return;
-    // Actualizar numILA si faltaba
+    // Actualizar numILA si la fila tiene el dato
     if (!ilaMap[key].numILA && r.numILA) ilaMap[key].numILA = r.numILA;
     ilaMap[key].permisos.push(r);
   });
@@ -6051,11 +6045,14 @@ function pumRender() {
   // Filtrar ILAs por responsable
   var ilas = PUM_ILAS;
   if (PUM_RESP_FILTRO) {
-    ilas = ilas.map(function(ila) {
-      var perms = ila.permisos.filter(function(p){ return p.resp===PUM_RESP_FILTRO; });
-      if (!perms.length) return null;
-      return Object.assign({}, ila, {permisos: perms});
-    }).filter(Boolean);
+    ilas = [];
+    PUM_ILAS.forEach(function(ila) {
+      var perms = ila.permisos.filter(function(p){ return p.resp === PUM_RESP_FILTRO; });
+      if (perms.length > 0) {
+        ilas.push({ numILA:ila.numILA, proyecto:ila.proyecto, folioM:ila.folioM,
+          avanceIL:ila.avanceIL, prioridad:ila.prioridad, permisos:perms });
+      }
+    });
   }
 
   // Calcular métricas sobre datos filtrados
