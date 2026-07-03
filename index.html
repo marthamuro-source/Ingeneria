@@ -5891,87 +5891,85 @@ function cronoCatExportPDF(){
 
 
 
+
 // ══════════════════════════════════════════════════════════════════════════════
-//  DASHBOARD PERMISOS UM v5
+//  DASHBOARD PERMISOS UM v7 — parser robusto multilínea
 // ══════════════════════════════════════════════════════════════════════════════
-var PUM_ROWS = [];       // filas crudas del CSV
-var PUM_ILAS = [];       // ILAs agrupadas
-var PUM_RESP_FILTRO = ''; // '' = todos
-var PUM_ILA_OPEN = {};   // {folioM: true/false}
+var PUM_ROWS = [];
+var PUM_ILAS = [];
+var PUM_RESP_FILTRO = '';
+var PUM_ILA_OPEN = {};
 
 var PUM_RESP_COL = {'Raquel':'#2a78d6','Francisco':'#1baf7a','Hazael':'#eda100','Equipo':'#9b59b6'};
 var PUM_PRIO_COL = {'Critica':'#e24b4a','Alta':'#eda100','Media':'#2a78d6','Baja':'#888'};
 var PUM_EST_COL  = {'En proceso':'#1baf7a','Sin Iniciar':'#eda100','Sin gestionar':'#555'};
 
-// ── Parser CSV ────────────────────────────────────────────────────────────────
-function pumParseCSV(txt) {
-  var rows = [];
-  // Normalizar saltos de línea
-  var raw = txt.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
-  // Reconstruir líneas respetando campos entre comillas que contienen saltos de línea
-  var allLines = raw.split('\n');
-  var cleanLines = [];
-  var buffer = '', qCount = 0;
-  for (var i = 0; i < allLines.length; i++) {
-    var ln = allLines[i];
-    for (var ci = 0; ci < ln.length; ci++) { if (ln[ci]==='"') qCount++; }
-    buffer = buffer ? buffer + ' | ' + ln.trim() : ln;
-    if (qCount % 2 === 0) { cleanLines.push(buffer); buffer = ''; qCount = 0; }
-  }
-  if (buffer) cleanLines.push(buffer);
+function pumNormResp(r) {
+  var v = (r||'').toLowerCase();
+  if (v.indexOf('hazael')>=0) return 'Hazael';
+  if (v.indexOf('francisco')>=0) return 'Francisco';
+  if (v.indexOf('raquel')>=0) return 'Raquel';
+  if (v.indexOf('equipo')>=0||v.indexOf('construc')>=0) return 'Equipo';
+  return (r||'').split(' ')[0]||'';
+}
 
-  function parseRow(line) {
-    var cols = [], f = '', q = false;
-    for (var i = 0; i <= line.length; i++) {
-      var c = i < line.length ? line[i] : ',';
-      if (c === '"') { q = !q; }
-      else if (c === ',' && !q) { cols.push(f.trim()); f = ''; }
-      else { f += c; }
+// Parser robusto que maneja celdas con saltos de línea (RFC 4180)
+function pumParseCSV(txt) {
+  var records = [];
+  var pos = 0;
+  var len = txt.length;
+
+  function parseField() {
+    if (pos >= len) return '';
+    if (txt[pos] === '"') {
+      pos++; // skip opening quote
+      var val = '';
+      while (pos < len) {
+        if (txt[pos] === '"') {
+          pos++;
+          if (pos < len && txt[pos] === '"') { val += '"'; pos++; } // escaped quote
+          else break; // end of field
+        } else {
+          val += txt[pos++];
+        }
+      }
+      return val.trim();
+    } else {
+      var val = '';
+      while (pos < len && txt[pos] !== ',' && txt[pos] !== '\n' && txt[pos] !== '\r') {
+        val += txt[pos++];
+      }
+      return val.trim();
     }
+  }
+
+  function parseLine() {
+    var cols = [];
+    while (pos < len && txt[pos] !== '\n' && txt[pos] !== '\r') {
+      cols.push(parseField());
+      if (pos < len && txt[pos] === ',') pos++;
+      else break;
+    }
+    // skip \r\n or \n
+    if (pos < len && txt[pos] === '\r') pos++;
+    if (pos < len && txt[pos] === '\n') pos++;
     return cols;
   }
 
-  for (var li = 2; li < cleanLines.length; li++) {
-    var line = cleanLines[li];
-    if (!line.trim()) continue;
-    var c = parseRow(line);
-    var prio = c[0]||'', proy = c[3]||'';
-    if (!prio && !proy) continue;
-    var folioP = (c[6]||'').replace(/ \| /g,'\n');
-    var estRaw = c[18]||'';
+  // Saltar fila 0 (grupos) y fila 1 (headers)
+  parseLine(); parseLine();
 
-function pumNormResp(r) {
-  var v = (r || '').toLowerCase();
-  if (v.indexOf('hazael')    >= 0) return 'Hazael';
-  if (v.indexOf('francisco') >= 0) return 'Francisco';
-  if (v.indexOf('raquel')    >= 0) return 'Raquel';
-  if (v.indexOf('equipo') >= 0 || v.indexOf('construc') >= 0) return 'Equipo';
-  return (r || '').split(' ')[0] || '';
-}
-
-function pumParseCSV(txt) {
-  var rows = [];
-  var lines = txt.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
-  // Fila 0 = grupos, Fila 1 = headers, Fila 2+ = datos
-  // Col indices: 0=Prio,1=%AvanceIL,2=#ILA,3=Proyecto,4=BC,5=FolioM,
-  // 6=FolioP,7=Tipo,8=CantIngreso,9=Metodo,10=Km,11=Responsable,
-  // 12=Comentario,13=Proyectista,14=FechaEntrega,15=Correo,16=Drive,
-  // 17=Imagen,18=Estatus,19=Topo,20=Geo,21=SolEsp,
-  // 22=RespPermisos,23=TipoOficial,24=Autoridad,25=Carretera,
-  // 26=Tramo,27=Firmas,28=Alcance,29=KMZ
-  for (var li = 2; li < lines.length; li++) {
-    var line = lines[li];
-    if (!line.trim()) continue;
-    var c = pumParseRow(line);
-    var prio = c[0]||'', proy = c[3]||'';
-    if (!prio && !proy) continue;
+  while (pos < len) {
+    var c = parseLine();
+    if (!c.length || (!c[0] && !c[3])) continue;
     var folioP = c[6]||'';
     var estRaw = c[18]||'';
-    rows.push({
-      prioridad:    prio,
+    var resp = pumNormResp(c[11]||'');
+    records.push({
+      prioridad:    c[0]||'',
       avanceIL:     c[1]||'',
       numILA:       c[2]||'',
-      proyecto:     proy,
+      proyecto:     c[3]||'',
       bc:           c[4]||'',
       folioM:       c[5]||'',
       folioP:       folioP,
@@ -5979,8 +5977,8 @@ function pumParseCSV(txt) {
       cantIngreso:  c[8]||'',
       metodo:       c[9]||'',
       km:           c[10]||'',
-      respRaw:      c[11]||'',
-      resp:         pumNormResp(c[11]),
+      responsable:  c[11]||'',
+      resp:         resp,
       comentario:   c[12]||'',
       proyectista:  c[13]||'',
       fechaEntrega: c[14]||'',
@@ -5999,309 +5997,239 @@ function pumParseCSV(txt) {
       kmz:          c[29]||''
     });
   }
-  return rows;
+  return records;
 }
 
-// Agrupar filas en ILAs — usar Folio Maestro como clave principal
 function pumAgrupar(rows) {
   var ilaMap = {}, ilaOrder = [];
   rows.forEach(function(r) {
-    // Clave = Folio Maestro (siempre único por ILA)
     var key = r.folioM || r.proyecto;
     if (!ilaMap[key]) {
-      ilaMap[key] = { numILA:r.numILA, proyecto:r.proyecto, folioM:r.folioM,
-        avanceIL:r.avanceIL, prioridad:r.prioridad, permisos:[] };
+      ilaMap[key] = {numILA:r.numILA, proyecto:r.proyecto, folioM:r.folioM,
+        avanceIL:r.avanceIL, prioridad:r.prioridad, permisos:[]};
       ilaOrder.push(key);
     }
-    // Actualizar numILA si la fila tiene el dato
     if (!ilaMap[key].numILA && r.numILA) ilaMap[key].numILA = r.numILA;
     ilaMap[key].permisos.push(r);
   });
-  var PORDER = {Critica:0,Alta:1,Media:2,Baja:3};
-  return ilaOrder.map(function(k){ return ilaMap[k]; })
-    .sort(function(a,b){ return (PORDER[a.prioridad]||9)-(PORDER[b.prioridad]||9); });
+  var PO = {Critica:0,Alta:1,Media:2,Baja:3};
+  return ilaOrder.map(function(k){return ilaMap[k];})
+    .sort(function(a,b){return (PO[a.prioridad]||9)-(PO[b.prioridad]||9);});
 }
 
-// ── Cargar CSV ────────────────────────────────────────────────────────────────
 function pumLoadCSV(inp) {
-  var f = inp.files[0]; if (!f) return;
+  var f = inp.files[0]; if(!f) return;
   var r = new FileReader();
   r.onload = function(e) {
-    // Limpiar datos anteriores antes de parsear
-    try { localStorage.removeItem('pum_v6_rows'); localStorage.removeItem('pum_v6_fecha'); } catch(ex) {}
     PUM_ROWS = pumParseCSV(e.target.result);
     PUM_ILAS = pumAgrupar(PUM_ROWS);
-    PUM_ILA_OPEN = {}; // resetear ILAs abiertas
+    PUM_ILA_OPEN = {};
+    console.log('PUM loaded:', PUM_ROWS.length, 'rows,', PUM_ILAS.length, 'ILAs');
+    var resp_count = {};
+    PUM_ROWS.forEach(function(r){resp_count[r.resp]=(resp_count[r.resp]||0)+1;});
+    console.log('Por responsable:', JSON.stringify(resp_count));
     var fecha = new Date().toLocaleString('es-MX');
-    try { localStorage.setItem('pum_v6_rows', JSON.stringify(PUM_ROWS));
-          localStorage.setItem('pum_v6_fecha', fecha); } catch(ex) {}
-    var fe = document.getElementById('pumFecha');
-    if (fe) fe.textContent = 'Actualizado: '+fecha;
+    try{localStorage.setItem('pum_v7',JSON.stringify(PUM_ROWS));localStorage.setItem('pum_v7_f',fecha);}catch(ex){}
+    var fe=document.getElementById('pumFecha'); if(fe) fe.textContent='Actualizado: '+fecha;
     pumSetResp('');
   };
-  r.readAsText(f, 'UTF-8');
+  r.readAsText(f,'UTF-8');
 }
 
-// ── Filtro responsable ────────────────────────────────────────────────────────
 function pumSetResp(resp) {
   PUM_RESP_FILTRO = resp;
-  // Estilos botones
-  var btns = {
-    'pumBtnTodos':     '',
-    'pumBtnRaquel':    'Raquel',
-    'pumBtnFrancisco': 'Francisco',
-    'pumBtnHazael':    'Hazael',
-    'pumBtnEquipo':    'Equipo'
-  };
-  Object.keys(btns).forEach(function(id) {
-    var el = document.getElementById(id); if (!el) return;
-    el.classList.toggle('active', btns[id] === resp);
-    if (btns[id] && PUM_RESP_COL[btns[id]]) {
-      el.style.borderColor = btns[id]===resp ? PUM_RESP_COL[btns[id]] : '';
-      el.style.background  = btns[id]===resp ? PUM_RESP_COL[btns[id]]+'22' : '';
-      el.style.color       = btns[id]===resp ? PUM_RESP_COL[btns[id]] : '';
-    }
+  ['Todos','Raquel','Francisco','Hazael','Equipo'].forEach(function(b) {
+    var el=document.getElementById('pumBtn'+b); if(!el) return;
+    var key = b==='Todos'?'':b;
+    var col = key&&PUM_RESP_COL[key] ? PUM_RESP_COL[key] : 'var(--accent)';
+    var active = PUM_RESP_FILTRO===key;
+    el.style.borderColor = active?col:'rgba(255,255,255,.15)';
+    el.style.background  = active?col+'22':'transparent';
+    el.style.color       = active?col:'var(--dim)';
   });
-  document.getElementById('pumFiltros').style.display = 'flex';
+  document.getElementById('pumFiltros').style.display='flex';
   pumRender();
 }
 
-// ── Render principal ──────────────────────────────────────────────────────────
 function pumRender() {
-  var el = document.getElementById('pumMain'); if (!el) return;
+  var el=document.getElementById('pumMain'); if(!el) return;
 
-  // Filtrar ILAs por responsable
   var ilas = PUM_ILAS;
   if (PUM_RESP_FILTRO) {
     ilas = [];
     PUM_ILAS.forEach(function(ila) {
-      var perms = ila.permisos.filter(function(p){ return p.resp === PUM_RESP_FILTRO; });
-      if (perms.length > 0) {
-        ilas.push({ numILA:ila.numILA, proyecto:ila.proyecto, folioM:ila.folioM,
-          avanceIL:ila.avanceIL, prioridad:ila.prioridad, permisos:perms });
-      }
+      var perms = ila.permisos.filter(function(p){return p.resp===PUM_RESP_FILTRO;});
+      if (perms.length) ilas.push({numILA:ila.numILA,proyecto:ila.proyecto,
+        folioM:ila.folioM,avanceIL:ila.avanceIL,prioridad:ila.prioridad,permisos:perms});
     });
   }
 
-  // Calcular métricas sobre datos filtrados
-  var totalILAs    = ilas.length;
-  var totalFolios  = 0, conFolio = 0, sinFolio = 0;
-  var enProceso = 0, sinIniciar = 0, sinGest = 0;
-  var byResp = {}, byPrio = {};
-  var RESPS = ['Raquel','Francisco','Hazael','Equipo'];
-  RESPS.forEach(function(r){ byResp[r]=0; });
-
-  ilas.forEach(function(ila) {
-    ila.permisos.forEach(function(p) {
-      totalFolios++;
-      if (p.folioP) conFolio++; else sinFolio++;
-      if (p.estatus==='En proceso') enProceso++;
-      else if (p.estatus==='Sin Iniciar') sinIniciar++;
-      else sinGest++;
-      if (byResp[p.resp]!==undefined) byResp[p.resp]++;
-      byPrio[p.prioridad] = (byPrio[p.prioridad]||0)+1;
+  var totalILAs=ilas.length, totalF=0, conF=0, sinF=0, enP=0, sinI=0, sinG=0;
+  var byR={Raquel:0,Francisco:0,Hazael:0,Equipo:0}, byP={};
+  ilas.forEach(function(ila){
+    ila.permisos.forEach(function(p){
+      totalF++;
+      if(p.folioP){conF++;} else sinF++;
+      if(p.estatus==='En proceso') enP++;
+      else if(p.estatus==='Sin Iniciar') sinI++;
+      else sinG++;
+      if(byR[p.resp]!==undefined) byR[p.resp]++;
+      byP[p.prioridad]=(byP[p.prioridad]||0)+1;
     });
   });
 
-  var h = '';
+  var h='';
 
-  // ── KPIs ──────────────────────────────────────────────────────────────────
-  h += '<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:1.25rem">';
-  h += pumKPI('ILAs',          totalILAs, 'var(--accent)');
-  h += pumKPI('Folios permiso',conFolio,  '#2a78d6');
-  h += pumKPI('Sin gestionar', sinFolio,  '#555');
-  h += pumKPI('En proceso',    enProceso, '#1baf7a');
-  h += pumKPI('Sin iniciar',   sinIniciar,'#eda100');
-  h += pumKPI('Total registros',totalFolios,'var(--dim)');
-  h += '</div>';
+  // KPIs
+  h+='<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:1.25rem">';
+  h+=pumKPI('ILAs',totalILAs,'var(--accent)');
+  h+=pumKPI('Con folio',conF,'#2a78d6');
+  h+=pumKPI('Sin gestionar',sinF,'#555');
+  h+=pumKPI('En proceso',enP,'#1baf7a');
+  h+=pumKPI('Sin iniciar',sinI,'#eda100');
+  h+=pumKPI('Total registros',totalF,'var(--dim)');
+  h+='</div>';
 
-  // ── Gráficas ──────────────────────────────────────────────────────────────
-  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:1.25rem">';
+  // Gráficas
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:1.25rem">';
 
   // Por responsable
-  h += '<div class="panel" style="padding:14px 16px">';
-  h += '<div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px">Folios por responsable</div>';
-  var maxR = Math.max.apply(null, RESPS.map(function(r){return byResp[r]||0;})) || 1;
-  RESPS.forEach(function(r) {
-    if (!byResp[r]) return;
-    var col = PUM_RESP_COL[r]||'#888';
-    var pct = Math.round(byResp[r]/maxR*100);
-    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">';
-    h += '<div style="font-size:12px;color:var(--text);width:80px;flex-shrink:0">'+r+'</div>';
-    h += '<div style="flex:1;height:10px;background:rgba(255,255,255,.07);border-radius:5px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:'+col+';border-radius:5px"></div></div>';
-    h += '<div style="font-size:13px;font-weight:700;color:'+col+';min-width:22px;text-align:right">'+byResp[r]+'</div>';
-    h += '</div>';
+  h+='<div class="panel" style="padding:14px 16px">';
+  h+='<div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px">Permisos por responsable</div>';
+  var maxR=Math.max.apply(null,Object.values(byR))||1;
+  Object.keys(byR).forEach(function(r){
+    if(!byR[r]) return;
+    var col=PUM_RESP_COL[r]||'#888';
+    h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">';
+    h+='<div style="font-size:12px;color:var(--text);width:80px;flex-shrink:0">'+r+'</div>';
+    h+='<div style="flex:1;height:10px;background:rgba(255,255,255,.07);border-radius:5px;overflow:hidden"><div style="width:'+Math.round(byR[r]/maxR*100)+'%;height:100%;background:'+col+';border-radius:5px"></div></div>';
+    h+='<div style="font-size:13px;font-weight:700;color:'+col+';min-width:22px;text-align:right">'+byR[r]+'</div>';
+    h+='</div>';
   });
-  h += '</div>';
+  h+='</div>';
 
   // Por prioridad
-  h += '<div class="panel" style="padding:14px 16px">';
-  h += '<div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px">ILAs por prioridad</div>';
-  var PORDER = ['Critica','Alta','Media','Baja'];
-  var maxP = Math.max.apply(null, PORDER.map(function(p){return byPrio[p]||0;})) || 1;
-  PORDER.forEach(function(p) {
-    if (!byPrio[p]) return;
-    var col = PUM_PRIO_COL[p]||'#888';
-    var pct = Math.round(byPrio[p]/maxP*100);
-    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">';
-    h += '<div style="font-size:12px;color:var(--text);width:80px;flex-shrink:0">'+p+'</div>';
-    h += '<div style="flex:1;height:10px;background:rgba(255,255,255,.07);border-radius:5px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:'+col+';border-radius:5px"></div></div>';
-    h += '<div style="font-size:13px;font-weight:700;color:'+col+';min-width:22px;text-align:right">'+byPrio[p]+'</div>';
-    h += '</div>';
+  h+='<div class="panel" style="padding:14px 16px">';
+  h+='<div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px">Por prioridad</div>';
+  var PORD=['Critica','Alta','Media','Baja'];
+  var maxP=Math.max.apply(null,PORD.map(function(p){return byP[p]||0;}))||1;
+  PORD.forEach(function(p){
+    if(!byP[p]) return;
+    var col=PUM_PRIO_COL[p]||'#888';
+    h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">';
+    h+='<div style="font-size:12px;color:var(--text);width:80px;flex-shrink:0">'+p+'</div>';
+    h+='<div style="flex:1;height:10px;background:rgba(255,255,255,.07);border-radius:5px;overflow:hidden"><div style="width:'+Math.round(byP[p]/maxP*100)+'%;height:100%;background:'+col+';border-radius:5px"></div></div>';
+    h+='<div style="font-size:13px;font-weight:700;color:'+col+';min-width:22px;text-align:right">'+byP[p]+'</div>';
+    h+='</div>';
   });
-  h += '</div>';
+  h+='</div>';
 
-  // Por estatus
-  h += '<div class="panel" style="padding:14px 16px">';
-  h += '<div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px">Estatus de permisos</div>';
-  [['En proceso','#1baf7a',enProceso],['Sin Iniciar','#eda100',sinIniciar],['Sin gestionar','#555',sinFolio]].forEach(function(e) {
-    if (!e[2]) return;
-    var pct = Math.round(e[2]/totalFolios*100);
-    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">';
-    h += '<div style="font-size:11px;color:var(--text);width:100px;flex-shrink:0">'+e[0]+'</div>';
-    h += '<div style="flex:1;height:10px;background:rgba(255,255,255,.07);border-radius:5px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:'+e[1]+';border-radius:5px"></div></div>';
-    h += '<div style="font-size:13px;font-weight:700;color:'+e[1]+';min-width:22px;text-align:right">'+e[2]+'</div>';
-    h += '</div>';
+  // Estatus
+  h+='<div class="panel" style="padding:14px 16px">';
+  h+='<div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px">Estatus</div>';
+  [['En proceso','#1baf7a',enP],['Sin Iniciar','#eda100',sinI],['Sin gestionar','#555',sinF]].forEach(function(e){
+    if(!e[2]) return;
+    h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">';
+    h+='<div style="font-size:11px;color:var(--text);width:100px;flex-shrink:0">'+e[0]+'</div>';
+    h+='<div style="flex:1;height:10px;background:rgba(255,255,255,.07);border-radius:5px;overflow:hidden"><div style="width:'+Math.round(e[2]/totalF*100)+'%;height:100%;background:'+e[1]+';border-radius:5px"></div></div>';
+    h+='<div style="font-size:13px;font-weight:700;color:'+e[1]+';min-width:22px;text-align:right">'+e[2]+'</div>';
+    h+='</div>';
   });
-  h += '</div>';
-  h += '</div>'; // fin grid gráficas
+  h+='</div>';
+  h+='</div>';
 
-  // ── Desglose por ILA ──────────────────────────────────────────────────────
-  h += '<div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Desglose por ILA</div>';
-  h += '<div style="display:flex;flex-direction:column;gap:8px">';
+  // Desglose ILAs
+  h+='<div style="font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Desglose por ILA</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:8px">';
 
-  ilas.forEach(function(ila) {
-    var key = ila.folioM || ila.proyecto;
-    var isOpen = PUM_ILA_OPEN[key];
-    var pc = PUM_PRIO_COL[ila.prioridad]||'#888';
-    var avPct = parseFloat(ila.avanceIL)||0;
-    var avCol = avPct>=80?'#1baf7a':avPct>=50?'#eda100':'#e24b4a';
-    var foliosConFolio = ila.permisos.filter(function(p){return p.folioP;}).length;
-    var foliosSin = ila.permisos.length - foliosConFolio;
+  ilas.forEach(function(ila){
+    var key=ila.folioM||ila.proyecto;
+    var isOpen=PUM_ILA_OPEN[key];
+    var pc=PUM_PRIO_COL[ila.prioridad]||'#888';
+    var av=parseFloat(ila.avanceIL)||0;
+    var avC=av>=80?'#1baf7a':av>=50?'#eda100':'#e24b4a';
+    var cF=ila.permisos.filter(function(p){return p.folioP;}).length;
+    var sG=ila.permisos.length-cF;
 
-    h += '<div class="panel" style="padding:0;overflow:hidden">';
+    h+='<div class="panel" style="padding:0;overflow:hidden">';
+    h+='<div onclick="pumToggle(''+key.replace(/\/g,'\\').replace(/'/g,"\'")+'')" style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;border-bottom:'+(isOpen?'0.5px solid rgba(255,255,255,.07)':'none')+'" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">';
+    h+='<span style="font-size:12px;color:var(--dim);transition:transform .2s;display:inline-block;transform:rotate('+(isOpen?'90':'0')+'deg)">▶</span>';
+    h+='<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:'+pc+'22;color:'+pc+';font-weight:600;flex-shrink:0">'+ila.prioridad+'</span>';
+    if(ila.numILA) h+='<span style="font-size:11px;color:var(--dim);font-family:var(--mono);flex-shrink:0">#'+ila.numILA+'</span>';
+    h+='<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text)">'+ila.proyecto+'</div>';
+    h+='<div style="font-size:10px;color:var(--dim);font-family:var(--mono)">'+ila.folioM+'</div></div>';
+    h+='<div style="flex-shrink:0;text-align:right"><div style="font-size:10px;color:var(--dim);margin-bottom:2px">Avance IL</div>';
+    h+='<div style="display:flex;align-items:center;gap:5px"><div style="width:55px;height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden"><div style="width:'+av+'%;height:100%;background:'+avC+'"></div></div>';
+    h+='<span style="font-size:12px;font-weight:600;color:'+avC+'">'+ila.avanceIL+'</span></div></div>';
+    h+='<div style="display:flex;gap:12px;flex-shrink:0;margin-left:8px">';
+    h+='<div style="text-align:center"><div style="font-size:16px;font-weight:700;color:#2a78d6">'+cF+'</div><div style="font-size:9px;color:var(--dim)">con folio</div></div>';
+    h+='<div style="text-align:center"><div style="font-size:16px;font-weight:700;color:#555">'+sG+'</div><div style="font-size:9px;color:var(--dim)">sin gestionar</div></div>';
+    h+='</div></div>';
 
-    // Cabecera clickeable
-    h += '<div onclick="pumToggleILA(\''+key.replace(/'/g,"\\'")+'\')" style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;border-bottom:'+(isOpen?'0.5px solid rgba(255,255,255,.07)':'none')+';background:rgba(255,255,255,.02);transition:background .15s" onmouseover="this.style.background=\'rgba(255,255,255,.04)\'" onmouseout="this.style.background=\'rgba(255,255,255,.02)\'">';
-    h += '<span style="font-size:13px;color:var(--dim);transition:transform .2s;display:inline-block;transform:rotate('+(isOpen?'90':'0')+'deg)">▶</span>';
-    h += '<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:'+pc+'22;color:'+pc+';font-weight:600;flex-shrink:0">'+ila.prioridad+'</span>';
-    if (ila.numILA) h += '<span style="font-size:11px;color:var(--dim);font-family:var(--mono);flex-shrink:0">#'+ila.numILA+'</span>';
-    h += '<div style="flex:1;min-width:0">';
-    h += '<div style="font-size:13px;font-weight:600;color:var(--text)">'+ila.proyecto+'</div>';
-    h += '<div style="font-size:10px;color:var(--dim);font-family:var(--mono);margin-top:1px">'+ila.folioM+'</div>';
-    h += '</div>';
-    // Avance IL
-    h += '<div style="flex-shrink:0;text-align:right">';
-    h += '<div style="font-size:10px;color:var(--dim);margin-bottom:3px">Avance IL</div>';
-    h += '<div style="display:flex;align-items:center;gap:5px">';
-    h += '<div style="width:55px;height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden"><div style="width:'+avPct+'%;height:100%;background:'+avCol+'"></div></div>';
-    h += '<span style="font-size:12px;font-weight:600;color:'+avCol+'">'+ila.avanceIL+'</span>';
-    h += '</div></div>';
-    // Stats rápidas
-    h += '<div style="display:flex;gap:14px;flex-shrink:0;margin-left:8px">';
-    h += '<div style="text-align:center"><div style="font-size:16px;font-weight:700;color:#2a78d6">'+foliosConFolio+'</div><div style="font-size:9px;color:var(--dim)">con folio</div></div>';
-    h += '<div style="text-align:center"><div style="font-size:16px;font-weight:700;color:#555">'+foliosSin+'</div><div style="font-size:9px;color:var(--dim)">sin gestionar</div></div>';
-    h += '</div>';
-    h += '</div>'; // fin cabecera
-
-    // Detalle expandible
-    if (isOpen) {
-      h += '<div style="padding:12px 16px">';
-
-      // Tabla de permisos
-      h += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
-      h += '<thead><tr style="border-bottom:0.5px solid rgba(255,255,255,.1)">';
-      ['Folio de permiso','Tipo','Cant. ingreso','Método','Km','Responsable','Fecha est.','Estatus','Topo','Geo','Resp. Permisos','Autoridad'].forEach(function(col){
-        h += '<th style="padding:5px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;text-align:left;white-space:nowrap">'+col+'</th>';
+    if(isOpen){
+      h+='<div style="padding:12px 16px;overflow-x:auto">';
+      h+='<table style="width:100%;border-collapse:collapse;font-size:11px;min-width:800px">';
+      h+='<thead><tr style="border-bottom:0.5px solid rgba(255,255,255,.1)">';
+      ['Folio permiso','Tipo','Cant.ingreso','Método','Km','Responsable','Fecha est.','Estatus','Topo','Geo','Resp.Permisos','Autoridad'].forEach(function(c){
+        h+='<th style="padding:5px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;text-align:left;white-space:nowrap">'+c+'</th>';
       });
-      h += '</tr></thead><tbody>';
-
-      ila.permisos.forEach(function(p) {
-        var ec = PUM_EST_COL[p.estatus]||'#555';
-        var rc = PUM_RESP_COL[p.resp]||'var(--dim)';
-        var foliosStr = p.folioP ? p.folioP.replace(/\n/g,'<br>') : '<span style="color:#555;font-style:italic">Sin gestionar</span>';
-        h += '<tr style="border-bottom:0.5px solid rgba(255,255,255,.04)">';
-        h += '<td style="padding:7px 8px;font-size:10px;color:var(--accent);font-family:var(--mono);line-height:1.6">'+foliosStr+'</td>';
-        h += '<td style="padding:7px 8px;white-space:nowrap">'+pumTipoTag(p.tipo)+'</td>';
-        h += '<td style="padding:7px 8px;color:var(--dim);white-space:nowrap">'+(p.cantIngreso||'—')+'</td>';
-        h += '<td style="padding:7px 8px;color:var(--dim);white-space:nowrap">'+(p.metodo||'—')+'</td>';
-        h += '<td style="padding:7px 8px;color:var(--dim);white-space:nowrap">'+(p.km||'—')+'</td>';
-        h += '<td style="padding:7px 8px;white-space:nowrap;color:'+rc+';font-weight:500">'+p.resp+'</td>';
-        h += '<td style="padding:7px 8px;white-space:nowrap">'+pumFechaBadge(p.fechaEntrega)+'</td>';
-        h += '<td style="padding:7px 8px;white-space:nowrap"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:'+ec+'22;color:'+ec+';font-weight:500">'+p.estatus+'</span></td>';
-        h += '<td style="padding:7px 8px;text-align:center">'+pumChip(p.topo)+'</td>';
-        h += '<td style="padding:7px 8px;text-align:center">'+pumChip(p.geo)+'</td>';
-        h += '<td style="padding:7px 8px;color:var(--dim);white-space:nowrap">'+(p.respPermisos||'—')+'</td>';
-        h += '<td style="padding:7px 8px;color:var(--dim);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+p.autoridad+'">'+(p.autoridad||'—')+'</td>';
-        h += '</tr>';
+      h+='</tr></thead><tbody>';
+      ila.permisos.forEach(function(p){
+        var ec=PUM_EST_COL[p.estatus]||'#555';
+        var rc=PUM_RESP_COL[p.resp]||'var(--dim)';
+        var fp=p.folioP?p.folioP.replace(/
+/g,'<br>'):'<span style="color:#555;font-style:italic">Sin gestionar</span>';
+        var fd=p.fechaEntrega?pumFecha(p.fechaEntrega):'<span style="color:#555">—</span>';
+        h+='<tr style="border-bottom:0.5px solid rgba(255,255,255,.04)">';
+        h+='<td style="padding:7px 8px;font-size:10px;color:var(--accent);font-family:var(--mono);line-height:1.6">'+fp+'</td>';
+        h+='<td style="padding:7px 8px">'+pumTipo(p.tipo)+'</td>';
+        h+='<td style="padding:7px 8px;color:var(--dim);white-space:nowrap">'+(p.cantIngreso||'—')+'</td>';
+        h+='<td style="padding:7px 8px;color:var(--dim);white-space:nowrap">'+(p.metodo||'—')+'</td>';
+        h+='<td style="padding:7px 8px;color:var(--dim);white-space:nowrap">'+(p.km||'—')+'</td>';
+        h+='<td style="padding:7px 8px;color:'+rc+';font-weight:500;white-space:nowrap">'+p.resp+'</td>';
+        h+='<td style="padding:7px 8px;white-space:nowrap">'+fd+'</td>';
+        h+='<td style="padding:7px 8px;white-space:nowrap"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:'+ec+'22;color:'+ec+';font-weight:500">'+p.estatus+'</span></td>';
+        h+='<td style="padding:7px 8px;text-align:center">'+pumSN(p.topo)+'</td>';
+        h+='<td style="padding:7px 8px;text-align:center">'+pumSN(p.geo)+'</td>';
+        h+='<td style="padding:7px 8px;color:var(--dim);white-space:nowrap">'+(p.respPermisos||'—')+'</td>';
+        h+='<td style="padding:7px 8px;color:var(--dim);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+p.autoridad+'">'+(p.autoridad||'—')+'</td>';
+        h+='</tr>';
       });
-      h += '</tbody></table>';
-
-      // Comentario si hay
-      var comentarios = ila.permisos.filter(function(p){return p.comentario;});
-      if (comentarios.length) {
-        h += '<div style="margin-top:10px;padding:10px 12px;background:rgba(255,255,255,.02);border-radius:6px;border-left:3px solid rgba(255,255,255,.1)">';
-        comentarios.forEach(function(p) {
-          h += '<div style="font-size:11px;color:var(--dim);margin-bottom:3px"><span style="color:'+PUM_RESP_COL[p.resp]+';font-weight:500">'+p.resp+':</span> '+p.comentario+'</div>';
+      h+='</tbody></table>';
+      var coms=ila.permisos.filter(function(p){return p.comentario;});
+      if(coms.length){
+        h+='<div style="margin-top:10px;padding:10px 12px;background:rgba(255,255,255,.02);border-radius:6px;border-left:3px solid rgba(255,255,255,.08)">';
+        coms.forEach(function(p){
+          h+='<div style="font-size:11px;color:var(--dim);margin-bottom:3px"><span style="color:'+(PUM_RESP_COL[p.resp]||'var(--dim)')+';font-weight:500">'+p.resp+':</span> '+p.comentario+'</div>';
         });
-        h += '</div>';
+        h+='</div>';
       }
-
-      h += '</div>'; // fin detalle
+      h+='</div>';
     }
-
-    h += '</div>'; // fin panel ILA
+    h+='</div>';
   });
-
-  h += '</div>'; // fin lista ILAs
-  el.innerHTML = h;
+  h+='</div>';
+  el.innerHTML=h;
 }
 
-function pumToggleILA(key) {
-  PUM_ILA_OPEN[key] = !PUM_ILA_OPEN[key];
-  pumRender();
-}
+function pumToggle(key){ PUM_ILA_OPEN[key]=!PUM_ILA_OPEN[key]; pumRender(); }
+function pumKPI(l,v,c){ return '<div class="panel" style="padding:14px 16px;border-left:3px solid '+c+'"><div style="font-size:26px;font-weight:700;color:'+c+';line-height:1.1">'+v+'</div><div style="font-size:11px;color:var(--dim);margin-top:4px">'+l+'</div></div>'; }
+function pumSN(v){ var x=(v||'').toLowerCase().trim(); return x==='si'||x==='sí'?'<span style="color:#1baf7a;font-weight:700">✓</span>':x==='no'?'<span style="color:#e24b4a">✗</span>':'<span style="color:#555">—</span>'; }
+function pumTipo(t){ if(!t) return '<span style="color:#555">—</span>'; var c=t.indexOf('Federal')>=0?'#9b59b6':t.indexOf('Estatal')>=0?'#2a78d6':t.indexOf('Municipal')>=0?'#1baf7a':'#888'; return '<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:'+c+'22;color:'+c+'">'+t+'</span>'; }
+function pumFecha(f){ if(!f||!f.trim()) return '<span style="color:#555">—</span>'; var p=f.split('/'); if(p.length<3) return '<span style="font-size:11px;color:var(--dim)">'+f+'</span>'; var d=new Date(parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0])),h=new Date(); h.setHours(0,0,0,0); var diff=Math.round((d-h)/86400000); var c=diff<0?'#e24b4a':diff<=7?'#eda100':'#1baf7a'; var i=diff<0?'🔴':diff<=7?'🟡':'🟢'; return '<span style="font-size:11px;color:'+c+'">'+i+' '+f+'</span>'; }
 
-function pumKPI(lbl, val, col) {
-  return '<div class="panel" style="padding:14px 16px;border-left:3px solid '+col+'">'+
-    '<div style="font-size:26px;font-weight:700;color:'+col+';line-height:1.1">'+val+'</div>'+
-    '<div style="font-size:11px;color:var(--dim);margin-top:4px">'+lbl+'</div>'+
-    '</div>';
-}
-
-function pumChip(val) {
-  var v = (val||'').toLowerCase().trim();
-  if (v==='si'||v==='sí') return '<span style="color:#1baf7a;font-weight:700">✓</span>';
-  if (v==='no') return '<span style="color:#e24b4a">✗</span>';
-  return '<span style="color:#555">—</span>';
-}
-
-function pumTipoTag(tipo) {
-  if (!tipo) return '<span style="color:#555">—</span>';
-  var col = tipo.indexOf('Federal')>=0?'#9b59b6':tipo.indexOf('Estatal')>=0?'#2a78d6':tipo.indexOf('Municipal')>=0?'#1baf7a':'#888';
-  return '<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:'+col+'22;color:'+col+'">'+tipo+'</span>';
-}
-
-function pumFechaBadge(f) {
-  if (!f||!f.trim()) return '<span style="color:#555">—</span>';
-  var parts = f.split('/');
-  if (parts.length<3) return '<span style="font-size:11px;color:var(--dim)">'+f+'</span>';
-  var d = new Date(parseInt(parts[2]),parseInt(parts[1])-1,parseInt(parts[0]));
-  var hoy = new Date(); hoy.setHours(0,0,0,0);
-  var diff = Math.round((d-hoy)/86400000);
-  var col = diff<0?'#e24b4a':diff<=7?'#eda100':'#1baf7a';
-  var icon = diff<0?'🔴':diff<=7?'🟡':'🟢';
-  return '<span style="font-size:11px;color:'+col+'">'+icon+' '+f+'</span>';
-}
-
-// Limpiar TODO el localStorage de PUM al cargar
 (function(){
-  try {
-    ['pum_v3','pum_v3_fecha','pum_v4','pum_v4_fecha',
-     'pum_v5_rows','pum_v5_fecha','pum_v6_rows','pum_v6_fecha'].forEach(function(k){
-      localStorage.removeItem(k);
-    });
-  } catch(ex){}
+  try{
+    // Limpiar versiones anteriores
+    for(var k in localStorage){ if(k.indexOf('pum_')==0) localStorage.removeItem(k); }
+    var s=localStorage.getItem('pum_v7');
+    if(s){ PUM_ROWS=JSON.parse(s); PUM_ILAS=pumAgrupar(PUM_ROWS); }
+    var f=localStorage.getItem('pum_v7_f');
+    setTimeout(function(){
+      var fe=document.getElementById('pumFecha'); if(f&&fe) fe.textContent='Actualizado: '+f;
+      if(PUM_ILAS.length) pumSetResp('');
+    },150);
+  }catch(ex){}
 })();
 
 try{ cronoLoad(); cronoLoadCatalogo(); }catch(e){}
