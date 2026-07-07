@@ -2007,7 +2007,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           Exportar CSV
         </button>
-        <button class="pa-btn pa-btn-ghost" onclick="paExportPDF()" style="font-size:12px;border-color:rgba(255,92,92,.25);color:#ff7a7a" title="Generar reporte ejecutivo en PDF de las últimas 2 semanas">
+        <button class="pa-btn pa-btn-ghost" onclick="paOpenReporteSelector()" style="font-size:12px;border-color:rgba(255,92,92,.25);color:#ff7a7a" title="Generar reporte PDF">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
           Reporte PDF
         </button>
@@ -11274,6 +11274,247 @@ setInterval(rtTick, 1000);
 rtTick();
 
 // ─── REPORTE PDF ─────────────────────────────────────────────────────────────
+function paOpenReporteSelector(){
+  const old = document.getElementById('paReporteSelectorBg');
+  if(old) old.remove();
+  const bg = document.createElement('div');
+  bg.id = 'paReporteSelectorBg';
+  bg.className = 'pa-modal-bg open';
+  bg.innerHTML = `
+    <div class="pa-modal" style="max-width:500px" onclick="event.stopPropagation()">
+      <div class="pa-modal-title">Generar Reporte PDF</div>
+      <div style="font-size:12px;color:var(--dim);margin-bottom:16px">Selecciona el tipo de reporte</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+        <div id="paRpOpt1" onclick="paRpSelect(1)" style="border:1.5px solid rgba(255,255,255,.12);border-radius:10px;padding:16px;cursor:pointer;transition:all .15s">
+          <div style="font-size:24px;margin-bottom:8px">📊</div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px">Reporte de actividades</div>
+          <div style="font-size:11px;color:var(--dim);line-height:1.5">Listado completo con estatus, fechas, km y días</div>
+        </div>
+        <div id="paRpOpt2" onclick="paRpSelect(2)" style="border:1.5px solid var(--accent);background:rgba(74,143,212,.08);border-radius:10px;padding:16px;cursor:pointer;transition:all .15s">
+          <div style="font-size:24px;margin-bottom:8px">👥</div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px">Reporte ejecutivo del equipo</div>
+          <div style="font-size:11px;color:var(--dim);line-height:1.5">Proyectistas con sus actividades en proceso y pendientes</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="pa-btn pa-btn-ghost" onclick="document.getElementById('paReporteSelectorBg').remove()">Cancelar</button>
+        <button class="pa-btn pa-btn-primary" onclick="paGenerarReporteSeleccionado()">Generar PDF</button>
+      </div>
+    </div>`;
+  bg.onclick = (e)=>{ if(e.target===bg) bg.remove(); };
+  document.body.appendChild(bg);
+  window._paRpSelected = 2;
+}
+
+function paRpSelect(n){
+  window._paRpSelected = n;
+  const c1 = 'border:1.5px solid rgba(255,255,255,.12);border-radius:10px;padding:16px;cursor:pointer;transition:all .15s';
+  const c2 = 'border:1.5px solid var(--accent);background:rgba(74,143,212,.08);border-radius:10px;padding:16px;cursor:pointer;transition:all .15s';
+  document.getElementById('paRpOpt1').style.cssText = n===1 ? c2 : c1;
+  document.getElementById('paRpOpt2').style.cssText = n===2 ? c2 : c1;
+}
+
+function paGenerarReporteSeleccionado(){
+  document.getElementById('paReporteSelectorBg')?.remove();
+  if(window._paRpSelected === 1){
+    paExportPDF();
+  } else {
+    paExportPDFEquipo();
+  }
+}
+
+function paExportPDFEquipo(){
+  const fecha = new Date().toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const hora  = new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
+
+  // Estatus activos
+  const ACTIVOS = ['En progreso','Sin iniciar','En pausa','En revisión'];
+
+  // Colores avatar por proyectista
+  const avatarCols = {'Jonathan':'#1a56db','Isabel':'#4a5568','Edgar':'#7b2d8b','Llense':'#2d6a4f','Mauricio':'#b45309','Sergio Daniel':'#065f46'};
+  function getCol(name){ const k = Object.keys(avatarCols).find(k=>name.includes(k)); return k?avatarCols[k]:'#374151'; }
+  function getInitials(name){ return name.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase(); }
+
+  // Agrupar actividades activas por responsable
+  const porResp = {};
+  PA_MEMBERS.forEach(m=>{ porResp[m]=[]; });
+  PA_ITEMS.forEach(a=>{
+    if(!ACTIVOS.includes(a.estatus)) return;
+    const resp = a.responsable||'';
+    const key = PA_MEMBERS.find(m=>m===resp||resp.includes(m.split(' ')[0]));
+    if(key){ if(!porResp[key]) porResp[key]=[]; porResp[key].push(a); }
+  });
+
+  // Datos de ocupación del equipo (de las tarjetas del panel)
+  function getEstadoCard(member){
+    const acts = PA_ITEMS.filter(a=>a.responsable===member||member.includes((a.responsable||'').split(' ')[0]));
+    const activas = acts.filter(a=>ACTIVOS.includes(a.estatus));
+    const enProg  = activas.filter(a=>a.estatus==='En progreso');
+    if(!activas.length) return {label:'Disponible',color:'#065f46',bg:'#d1fae5'};
+    if(enProg.length)   return {label:'Ocupado',   color:'#b91c1c',bg:'#fee2e2'};
+    return {label:'Pendiente',color:'#92400e',bg:'#fef3c7'};
+  }
+
+  const estBadge = {
+    'En progreso':'background:#dbeafe;color:#1d4ed8',
+    'Sin iniciar':'background:#f3f4f6;color:#374151',
+    'En pausa':'background:#fef3c7;color:#92400e',
+    'En revisión':'background:#ede9fe;color:#6d28d9'
+  };
+
+  let html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Reporte Ejecutivo del Equipo — C3NTRO</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,sans-serif;font-size:12px;color:#1a1a2e;background:#fff;padding:32px}
+  .header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;padding-bottom:14px;border-bottom:2px solid #1a1a2e}
+  .logo{font-size:18px;font-weight:800;color:#1a1a2e}
+  .logo-sub{font-size:11px;color:#6b7280;margin-top:2px}
+  .report-title{text-align:right}
+  .report-title h1{font-size:15px;font-weight:700}
+  .report-title p{font-size:10px;color:#6b7280;margin-top:2px;line-height:1.6}
+  .section{margin-bottom:24px}
+  .section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#1a1a2e;padding-bottom:6px;border-bottom:1px solid #e5e7eb;margin-bottom:12px}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:4px}
+  .card{border:1px solid #e5e7eb;border-radius:8px;padding:12px}
+  .card-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .avatar{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0}
+  .card-name{font-size:11px;font-weight:600}
+  .card-loc{font-size:10px;color:#6b7280}
+  .status-badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:500;margin-bottom:6px}
+  .card-info{font-size:10px;color:#6b7280}
+  .proyectista-block{margin-bottom:20px}
+  .proy-header{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 10px;background:#f9fafb;border-radius:6px}
+  .proy-name{font-size:12px;font-weight:700}
+  .proy-count{font-size:10px;color:#6b7280}
+  table{width:100%;border-collapse:collapse;font-size:11px}
+  th{background:#1a1a2e;color:#fff;padding:6px 10px;text-align:left;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.03em}
+  td{padding:6px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+  tr:nth-child(even) td{background:#f9fafb}
+  .badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:500}
+  .no-acts{font-size:11px;color:#9ca3af;font-style:italic;padding:10px}
+  .footer{text-align:center;font-size:10px;color:#9ca3af;margin-top:24px;padding-top:12px;border-top:1px solid #e5e7eb}
+  @media print{body{padding:16px} @page{margin:1cm}}
+</style></head><body>
+
+  <div class="header">
+    <div>
+      <div class="logo">C3NTRO Telecom</div>
+      <div class="logo-sub">Coordinación de Ingeniería</div>
+    </div>
+    <div class="report-title">
+      <h1>Reporte Ejecutivo del Equipo</h1>
+      <p>Generado: ${fecha} · ${hora}<br>Responsable: Martha Raquel Muro Morales</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Disponibilidad del equipo</div>
+    <div class="cards">`;
+
+  PA_MEMBERS.forEach(member=>{
+    const estado = getEstadoCard(member);
+    const acts = PA_ITEMS.filter(a=>(a.responsable===member)&&ACTIVOS.includes(a.estatus));
+    const enProg = acts.filter(a=>a.estatus==='En progreso');
+    const sinIni = acts.filter(a=>a.estatus==='Sin iniciar');
+    const enPaus = acts.filter(a=>a.estatus==='En pausa'||a.estatus==='En revisión');
+    const col = getCol(member);
+    const ini = getInitials(member);
+    // Generar lista de actividades en la tarjeta
+    let actsHtml = '';
+    if(enProg.length){
+      actsHtml += `<div style="font-size:9px;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:.04em;margin:7px 0 4px">En progreso</div>`;
+      enProg.forEach(a=>{
+        actsHtml += `<div style="margin-bottom:5px">
+          <div style="font-size:10px;font-weight:700;color:#1a1a2e">${a.proyecto||'—'}</div>
+          <div style="font-size:9px;font-family:monospace;color:#2a78d6;margin-top:1px">${a.folio||''}</div>
+          ${a.fechaTermino?`<div style="font-size:9px;color:#6b7280;margin-top:1px">Vence ${a.fechaTermino}</div>`:''}
+        </div>`;
+      });
+    }
+    if(sinIni.length){
+      actsHtml += `<div style="font-size:9px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.04em;margin:7px 0 4px">Sin iniciar</div>`;
+      sinIni.forEach(a=>{
+        actsHtml += `<div style="margin-bottom:5px">
+          <div style="font-size:10px;font-weight:700;color:#1a1a2e">${a.proyecto||'—'}</div>
+          <div style="font-size:9px;font-family:monospace;color:#2a78d6;margin-top:1px">${a.folio||''}</div>
+          ${a.fechaTermino?`<div style="font-size:9px;color:#6b7280;margin-top:1px">Vence ${a.fechaTermino}</div>`:''}
+        </div>`;
+      });
+    }
+    if(enPaus.length){
+      actsHtml += `<div style="font-size:9px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.04em;margin:7px 0 4px">En pausa</div>`;
+      enPaus.forEach(a=>{
+        actsHtml += `<div style="margin-bottom:5px">
+          <div style="font-size:10px;font-weight:700;color:#1a1a2e">${a.proyecto||'—'}</div>
+          <div style="font-size:9px;font-family:monospace;color:#2a78d6;margin-top:1px">${a.folio||''}</div>
+        </div>`;
+      });
+    }
+    if(!acts.length) actsHtml = `<div style="font-size:10px;color:#9ca3af;font-style:italic;margin-top:6px">Sin actividades activas</div>`;
+    html += `<div class="card">
+      <div class="card-header">
+        <div class="avatar" style="background:${col}">${ini}</div>
+        <div><div class="card-name">${member}</div></div>
+      </div>
+      <span class="status-badge" style="background:${estado.bg};color:${estado.color}">${estado.label}</span>
+      ${actsHtml}
+    </div>`;
+  });
+
+  html += `</div></div>
+
+  <div class="section">
+    <div class="section-title">Actividades por proyectista — En proceso y pendientes</div>`;
+
+  PA_MEMBERS.forEach(member=>{
+    const acts = (porResp[member]||[]).sort((a,b)=>{
+      const ord={'En progreso':0,'En pausa':1,'En revisión':2,'Sin iniciar':3};
+      return (ord[a.estatus]??9)-(ord[b.estatus]??9);
+    });
+    const col = getCol(member);
+    const ini = getInitials(member);
+    html += `<div class="proyectista-block">
+      <div class="proy-header">
+        <div class="avatar" style="background:${col}">${ini}</div>
+        <div class="proy-name">${member}</div>
+        <div class="proy-count">${acts.length} actividad${acts.length!==1?'es':''} activa${acts.length!==1?'s':''}</div>
+      </div>`;
+    if(!acts.length){
+      html += `<div class="no-acts">Sin actividades activas en este momento</div>`;
+    } else {
+      html += `<table><thead><tr>
+        <th>Folio</th><th>Proyecto / Actividad</th><th>Tipo</th><th>F. Asig.</th><th>F. Término</th><th>Km</th><th>D.Est</th><th>D.Real</th><th>Estatus</th>
+      </tr></thead><tbody>`;
+      acts.forEach(a=>{
+        const bs = estBadge[a.estatus]||'background:#f3f4f6;color:#374151';
+        html += `<tr>
+          <td style="font-family:monospace;font-size:10px;color:#2a78d6">${a.folio||'—'}</td>
+          <td><div style="font-weight:500">${a.proyecto||'—'}</div><div style="font-size:10px;color:#6b7280">${a.actividad||''}</div></td>
+          <td>${a.tipo||'—'}</td>
+          <td style="white-space:nowrap">${a.fechaAsig||'—'}</td>
+          <td style="white-space:nowrap">${a.fechaTermino||'—'}</td>
+          <td>${a.km||'—'}</td>
+          <td style="text-align:center">${a.diasEstimados?a.diasEstimados+'d':'—'}</td>
+          <td style="text-align:center">${a.diasReales?a.diasReales+'d':'—'}</td>
+          <td><span class="badge" style="${bs}">${a.estatus}</span></td>
+        </tr>`;
+      });
+      html += `</tbody></table>`;
+    }
+    html += `</div>`;
+  });
+
+  html += `</div>
+  <div class="footer">C3NTRO Telecom · Coordinación de Ingeniería · Reporte generado automáticamente · ${fecha}</div>
+</body></html>`;
+
+  const win = window.open('','_blank','width=1000,height=750');
+  win.document.write(html);
+  win.document.close();
+  setTimeout(()=>win.print(), 600);
+}
+
 function paExportPDF(){
   const now = new Date();
   const twoWeeksAgo = new Date(now); twoWeeksAgo.setDate(now.getDate()-14); twoWeeksAgo.setHours(0,0,0,0);
@@ -11340,18 +11581,41 @@ function paExportPDF(){
     const statusBg = p.type==='libre' ? '#eafbf2' : p.type==='atencion' ? '#fff8e6' : '#fdeeee';
     const statusDot = p.type==='libre' ? '🟢' : p.type==='atencion' ? '🟡' : '🔴';
 
-    const pendientes = PA_ITEMS
-      .filter(a => a.responsable===p.name && a.estatus!=='Terminado' && a.estatus!=='En pausa')
-      .sort((a,b)=>(a.fechaTermino||'9999').localeCompare(b.fechaTermino||'9999'))
-      .slice(0,3);
+    const enProcActs = PA_ITEMS
+      .filter(a => a.responsable===p.name && a.estatus==='En progreso')
+      .sort((a,b)=>(a.fechaTermino||'9999').localeCompare(b.fechaTermino||'9999'));
+    const sinIniActs = PA_ITEMS
+      .filter(a => a.responsable===p.name && a.estatus==='Sin iniciar')
+      .sort((a,b)=>(a.fechaTermino||'9999').localeCompare(b.fechaTermino||'9999'));
+    const enPausActs = PA_ITEMS
+      .filter(a => a.responsable===p.name && (a.estatus==='En pausa'||a.estatus==='En revisión'))
+      .sort((a,b)=>(a.fechaTermino||'9999').localeCompare(b.fechaTermino||'9999'));
 
-    const pendientesHTML = pendientes.length ? pendientes.map(a=>{
+    function actRow(a, labelColor){
       const venceTxt = a.fechaTermino ? fmtShort(a.fechaTermino) : 'sin fecha';
-      return `<div style="font-size:9px;color:#555;padding:2px 0;border-top:1px solid #eee">
-        <span style="font-family:monospace;color:#888">${a.folio||a.tipo}</span> — ${(a.actividad||'').slice(0,38)}${(a.actividad||'').length>38?'…':''}
-        <span style="color:#999"> (vence ${venceTxt})</span>
+      return `<div style="padding:4px 0;border-top:1px solid ${statusColor}22">
+        <div style="font-size:10px;font-weight:700;color:#1a1a2e">${a.proyecto||a.actividad||'—'}</div>
+        <div style="font-size:9px;font-family:monospace;color:#2a78d6;margin-top:1px">${a.folio||''}</div>
+        <div style="font-size:9px;color:#777;margin-top:1px">Vence ${venceTxt}</div>
       </div>`;
-    }).join('') : `<div style="font-size:9px;color:#aaa;font-style:italic;padding-top:3px">Sin pendientes activos</div>`;
+    }
+
+    let pendientesHTML = '';
+    if(enProcActs.length){
+      pendientesHTML += `<div style="font-size:8px;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:.05em;margin:6px 0 3px">En progreso</div>`;
+      pendientesHTML += enProcActs.map(a=>actRow(a,'#1d4ed8')).join('');
+    }
+    if(sinIniActs.length){
+      pendientesHTML += `<div style="font-size:8px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin:6px 0 3px">Sin iniciar</div>`;
+      pendientesHTML += sinIniActs.map(a=>actRow(a,'#374151')).join('');
+    }
+    if(enPausActs.length){
+      pendientesHTML += `<div style="font-size:8px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.05em;margin:6px 0 3px">En pausa</div>`;
+      pendientesHTML += enPausActs.map(a=>actRow(a,'#92400e')).join('');
+    }
+    if(!enProcActs.length && !sinIniActs.length && !enPausActs.length){
+      pendientesHTML = `<div style="font-size:9px;color:#aaa;font-style:italic;padding-top:4px">Sin actividades activas</div>`;
+    }
 
     return `<div style="background:${statusBg};border:1px solid ${statusColor}33;border-radius:8px;padding:10px 12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
@@ -11359,7 +11623,7 @@ function paExportPDF(){
         <span style="font-size:10px">${statusDot}</span>
       </div>
       <div style="font-size:10px;font-weight:600;color:${statusColor};margin-bottom:2px">${p.label}</div>
-      <div style="font-size:9px;color:#777;margin-bottom:5px">${p.detail}</div>
+      <div style="font-size:9px;color:#777;margin-bottom:4px">${p.detail}</div>
       ${pendientesHTML}
     </div>`;
   }).join('');
