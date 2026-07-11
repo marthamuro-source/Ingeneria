@@ -571,6 +571,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .pa-cal-btn{position:absolute;right:8px;background:none;border:none;color:var(--muted);cursor:pointer;padding:2px;display:flex;align-items:center;z-index:1;pointer-events:none;}
 .pa-th-inner{display:inline-flex;align-items:center;gap:4px;user-select:none;}
 .pa-sort-icon{font-size:10px;color:var(--muted);width:10px;display:inline-block;}
+.pa-th-resizer{position:absolute;right:0;top:2px;bottom:2px;width:5px;cursor:col-resize;background:transparent;border-radius:2px;z-index:2}
+.pa-th-resizer:hover,.pa-th-resizer.resizing{background:rgba(74,143,212,.5)}
+.et th{position:relative;overflow:visible !important}
 .et th:hover .pa-sort-icon{color:var(--muted);}
 .et th.sort-active{color:var(--accent);}
 .et th.sort-active .pa-sort-icon{color:var(--accent);}
@@ -6284,6 +6287,76 @@ function pumFechaBadge(f) {
   } catch(ex){}
 })();
 
+// ── Column resizer ────────────────────────────────────────────────────────────
+function paInitResizers(tableId){
+  const table = document.getElementById(tableId);
+  if(!table) return;
+  const ths = table.querySelectorAll('thead th');
+  ths.forEach(function(th){
+    if(th.querySelector('.pa-th-resizer')) return; // ya tiene
+    const div = document.createElement('div');
+    div.className = 'pa-th-resizer';
+    th.appendChild(div);
+    let startX, startW;
+    div.addEventListener('mousedown', function(e){
+      e.stopPropagation();
+      startX = e.pageX;
+      startW = th.offsetWidth;
+      div.classList.add('resizing');
+      function onMove(e){
+        const w = Math.max(40, startW + e.pageX - startX);
+        th.style.minWidth = w+'px';
+        th.style.maxWidth = w+'px';
+        th.style.width = w+'px';
+      }
+      function onUp(){
+        div.classList.remove('resizing');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+    div.addEventListener('click', function(e){ e.stopPropagation(); });
+  });
+}
+
+function paInitAllResizers(){
+  ['paTbody-Proyecto','paTbody-Planos de Conectividad','paTbody-Trabajo Operativo','paTbody-Impresiones'].forEach(function(id){
+    const tbody = document.getElementById(id);
+    if(tbody){
+      const table = tbody.closest('table');
+      if(table && !table.dataset.resizersInit){
+        table.dataset.resizersInit = '1';
+        const ths = table.querySelectorAll('thead th');
+        ths.forEach(function(th){
+          const div = document.createElement('div');
+          div.className = 'pa-th-resizer';
+          th.appendChild(div);
+          let startX, startW;
+          div.addEventListener('mousedown', function(e){
+            e.stopPropagation();
+            startX = e.pageX; startW = th.offsetWidth;
+            div.classList.add('resizing');
+            function onMove(e){
+              var w = Math.max(40, startW + e.pageX - startX);
+              th.style.minWidth = w+'px'; th.style.width = w+'px';
+            }
+            function onUp(){
+              div.classList.remove('resizing');
+              document.removeEventListener('mousemove', onMove);
+              document.removeEventListener('mouseup', onUp);
+            }
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+          });
+          div.addEventListener('click', function(e){ e.stopPropagation(); });
+        });
+      }
+    }
+  });
+}
+
 try{ cronoLoad(); cronoLoadCatalogo(); }catch(e){}
 
 
@@ -8308,8 +8381,8 @@ function paRenderTipo(tipo){
       return `<tr class="${hlCls}">
         ${numBobinaTd}
         ${actividadTd}
-        ${folioTd}
         ${proyectoTd}
+        ${folioTd}
         ${propietarioTd}
         ${responsableTd}${fechaAsigTd}${fechaTermTd}${fechaRealTd}
         <td style="color:var(--text);font-size:11px;text-align:right${_puedoEditar?';cursor:pointer':''}" ${_puedoEditar ? `onclick="paInlineKm('${a.id}','${a.km||''}',this)" title="Clic para editar km"` : ''}>${a.km||'—'}</td>
@@ -8344,7 +8417,8 @@ function paRenderTipo(tipo){
   });
 }
 
-// ── Populate responsable dropdowns per tipo ──
+// ── Populate responsable dropdowns per tipo ──  setTimeout(paInitAllResizers, 80);
+
 function paPopulateRespSelects(){
   ['Proyecto','Planos de Conectividad','Trabajo Operativo','Impresiones'].forEach(tipo=>{
     const sel = document.getElementById('paFiltResp-'+tipo);
