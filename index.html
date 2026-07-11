@@ -2078,7 +2078,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           </div>
           <div class="pa-table-wrap">
             <table class="et">
-              <thead><tr><th style="cursor:pointer;padding-left:14px" onclick="paSortTipo('Proyecto','proyecto')"><span class="pa-th-inner">Folio <span id="paS-Proyecto-proyecto" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','folio')"><span class="pa-th-inner">Proyecto <span id="paS-Proyecto-folio" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','responsable')"><span class="pa-th-inner">Responsable <span id="paS-Proyecto-responsable" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','fechaAsig')"><span class="pa-th-inner">F. Asig. <span id="paS-Proyecto-fechaAsig" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','fechaTermino')"><span class="pa-th-inner">F. Término <span id="paS-Proyecto-fechaTermino" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','fechaReal')" title="Fecha en la que realmente se entregó"><span class="pa-th-inner">F. Final Real <span id="paS-Proyecto-fechaReal" class="pa-sort-icon"></span></span></th><th style="text-align:right">Km</th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','estatus')"><span class="pa-th-inner">Estatus <span id="paS-Proyecto-estatus" class="pa-sort-icon"></span></span></th><th style="text-align:center;white-space:nowrap">Pronóstico</th><th style="text-align:center;white-space:nowrap">D.Est</th><th style="text-align:center;white-space:nowrap">D.Real</th><th style="min-width:110px">Notas</th><th style="width:32px;text-align:center">🔗</th><th style="width:56px;padding-right:12px"></th></tr></thead>
+              <thead><tr><th style="cursor:pointer;padding-left:14px" onclick="paSortTipo('Proyecto','folio')"><span class="pa-th-inner">Proyecto <span id="paS-Proyecto-folio" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','proyecto')"><span class="pa-th-inner">Folio <span id="paS-Proyecto-proyecto" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','responsable')"><span class="pa-th-inner">Responsable <span id="paS-Proyecto-responsable" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','fechaAsig')"><span class="pa-th-inner">F. Asig. <span id="paS-Proyecto-fechaAsig" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','fechaTermino')"><span class="pa-th-inner">F. Término <span id="paS-Proyecto-fechaTermino" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','fechaReal')" title="Fecha en la que realmente se entregó"><span class="pa-th-inner">F. Final Real <span id="paS-Proyecto-fechaReal" class="pa-sort-icon"></span></span></th><th style="text-align:right">Km</th><th style="text-align:center;white-space:nowrap">Pronóstico</th><th style="cursor:pointer;" onclick="paSortTipo('Proyecto','estatus')"><span class="pa-th-inner">Estatus <span id="paS-Proyecto-estatus" class="pa-sort-icon"></span></span></th><th style="min-width:110px">Notas</th><th style="width:32px;text-align:center">🔗</th><th style="width:56px;padding-right:12px"></th></tr></thead>
               <tbody id="paTbody-Proyecto"><tr><td colspan="15" class="pa-empty"><p>Cargando…</p></td></tr></tbody>
             </table>
           </div>
@@ -2123,9 +2123,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
                 <th style="cursor:pointer" onclick="paSortTipo('Planos de Conectividad','fechaTermino')" title="Ordenar por fecha de término"><span class="pa-th-inner">F. Término <span id="paS-Planos de Conectividad-fechaTermino" class="pa-sort-icon"></span></span></th>
                 <th style="cursor:pointer" onclick="paSortTipo('Planos de Conectividad','fechaReal')" title="Fecha en la que realmente se entregó"><span class="pa-th-inner">F. Final Real <span id="paS-Planos de Conectividad-fechaReal" class="pa-sort-icon"></span></span></th>
                 <th style="text-align:right">Km</th>
+                <th style="text-align:center;white-space:nowrap">Pronóstico</th>
                 <th style="cursor:pointer" onclick="paSortTipo('Planos de Conectividad','estatus')" title="Ordenar por estatus"><span class="pa-th-inner">Estatus <span id="paS-Planos de Conectividad-estatus" class="pa-sort-icon"></span></span></th>
-                <th style="text-align:center">D.Est</th>
-                <th style="text-align:center">D.Real</th>
                 <th style="min-width:110px">Notas</th>
                 <th style="width:32px;text-align:center">🔗</th>
                 <th style="width:56px;padding-right:12px"></th>
@@ -2163,7 +2162,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           </div>
           <div class="pa-table-wrap">
             <table class="et">
-              <thead><tr><th style="cursor:pointer;padding-left:14px;min-width:200px" onclick="paSortTipo('Trabajo Operativo','actividad')"><span class="pa-th-inner">Actividad <span id="paS-Trabajo Operativo-actividad" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','responsable')"><span class="pa-th-inner">Responsable <span id="paS-Trabajo Operativo-responsable" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','fechaAsig')"><span class="pa-th-inner">F. Asig. <span id="paS-Trabajo Operativo-fechaAsig" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','fechaTermino')"><span class="pa-th-inner">F. Término <span id="paS-Trabajo Operativo-fechaTermino" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','fechaReal')" title="Fecha en la que realmente se entregó"><span class="pa-th-inner">F. Final Real <span id="paS-Trabajo Operativo-fechaReal" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','estatus')"><span class="pa-th-inner">Estatus <span id="paS-Trabajo Operativo-estatus" class="pa-sort-icon"></span></span></th><th style="text-align:center;white-space:nowrap">Pronóstico</th><th style="text-align:center">D.Est</th><th style="text-align:center">D.Real</th><th style="min-width:110px">Notas</th><th style="width:32px;text-align:center">🔗</th><th style="width:56px;padding-right:12px"></th></tr></thead>
+              <thead><tr><th style="cursor:pointer;padding-left:14px;min-width:200px" onclick="paSortTipo('Trabajo Operativo','actividad')"><span class="pa-th-inner">Actividad <span id="paS-Trabajo Operativo-actividad" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','responsable')"><span class="pa-th-inner">Responsable <span id="paS-Trabajo Operativo-responsable" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','fechaAsig')"><span class="pa-th-inner">F. Asig. <span id="paS-Trabajo Operativo-fechaAsig" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','fechaTermino')"><span class="pa-th-inner">F. Término <span id="paS-Trabajo Operativo-fechaTermino" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','fechaReal')" title="Fecha en la que realmente se entregó"><span class="pa-th-inner">F. Final Real <span id="paS-Trabajo Operativo-fechaReal" class="pa-sort-icon"></span></span></th><th style="text-align:center;white-space:nowrap">Pronóstico</th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','estatus')"><span class="pa-th-inner">Estatus <span id="paS-Trabajo Operativo-estatus" class="pa-sort-icon"></span></span></th><th style="min-width:110px">Notas</th><th style="width:32px;text-align:center">🔗</th><th style="width:56px;padding-right:12px"></th></tr></thead>
               <tbody id="paTbody-Trabajo Operativo"><tr><td colspan="11" class="pa-empty"><p>Cargando…</p></td></tr></tbody>
             </table>
           </div>
@@ -2196,7 +2195,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           </div>
           <div class="pa-table-wrap">
             <table class="et">
-              <thead><tr><th style="cursor:pointer;padding-left:14px" onclick="paSortTipo('Impresiones','folio')"><span class="pa-th-inner">Folio <span id="paS-Impresiones-folio" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Impresiones','responsable')"><span class="pa-th-inner">Responsable <span id="paS-Impresiones-responsable" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Impresiones','fechaAsig')"><span class="pa-th-inner">F. Asig. <span id="paS-Impresiones-fechaAsig" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Impresiones','fechaTermino')"><span class="pa-th-inner">F. Término <span id="paS-Impresiones-fechaTermino" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Impresiones','fechaReal')" title="Fecha en la que realmente se entregó"><span class="pa-th-inner">F. Final Real <span id="paS-Impresiones-fechaReal" class="pa-sort-icon"></span></span></th><th style="text-align:center" title="Número de juegos">Juegos</th><th style="text-align:center" title="Planos por juego">Pl/Juego</th><th style="text-align:center;white-space:nowrap;font-weight:700" title="Total planos = Juegos × Planos/Juego">Total Planos</th><th style="cursor:pointer;" onclick="paSortTipo('Impresiones','estatus')"><span class="pa-th-inner">Estatus <span id="paS-Impresiones-estatus" class="pa-sort-icon"></span></span></th><th style="text-align:center;white-space:nowrap">Pronóstico</th><th style="text-align:center">D.Est</th><th style="text-align:center">D.Real</th><th style="min-width:110px">Notas</th><th style="width:56px;padding-right:12px"></th></tr></thead>
+              <thead><tr><th style="cursor:pointer;padding-left:14px" onclick="paSortTipo('Impresiones','folio')"><span class="pa-th-inner">Folio <span id="paS-Impresiones-folio" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Impresiones','responsable')"><span class="pa-th-inner">Responsable <span id="paS-Impresiones-responsable" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Impresiones','fechaAsig')"><span class="pa-th-inner">F. Asig. <span id="paS-Impresiones-fechaAsig" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Impresiones','fechaTermino')"><span class="pa-th-inner">F. Término <span id="paS-Impresiones-fechaTermino" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Impresiones','fechaReal')" title="Fecha en la que realmente se entregó"><span class="pa-th-inner">F. Final Real <span id="paS-Impresiones-fechaReal" class="pa-sort-icon"></span></span></th><th style="text-align:center" title="Número de juegos">Juegos</th><th style="text-align:center" title="Planos por juego">Pl/Juego</th><th style="text-align:center;white-space:nowrap;font-weight:700" title="Total planos = Juegos × Planos/Juego">Total Planos</th><th style="text-align:center;white-space:nowrap">Pronóstico</th><th style="cursor:pointer;" onclick="paSortTipo('Impresiones','estatus')"><span class="pa-th-inner">Estatus <span id="paS-Impresiones-estatus" class="pa-sort-icon"></span></span></th><th style="min-width:110px">Notas</th><th style="width:56px;padding-right:12px"></th></tr></thead>
               <tbody id="paTbody-Impresiones"><tr><td colspan="12" class="pa-empty"><p>Cargando…</p></td></tr></tbody>
             </table>
           </div>
@@ -2531,9 +2530,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           <label>Actividad / Descripción *</label>
           <select id="paFActividadSel" onchange="paActSelChange()" style="display:none;margin-bottom:6px">
             <option value="">— Selecciona —</option>
-            <option value="Impresión, doblado y recolección de firmas">Impresión, doblado y recolección de firmas</option>
-            <option value="Impresión y doblado">Impresión y doblado</option>
-            <option value="__otro__">Otra (escribir)</option>
+            <option value="Impresión, doblado y recolección de firmas" data-tipo="Impresiones">Impresión, doblado y recolección de firmas</option>
+            <option value="Impresión y doblado" data-tipo="Impresiones">Impresión y doblado</option>
+            <option value="AP de bobina (Kmz, plano, volumen)" data-tipo="Planos de Conectividad">AP de bobina (Kmz, plano, volumen)</option>
+            <option value="KmZ y volumétrico" data-tipo="Planos de Conectividad">KmZ y volumétrico</option>
+            <option value="__otro__">Otro (escribir)</option>
           </select>
           <input type="text" id="paFActividad" placeholder="Ej. Diseño de red FTTH colonia Centro">
         </div>
@@ -8306,18 +8307,18 @@ function paRenderTipo(tipo){
       const responsableTd = `<td><div class="chip"><div class="mav" style="background:${bg};color:${c}">${ini(a.responsable)}</div>${nombreCorto(a.responsable)}</div></td>`;
       return `<tr class="${hlCls}">
         ${numBobinaTd}
-        ${folioTd}
         ${actividadTd}
+        ${folioTd}
         ${proyectoTd}
         ${propietarioTd}
         ${responsableTd}${fechaAsigTd}${fechaTermTd}${fechaRealTd}
         <td style="color:var(--text);font-size:11px;text-align:right${_puedoEditar?';cursor:pointer':''}" ${_puedoEditar ? `onclick="paInlineKm('${a.id}','${a.km||''}',this)" title="Clic para editar km"` : ''}>${a.km||'—'}</td>
-        ${pronSubTd}${estatusTd}${dCells}${notasTd}${enlaceTd}${acciones}
+        ${pronSubTd}${estatusTd}${notasTd}${enlaceTd}${acciones}
       </tr>`;
     } else if(tipo==='Trabajo Operativo'){
       return `<tr class="${hlCls}">
         <td style="padding-left:14px;min-width:180px;max-width:240px"><div class="cm" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(a.actividad||'').replace(/"/g,'&quot;')}">${a.actividad||'—'}</div></td>
-        ${respTd}${fechaAsigTd}${fechaTermTd}${fechaRealTd}${pronSubTd}${estatusTd}${dCells}${notasTd}${enlaceTd}${acciones}
+        ${respTd}${fechaAsigTd}${fechaTermTd}${fechaRealTd}${pronSubTd}${estatusTd}${notasTd}${enlaceTd}${acciones}
       </tr>`;
     } else { // Impresiones
       const juegos = parseInt(a.juegos)||0;
@@ -8329,7 +8330,7 @@ function paRenderTipo(tipo){
         <td style="text-align:center;font-size:11px">${a.juegos||'—'}</td>
         <td style="text-align:center;font-size:11px;cursor:pointer" onclick="paInlinePlanosJuego('${a.id}','${a.planosJuego||''}',this)" title="Clic para editar">${a.planosJuego||'<span style=color:var(--dim)>+ agregar</span>'}</td>
         <td style="text-align:center;font-size:12px;font-weight:600;color:${totalPlanos?'var(--accent)':'var(--dim)'}">${totalPlanos??'—'}</td>
-        ${pronSubTd}${estatusTd}${dCells}${notasTd}${acciones}
+        ${pronSubTd}${estatusTd}${notasTd}${acciones}
       </tr>`;
     }
   }).join('');
@@ -9119,14 +9120,22 @@ function paTipoChange(){
   document.getElementById('paPropietarioWrap').style.display = isProj ? '' : 'none';
   document.getElementById('paJuegosWrap').style.display = t==='Impresiones' ? '' : 'none';
   document.getElementById('paNumBobinaWrap').style.display = t==='Planos de Conectividad' ? '' : 'none';
-  // Mostrar select de actividad solo para Impresiones
+  // Mostrar select de actividad para Impresiones y Planos de Conectividad
   const actSel = document.getElementById('paFActividadSel');
   const actInp = document.getElementById('paFActividad');
-  if(t==='Impresiones'){
+  if(t==='Impresiones' || t==='Planos de Conectividad'){
+    // Filtrar opciones según el tipo
+    [...actSel.options].forEach(opt=>{
+      const dt = opt.getAttribute('data-tipo');
+      if(!dt || dt===t || opt.value==='' || opt.value==='__otro__'){
+        opt.style.display = '';
+      } else {
+        opt.style.display = 'none';
+      }
+    });
     actSel.style.display = '';
-    // Si el input ya tiene valor del select, mostrarlo seleccionado
     const cur = actInp.value;
-    const opt = [...actSel.options].find(o=>o.value===cur);
+    const opt = [...actSel.options].find(o=>o.value===cur&&o.style.display!=='none');
     if(opt) actSel.value = cur;
     else if(cur){ actSel.value='__otro__'; actInp.style.display=''; }
     else { actSel.value=''; actInp.style.display='none'; actInp.value=''; }
@@ -9815,7 +9824,7 @@ function pdmGeneratePDF(period){
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:10px">
         <thead><tr style="background:#f0f4fa">
-          ${['Tipo','Folio','Actividad','Proyecto','F.Asig.','F.Término','D.Est','D.Real','Juegos','T.Planos','Estatus','Notas']
+          ${['Tipo','Folio','Actividad','Proyecto','F.Asig.','F.Término','Juegos','T.Planos','Estatus','Notas']
             .map(h=>`<th style="padding:6px 8px;border-bottom:2px solid #e0e7f0;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#555;text-align:left;white-space:nowrap">${h}</th>`).join('')}
         </tr></thead>
         <tbody>${rows}</tbody>
@@ -10819,7 +10828,10 @@ function notaToggleSergio(id){
 function notaDelete(id){
   if(!confirm('\u00bfEliminar esta nota?')) return;
   NOTAS = NOTAS.filter(x=>x.id!==id);
-  notaSave(); renderNotas();
+  notaSave();
+  // Eliminar de Supabase
+  if(_supa) _supa.from('notas_raquel').delete().eq('id', id).catch(e=>console.warn('notaDelete supa:', e));
+  renderNotas();
 }
 
 function notaEdit(id){
@@ -11524,7 +11536,7 @@ function paExportPDF(){
   const items = PA_ITEMS.filter(a=>{
     const ref = a.fechaAsig ? new Date(a.fechaAsig+'T00:00:00') : new Date(a.createdAt||0);
     return ref >= twoWeeksAgo;
-  }).sort((a,b)=>(a.fechaAsig||'').localeCompare(b.fechaAsig||''));
+  }).sort((a,b)=>(b.fechaAsig||'').localeCompare(a.fechaAsig||''));
 
   // Red flags: Proyecto & Impresiones that are NOT Terminado, regardless of date
   const redFlags = PA_ITEMS.filter(a=>
@@ -11838,8 +11850,13 @@ function paExportPDF(){
 
   const blob = new Blob([html],{type:'text/html;charset=utf-8'});
   const url = URL.createObjectURL(blob);
-  const win = window.open(url,'_blank');
-  if(!win) alert('Permite ventanas emergentes para generar el PDF.');
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
   setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
 
