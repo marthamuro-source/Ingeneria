@@ -9833,8 +9833,11 @@ function pdmGeneratePDF(period){
   }
 
   // Filter activities for this person and period
+  // Usar comparación flexible por si hay diferencias menores en el nombre
+  const nameNorm = (name||'').trim().toLowerCase();
   const all = PA_ITEMS.filter(a=>{
-    if(a.responsable!==name) return false;
+    const respNorm = (a.responsable||'').trim().toLowerCase();
+    if(respNorm !== nameNorm) return false;
     if(period==='all') return true;
     const ref = a.fechaAsig ? new Date(a.fechaAsig+'T00:00:00') : new Date(a.createdAt||0);
     return ref >= rangeStart && ref <= rangeEnd;
@@ -9845,7 +9848,7 @@ function pdmGeneratePDF(period){
       // Si no hay en el período, generar con historial completo
       pdmGeneratePDF('all');
     } else {
-      alert('Este proyectista no tiene actividades registradas.');
+      alert('Sin actividades para ' + name + '. Verifica que el nombre coincida con el asignado en las actividades.');
     }
     return;
   }
