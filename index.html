@@ -8369,7 +8369,7 @@ function paRenderTipo(tipo){
         ? `<td style="padding-left:14px;text-align:center;cursor:pointer;font-weight:600;color:var(--accent)" onclick="paInlineNumBobina('${a.id}','${a.numBobina||''}',this)" title="Clic para editar">${a.numBobina?'#'+a.numBobina:'<span style="color:var(--dim);font-weight:400">+ agregar</span>'}</td>`
         : '';
       // Header orden: #Bobina | Folio | Actividad | Proyecto | Propietario | Responsable | F.Asig | F.Término | F.Final Real | Km | Estatus | D.Est | D.Real | Notas | 🔗 | Acciones
-      const folioTd = `<td style="max-width:180px"><div class="cs" style="white-space:normal;word-break:break-word;cursor:help;color:var(--accent);font-family:var(--mono);font-size:11px;line-height:1.4" title="Actividad: ${(a.actividad||'Sin descripción').replace(/"/g,'&quot;')}">${a.folio||'—'}</div></td>`;
+      const folioTd = `<td style="min-width:220px;max-width:280px"><div class="cs" style="white-space:normal;word-break:break-word;cursor:help;color:var(--accent);font-family:var(--mono);font-size:11px;line-height:1.4" title="Actividad: ${(a.actividad||'Sin descripción').replace(/"/g,'&quot;')}">${a.folio||'—'}</div></td>`;
       const actividadTd = tipo==='Planos de Conectividad'
         ? `<td style="max-width:140px"><div class="cs" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--muted)" title="${(a.actividad||'').replace(/"/g,'&quot;')}">${a.actividad||'—'}</div></td>`
         : '';
@@ -9812,8 +9812,8 @@ function pdmGeneratePDF(period){
   // Define period range
   let rangeStart, rangeEnd, periodoLabel;
   if(period==='mes'){
-    rangeStart = new Date(y, now.getMonth()-1, 1);
-    rangeEnd   = new Date(y, now.getMonth(), 0, 23,59,59);
+    rangeStart = new Date(y, now.getMonth(), 1);
+    rangeEnd   = new Date(y, now.getMonth()+1, 0, 23,59,59);
     periodoLabel = rangeStart.toLocaleDateString('es-MX',{month:'long',year:'numeric'});
   } else if(period==='Q1'){
     rangeStart = new Date(y,0,1); rangeEnd = new Date(y,2,31,23,59,59);
@@ -9841,13 +9841,26 @@ function pdmGeneratePDF(period){
   });
 
   if(!all.length){
-    alert(`Sin actividades en el período seleccionado (${periodoLabel}).`);
+    if(period!=='all'){
+      // Si no hay en el período, generar con historial completo
+      pdmGeneratePDF('all');
+    } else {
+      alert('Este proyectista no tiene actividades registradas.');
+    }
     return;
   }
 
   const terminadas = all.filter(a=>a.estatus==='Terminado').length;
   const enProceso  = all.filter(a=>a.estatus==='En progreso').length;
-  const retrasadas = all.filter(a=>a.estatus!=='Terminado'&&a.fechaTermino&&new Date(a.fechaTermino+'T00:00:00')<now).length;
+
+  // Indicadores de cumplimiento
+  const todayStr = today;
+  const enTiempo   = all.filter(a=>a.estatus==='Terminado' && a.fechaReal && a.fechaTermino && a.fechaReal<=a.fechaTermino).length;
+  const retardadas = all.filter(a=>a.estatus==='Terminado' && a.fechaReal && a.fechaTermino && a.fechaReal>a.fechaTermino).length;
+  const enRiesgo   = all.filter(a=>a.estatus!=='Terminado' && a.fechaTermino && a.fechaTermino<todayStr).length;
+  const sinFecha   = all.filter(a=>!a.fechaTermino).length;
+  const conFecha   = all.length - sinFecha;
+  const pctTiempo  = conFecha ? Math.round(enTiempo/conFecha*100) : 0;
   const pct = n => all.length ? Math.round(n/all.length*100) : 0;
 
   const fmtS = d => d ? new Date(d+'T00:00:00').toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
@@ -9957,6 +9970,36 @@ function pdmGeneratePDF(period){
         <div class="dist-dot" style="background:${t==='Proyecto'?'#1a4fa0':t==='Impresiones'?'#c47d10':'#27a057'}"></div>
         <span>${t}: <strong>${c}</strong></span>
       </div>`).join('<span style="color:#ddd">|</span>')}
+  </div>
+  <!-- Indicador de cumplimiento -->
+  <div style="margin:16px 0;background:#f8fafc;border:1px solid #e2eaf3;border-radius:10px;padding:16px 20px">
+    <div style="font-size:11px;font-weight:700;color:#0f2744;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Cumplimiento de fechas</div>
+    <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+      <!-- Barra visual -->
+      <div style="flex:1;min-width:200px">
+        <div style="display:flex;height:18px;border-radius:9px;overflow:hidden;background:#e5e7eb">
+          ${enTiempo>0?`<div style="width:${Math.round(enTiempo/all.length*100)}%;background:#1baf7a;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff">${enTiempo}</div>`:''}
+          ${retardadas>0?`<div style="width:${Math.round(retardadas/all.length*100)}%;background:#e24b4a;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff">${retardadas}</div>`:''}
+          ${enRiesgo>0?`<div style="width:${Math.round(enRiesgo/all.length*100)}%;background:#eda100;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff">${enRiesgo}</div>`:''}
+          ${sinFecha>0?`<div style="width:${Math.round(sinFecha/all.length*100)}%;background:#d1d5db;display:flex;align-items:center;justify-content:center;font-size:9px;color:#6b7280">${sinFecha}</div>`:''}
+        </div>
+        <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:4px;font-size:10px"><div style="width:10px;height:10px;border-radius:2px;background:#1baf7a;flex-shrink:0"></div>En tiempo (${enTiempo})</div>
+          <div style="display:flex;align-items:center;gap:4px;font-size:10px"><div style="width:10px;height:10px;border-radius:2px;background:#e24b4a;flex-shrink:0"></div>Retrasadas (${retardadas})</div>
+          <div style="display:flex;align-items:center;gap:4px;font-size:10px"><div style="width:10px;height:10px;border-radius:2px;background:#eda100;flex-shrink:0"></div>En riesgo (${enRiesgo})</div>
+          <div style="display:flex;align-items:center;gap:4px;font-size:10px"><div style="width:10px;height:10px;border-radius:2px;background:#d1d5db;flex-shrink:0"></div>Sin fecha (${sinFecha})</div>
+        </div>
+      </div>
+      <!-- Indicador circular -->
+      <div style="text-align:center;flex-shrink:0">
+        <div style="width:70px;height:70px;border-radius:50%;background:conic-gradient(#1baf7a ${pctTiempo*3.6}deg,#e5e7eb 0deg);display:flex;align-items:center;justify-content:center;margin:0 auto 4px">
+          <div style="width:52px;height:52px;border-radius:50%;background:#f8fafc;display:flex;align-items:center;justify-content:center;flex-direction:column">
+            <div style="font-size:16px;font-weight:800;color:#0f2744;line-height:1">${pctTiempo}%</div>
+          </div>
+        </div>
+        <div style="font-size:9px;color:#6b7280;font-weight:500">cumplimiento</div>
+      </div>
+    </div>
   </div>
   ${sectionsHTML}
   <div class="rpt-footer">
@@ -11606,18 +11649,16 @@ function paExportPDF(){
   const twoWeeksAgo = new Date(now); twoWeeksAgo.setDate(now.getDate()-14); twoWeeksAgo.setHours(0,0,0,0);
   const genStr = now.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' · '+now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
 
-  // Items in last 2 weeks
+  // Mostrar todas las actividades activas + terminadas de los últimos 6 meses
+  const sixMonthsAgo = new Date(now); sixMonthsAgo.setMonth(now.getMonth()-6); sixMonthsAgo.setHours(0,0,0,0);
   const items = PA_ITEMS.filter(a=>{
+    if(a.estatus !== 'Terminado') return true; // todas las activas siempre
     const ref = a.fechaAsig ? new Date(a.fechaAsig+'T00:00:00') : new Date(a.createdAt||0);
-    return ref >= twoWeeksAgo;
+    return ref >= sixMonthsAgo; // terminadas solo últimos 6 meses
   }).sort((a,b)=>(b.fechaAsig||'').localeCompare(a.fechaAsig||''));
 
-  // Red flags: Proyecto & Impresiones that are NOT Terminado, regardless of date
-  const redFlags = PA_ITEMS.filter(a=>
-    (a.tipo==='Proyecto'||a.tipo==='Impresiones') &&
-    a.estatus!=='Terminado' &&
-    a.fechaAsig && new Date(a.fechaAsig+'T00:00:00') < twoWeeksAgo
-  ).sort((a,b)=>(a.fechaAsig||'').localeCompare(b.fechaAsig||''));
+  // Sin red flags separados — ya están incluidas en items
+  const redFlags = [];
 
   // USB in last 2 weeks
   const usbInPeriod = USB_ITEMS.filter(u=>{
