@@ -2005,6 +2005,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           Exportar CSV
         </button>
+        <button class="pa-btn pa-btn-ghost" onclick="planOpen()" style="font-size:12px;border-color:rgba(74,143,212,.35);color:#7ab8f5" title="Plan de trabajo del equipo">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          Plan de trabajo
+        </button>
         <button class="pa-btn pa-btn-ghost" onclick="paExportPDF()" style="font-size:12px;border-color:rgba(255,92,92,.25);color:#ff7a7a" title="Generar reporte ejecutivo en PDF de las últimas 2 semanas">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
           Reporte PDF
@@ -6280,6 +6284,314 @@ function pumFechaBadge(f) {
     }, 150);
   } catch(ex){}
 })();
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  PLAN DE TRABAJO
+// ══════════════════════════════════════════════════════════════════════════════
+var PLAN_WEEKS_OPEN = {0: true, 1: false, 2: false};
+
+function planOpen() {
+  var old = document.getElementById('planModalBg');
+  if (old) old.remove();
+
+  var bg = document.createElement('div');
+  bg.id = 'planModalBg';
+  bg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto';
+  bg.onclick = function(e) { if (e.target === bg) bg.remove(); };
+
+  var modal = document.createElement('div');
+  modal.style.cssText = 'background:var(--surface);border:0.5px solid var(--border);border-radius:14px;width:100%;max-width:1100px;overflow:hidden';
+  modal.onclick = function(e) { e.stopPropagation(); };
+
+  modal.innerHTML = planBuildHTML();
+  bg.appendChild(modal);
+  document.body.appendChild(bg);
+}
+
+function planBuildHTML() {
+  var today = new Date();
+  today.setHours(0,0,0,0);
+  var todayStr = today.toISOString().slice(0,10);
+  var weeks = planGetWeeks(today, 3);
+
+  var MEMBER_COLORS = {'Isabel Adriana':'#4a5568','Llense Omar':'#2d6a4f','Edgar Daniel':'#7b2d8b','Jonathan Isidro':'#1a56db','Mauricio Garduño':'#b45309','Sergio Daniel':'#065f46'};
+  function getMColor(name) {
+    var k = Object.keys(MEMBER_COLORS).find(function(k){ return name.indexOf(k.split(' ')[0]) >= 0; });
+    return k ? MEMBER_COLORS[k] : '#374151';
+  }
+  function getIni(name) {
+    return (name||'').split(' ').slice(0,2).map(function(w){ return w[0]; }).join('').toUpperCase();
+  }
+  function fmtDay(d) {
+    return d.toLocaleDateString('es-MX',{weekday:'short',day:'numeric'}).replace('.','');
+  }
+  function fmtWeekLabel(w) {
+    var opts = {day:'numeric',month:'short'};
+    return w[0].toLocaleDateString('es-MX',opts) + ' – ' + w[4].toLocaleDateString('es-MX',opts);
+  }
+
+  var h = '';
+  // Header
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:0.5px solid var(--border);background:rgba(255,255,255,.02)">';
+  h += '<div><div style="font-size:15px;font-weight:700">📅 Plan de trabajo del equipo</div>';
+  h += '<div style="font-size:11px;color:var(--dim);margin-top:2px">Próximas 3 semanas · desde hoy ' + today.toLocaleDateString('es-MX',{day:'numeric',month:'long'}) + '</div></div>';
+  h += '<div style="display:flex;gap:8px;align-items:center">';
+  h += '<button onclick="planExportPDF()" style="font-size:11px;padding:6px 14px;border-radius:7px;border:0.5px solid rgba(255,92,92,.3);background:transparent;color:#ff7a7a;cursor:pointer;font-family:var(--font)">⬇ Exportar PDF</button>';
+  h += '<button onclick="document.getElementById(\'planModalBg\').remove()" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer;padding:0 4px;line-height:1">×</button>';
+  h += '</div></div>';
+
+  h += '<div style="padding:16px 20px;overflow-x:auto">';
+
+  weeks.forEach(function(week, wi) {
+    var isOpen = PLAN_WEEKS_OPEN[wi] !== false;
+    var weekLabel = 'Semana ' + (wi+1) + ' — ' + fmtWeekLabel(week);
+
+    // Header de semana colapsable
+    h += '<div onclick="planToggleWeek(' + wi + ')" style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:' + (isOpen?'8':'4') + 'px;background:rgba(255,255,255,.03);border-radius:8px;cursor:pointer;border:0.5px solid rgba(255,255,255,.07)" onmouseover="this.style.background=\'rgba(255,255,255,.05)\'" onmouseout="this.style.background=\'rgba(255,255,255,.03)\'">';
+    h += '<span style="font-size:12px;color:var(--dim);transform:rotate(' + (isOpen?'90':'0') + 'deg);display:inline-block;transition:transform .2s">▶</span>';
+    h += '<span style="font-size:11px;font-weight:600;color:var(--text)">' + weekLabel + '</span>';
+    h += '</div>';
+
+    if (!isOpen) return;
+
+    // Grid header días
+    h += '<div style="display:grid;grid-template-columns:130px repeat(5,1fr);gap:4px;margin-bottom:4px">';
+    h += '<div></div>';
+    week.forEach(function(day) {
+      var isToday = day.toISOString().slice(0,10) === todayStr;
+      h += '<div style="font-size:10px;color:' + (isToday?'#2a78d6':'var(--dim)') + ';text-align:center;padding:4px 2px;font-weight:' + (isToday?'700':'400') + '">' + fmtDay(day) + (isToday?' ●':'') + '</div>';
+    });
+    h += '</div>';
+
+    // Filas por proyectista
+    PA_MEMBERS.forEach(function(member) {
+      var col = getMColor(member);
+      var ini = getIni(member);
+      var shortName = member.split(' ').slice(0,2).join(' ');
+
+      h += '<div style="display:grid;grid-template-columns:130px repeat(5,1fr);gap:4px;margin-bottom:4px">';
+      // Nombre
+      h += '<div style="display:flex;align-items:center;gap:6px;padding:4px 0">';
+      h += '<div style="width:24px;height:24px;border-radius:50%;background:' + col + ';display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;flex-shrink:0">' + ini + '</div>';
+      h += '<div style="font-size:11px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + shortName + '</div>';
+      h += '</div>';
+
+      // Celdas por día
+      week.forEach(function(day) {
+        var dayStr = day.toISOString().slice(0,10);
+        var isToday = dayStr === todayStr;
+        var dayActs = PA_ITEMS.filter(function(a) {
+          if (a.responsable !== member) return false;
+          if (!a.fechaAsig) return false;
+          var start = a.fechaAsig;
+          var end = a.fechaTermino || a.fechaAsig;
+          return dayStr >= start && dayStr <= end;
+        });
+
+        h += '<div onclick="planCellClick(\'' + member.replace(/'/g,"\\'") + '\',\'' + dayStr + '\')" style="min-height:54px;border-radius:6px;background:' + (isToday?'rgba(42,120,214,.06)':'rgba(255,255,255,.02)') + ';border:0.5px solid ' + (isToday?'rgba(42,120,214,.3)':'rgba(255,255,255,.05)') + ';padding:4px;cursor:pointer;position:relative;transition:background .1s" onmouseover="this.style.background=\'' + (isToday?'rgba(42,120,214,.1)':'rgba(255,255,255,.05)') + '\'" onmouseout="this.style.background=\'' + (isToday?'rgba(42,120,214,.06)':'rgba(255,255,255,.02)') + '\'">';
+
+        dayActs.forEach(function(a) {
+          var isProg = a.estatus === 'En progreso';
+          var isVenc = a.fechaTermino && a.fechaTermino < todayStr && a.estatus !== 'Terminado';
+          var bg = isProg ? 'rgba(42,120,214,.2)' : isVenc ? 'rgba(226,75,74,.15)' : 'rgba(255,255,255,.06)';
+          var tc = isProg ? '#7ab8f5' : isVenc ? '#ff6b6b' : 'var(--dim)';
+          var label = (a.actividad || a.folio || '—').slice(0,18);
+          h += '<div style="font-size:9px;padding:2px 4px;border-radius:3px;background:' + bg + ';color:' + tc + ';margin-bottom:2px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + (a.actividad||'') + '">' + label + '</div>';
+        });
+
+        h += '<div style="position:absolute;bottom:3px;right:3px;width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--dim)">+</div>';
+        h += '</div>';
+      });
+      h += '</div>';
+    });
+
+    h += '<div style="margin-bottom:16px"></div>';
+  });
+
+  // Leyenda
+  h += '<div style="display:flex;gap:14px;flex-wrap:wrap;padding-top:8px;border-top:0.5px solid var(--border)">';
+  h += '<div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--dim)"><div style="width:10px;height:10px;border-radius:2px;background:rgba(42,120,214,.2)"></div>En progreso</div>';
+  h += '<div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--dim)"><div style="width:10px;height:10px;border-radius:2px;background:rgba(255,255,255,.06)"></div>Sin iniciar</div>';
+  h += '<div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--dim)"><div style="width:10px;height:10px;border-radius:2px;background:rgba(226,75,74,.15)"></div>Vencida</div>';
+  h += '<div style="font-size:10px;color:var(--dim);margin-left:auto">Clic en cualquier celda para agregar actividad</div>';
+  h += '</div>';
+
+  h += '</div>'; // fin padding
+  return h;
+}
+
+function planGetWeeks(startDate, numWeeks) {
+  var weeks = [];
+  // Encontrar el lunes de la semana actual
+  var monday = new Date(startDate);
+  var day = monday.getDay() || 7;
+  monday.setDate(monday.getDate() - day + 1);
+
+  for (var w = 0; w < numWeeks; w++) {
+    var week = [];
+    for (var d = 0; d < 5; d++) {
+      var date = new Date(monday);
+      date.setDate(monday.getDate() + w*7 + d);
+      week.push(date);
+    }
+    weeks.push(week);
+  }
+  return weeks;
+}
+
+function planToggleWeek(wi) {
+  PLAN_WEEKS_OPEN[wi] = !PLAN_WEEKS_OPEN[wi];
+  var modal = document.querySelector('#planModalBg > div');
+  if (modal) modal.innerHTML = planBuildHTML();
+}
+
+function planCellClick(member, dateStr) {
+  // Abrir el formulario normal de nueva actividad con responsable y fecha prellenados
+  document.getElementById('planModalBg').remove();
+  // Abrir modal de nueva actividad
+  paOpenTypeSelector();
+  // Prellenar responsable y fecha después de que abra el modal
+  setTimeout(function() {
+    var respSel = document.getElementById('paFResp');
+    if (respSel) {
+      for (var i = 0; i < respSel.options.length; i++) {
+        if (respSel.options[i].value === member) {
+          respSel.value = member;
+          break;
+        }
+      }
+    }
+    var fechaAsig = document.getElementById('paFFechaAsig');
+    if (fechaAsig) fechaAsig.value = dateStr;
+    var fechaTerm = document.getElementById('paFFechaTermino');
+    if (fechaTerm) fechaTerm.value = dateStr;
+  }, 300);
+}
+
+function planExportPDF() {
+  var today = new Date();
+  today.setHours(0,0,0,0);
+  var todayStr = today.toISOString().slice(0,10);
+  var weeks = planGetWeeks(today, 3);
+  var genStr = today.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+  var MEMBER_COLORS_PDF = {'Isabel':'#4a5568','Llense':'#2d6a4f','Edgar':'#7b2d8b','Jonathan':'#1a56db','Mauricio':'#b45309','Sergio':'#065f46'};
+  function getPdfColor(name) {
+    var k = Object.keys(MEMBER_COLORS_PDF).find(function(k){ return name.indexOf(k) >= 0; });
+    return k ? MEMBER_COLORS_PDF[k] : '#374151';
+  }
+  function getIni(name) {
+    return (name||'').split(' ').slice(0,2).map(function(w){ return w[0]; }).join('').toUpperCase();
+  }
+  function fmtD(d) { return d ? new Date(d+'T00:00:00').toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit'}) : '—'; }
+  function fmtDay(d) { return d.toLocaleDateString('es-MX',{weekday:'short',day:'numeric'}).replace('.',''); }
+  function fmtWeekLabel(w) {
+    var opts = {day:'numeric',month:'short'};
+    return w[0].toLocaleDateString('es-MX',opts) + ' – ' + w[4].toLocaleDateString('es-MX',opts);
+  }
+
+  var html = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Plan de Trabajo C3NTRO</title><style>';
+  html += '*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:11px;color:#1a1a2e;background:#fff;padding:24px}';
+  html += '.hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0f2744;padding-bottom:12px;margin-bottom:20px}';
+  html += '.logo{font-size:18px;font-weight:900;color:#0f2744}.logo-sub{font-size:10px;color:#6b7280;margin-top:2px}';
+  html += '.rpt-title{text-align:right}.rpt-title h1{font-size:14px;font-weight:700}.rpt-title p{font-size:10px;color:#6b7280;margin-top:2px}';
+  html += '.section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#0f2744;padding:6px 0;border-bottom:1px solid #e5e7eb;margin:16px 0 10px}';
+  html += '.cal-grid{display:grid;gap:2px;margin-bottom:8px}';
+  html += '.cal-hdr{font-size:9px;color:#6b7280;text-align:center;padding:3px}';
+  html += '.cal-name{display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600}';
+  html += '.avatar{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#fff;flex-shrink:0}';
+  html += '.cal-cell{min-height:36px;border:0.5px solid #e5e7eb;border-radius:3px;padding:2px;font-size:8px}';
+  html += '.act-chip{padding:1px 3px;border-radius:2px;margin-bottom:1px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+  html += '.chip-prog{background:#dbeafe;color:#1d4ed8}.chip-sin{background:#f3f4f6;color:#374151}.chip-venc{background:#fee2e2;color:#b91c1c}';
+  html += 'table{width:100%;border-collapse:collapse;font-size:10px}th{background:#0f2744;color:#fff;padding:5px 8px;text-align:left;font-size:9px}td{padding:5px 8px;border-bottom:1px solid #f3f4f6;vertical-align:top}';
+  html += '.week-hdr{background:#f0f4f8;font-weight:700;font-size:10px;padding:6px 8px;border-radius:4px;margin:12px 0 6px;color:#0f2744}';
+  html += '.footer{text-align:center;font-size:9px;color:#9ca3af;margin-top:20px;padding-top:10px;border-top:1px solid #e5e7eb}';
+  html += '@media print{body{padding:12px}@page{margin:.8cm}}';
+  html += '</style></head><body>';
+
+  // Header
+  html += '<div class="hdr"><div><div class="logo">C3NTRO Telecom</div><div class="logo-sub">Coordinación de Ingeniería</div></div>';
+  html += '<div class="rpt-title"><h1>Plan de Trabajo del Equipo</h1><p>Próximas 3 semanas · Generado: ' + genStr + '<br>Responsable: Martha Raquel Muro Morales</p></div></div>';
+
+  // ── SECCIÓN 1: CALENDARIO ──
+  html += '<div class="section-title">Vista Calendario</div>';
+
+  weeks.forEach(function(week, wi) {
+    html += '<div class="week-hdr">Semana ' + (wi+1) + ' — ' + fmtWeekLabel(week) + '</div>';
+    html += '<div class="cal-grid" style="grid-template-columns:100px repeat(5,1fr)">';
+    // Headers días
+    html += '<div></div>';
+    week.forEach(function(day) {
+      html += '<div class="cal-hdr">' + fmtDay(day) + '</div>';
+    });
+    // Filas proyectistas
+    PA_MEMBERS.forEach(function(member) {
+      var col = getPdfColor(member);
+      var ini = getIni(member);
+      html += '<div class="cal-name"><div class="avatar" style="background:' + col + '">' + ini + '</div>' + member.split(' ').slice(0,2).join(' ') + '</div>';
+      week.forEach(function(day) {
+        var dayStr = day.toISOString().slice(0,10);
+        var dayActs = PA_ITEMS.filter(function(a) {
+          if (a.responsable !== member || !a.fechaAsig) return false;
+          return dayStr >= a.fechaAsig && dayStr <= (a.fechaTermino || a.fechaAsig);
+        });
+        html += '<div class="cal-cell">';
+        dayActs.forEach(function(a) {
+          var cls = a.estatus==='En progreso' ? 'chip-prog' : (a.fechaTermino&&a.fechaTermino<todayStr?'chip-venc':'chip-sin');
+          html += '<div class="act-chip ' + cls + '">' + (a.actividad||a.folio||'—').slice(0,16) + '</div>';
+        });
+        html += '</div>';
+      });
+    });
+    html += '</div>';
+  });
+
+  // ── SECCIÓN 2: LISTA ──
+  html += '<div class="section-title" style="margin-top:24px">Lista de actividades por proyectista</div>';
+
+  weeks.forEach(function(week, wi) {
+    var weekStart = week[0].toISOString().slice(0,10);
+    var weekEnd = week[4].toISOString().slice(0,10);
+    html += '<div class="week-hdr">Semana ' + (wi+1) + ' — ' + fmtWeekLabel(week) + '</div>';
+    html += '<table><thead><tr><th>Proyectista</th><th>Actividad</th><th>Folio / Proyecto</th><th>Tipo</th><th>Inicio</th><th>Término</th><th>Estatus</th></tr></thead><tbody>';
+
+    PA_MEMBERS.forEach(function(member) {
+      var acts = PA_ITEMS.filter(function(a) {
+        if (a.responsable !== member || !a.fechaAsig) return false;
+        var end = a.fechaTermino || a.fechaAsig;
+        return a.fechaAsig <= weekEnd && end >= weekStart;
+      });
+      acts.forEach(function(a) {
+        var col = getPdfColor(member);
+        var ini = getIni(member);
+        var isProg = a.estatus === 'En progreso';
+        var isVenc = a.fechaTermino && a.fechaTermino < todayStr && a.estatus !== 'Terminado';
+        var estColor = isProg ? '#1d4ed8' : isVenc ? '#b91c1c' : '#374151';
+        html += '<tr>';
+        html += '<td style="white-space:nowrap"><div style="display:flex;align-items:center;gap:4px"><div class="avatar" style="background:' + col + '">' + ini + '</div>' + member.split(' ').slice(0,2).join(' ') + '</div></td>';
+        html += '<td style="font-weight:500">' + (a.actividad||'—') + '</td>';
+        html += '<td style="font-family:monospace;font-size:9px;color:#2a78d6">' + (a.folio||'') + '<br><span style="color:#6b7280">' + (a.proyecto||'') + '</span></td>';
+        html += '<td>' + (a.tipo||'—') + '</td>';
+        html += '<td style="white-space:nowrap">' + fmtD(a.fechaAsig) + '</td>';
+        html += '<td style="white-space:nowrap;color:' + (isVenc?'#b91c1c':'#374151') + '">' + fmtD(a.fechaTermino) + '</td>';
+        html += '<td style="color:' + estColor + ';font-weight:500">' + a.estatus + '</td>';
+        html += '</tr>';
+      });
+    });
+    html += '</tbody></table>';
+  });
+
+  html += '<div class="footer">C3NTRO Telecom · Coordinación de Ingeniería · Plan de Trabajo · ' + genStr + '</div>';
+  html += '</body></html>';
+
+  var blob = new Blob([html],{type:'text/html;charset=utf-8'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.target = '_blank'; a.rel = 'noopener';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+}
 
 try{ cronoLoad(); cronoLoadCatalogo(); }catch(e){}
 
