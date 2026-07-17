@@ -9604,9 +9604,10 @@ function pdmOpen(name){
 
   // Build activity sections
   // Ordenar terminadas: la más recientemente cerrada primero
+  // Prioridad: fechaReal > fechaTermino > fechaAsig
   const terminadasOrdenadas = [...terminadas].sort((a,b)=>{
-    const fa = a.fechaReal || a.fechaTermino || '';
-    const fb = b.fechaReal || b.fechaTermino || '';
+    const fa = a.fechaReal || a.fechaTermino || a.fechaAsig || '';
+    const fb = b.fechaReal || b.fechaTermino || b.fechaAsig || '';
     return fb.localeCompare(fa);
   });
 
