@@ -6392,8 +6392,9 @@ function planBuildHTML() {
 
         var cellBg0 = isToday?'rgba(42,120,214,.06)':'rgba(255,255,255,.02)';
         var cellBord = isToday?'rgba(42,120,214,.3)':'rgba(255,255,255,.05)';
-        var cellPad = dayActs.length===1?'0':'4px';
-        h += '<div onclick="planCellClick(\'' + member.replace(/\'/g,"\\'") + '\',\'' + dayStr + '\')" style="min-height:54px;border-radius:6px;background:' + (dayActs.length===0?cellBg0:'transparent') + ';border:0.5px solid ' + cellBord + ';padding:' + cellPad + ';cursor:pointer;position:relative;transition:background .1s;overflow:hidden">';
+        var isOnly = dayActs.length === 1;
+        var cellBg = dayActs.length===0 ? cellBg0 : 'transparent';
+        h += '<div onclick="planCellClick(\'' + member.replace(/\'/g,"\\'") + '\',\'' + dayStr + '\')" style="min-height:54px;border-radius:6px;background:'+cellBg+';border:0.5px solid '+cellBord+';cursor:pointer;overflow:hidden;position:relative">';
 
         dayActs.forEach(function(a) {
           var isProg = a.estatus === 'En progreso';
@@ -6401,15 +6402,13 @@ function planBuildHTML() {
           var bg = isProg ? 'rgba(42,120,214,.2)' : isVenc ? 'rgba(226,75,74,.15)' : 'rgba(255,255,255,.06)';
           var tc = isProg ? '#7ab8f5' : isVenc ? '#ff6b6b' : 'var(--dim)';
           var tipTxt = [(a.proyecto||''),(a.folio||''),(a.actividad||'')].filter(Boolean).join(' · ');
-          // Si es la única actividad del día, ocupa toda la celda
-          var isOnly = dayActs.length === 1;
-          var actStyle = isOnly
-            ? 'font-size:9px;padding:4px 6px;border-radius:4px;background:' + bg + ';color:' + tc + ';line-height:1.4;height:100%;min-height:46px;display:flex;flex-direction:column;justify-content:center'
-            : 'font-size:9px;padding:3px 5px;border-radius:3px;background:' + bg + ';color:' + tc + ';margin-bottom:2px;line-height:1.4';
-          h += '<div style="' + actStyle + '" title="' + tipTxt + '">';
-          if(a.proyecto) h += '<div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + a.proyecto.slice(0,20) + '</div>';
-          if(a.folio)    h += '<div style="font-size:8px;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:monospace">' + a.folio.slice(0,20) + '</div>';
-          if(a.actividad)h += '<div style="font-size:8px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + a.actividad.slice(0,22) + '</div>';
+          var wrapStyle = isOnly
+            ? 'position:absolute;inset:0;padding:5px 6px;background:'+bg+';display:flex;flex-direction:column;justify-content:center;gap:1px'
+            : 'padding:3px 5px;background:'+bg+';margin-bottom:2px;border-radius:0';
+          h += '<div style="'+wrapStyle+'" title="'+tipTxt+'">';
+          if(a.proyecto) h += '<div style="font-size:9px;font-weight:700;color:'+tc+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+a.proyecto+'</div>';
+          if(a.folio)    h += '<div style="font-size:8px;color:'+tc+';opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace">'+a.folio+'</div>';
+          if(a.actividad)h += '<div style="font-size:8px;color:'+tc+';opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+a.actividad+'</div>';
           h += '</div>';
         });
 
