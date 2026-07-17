@@ -6390,7 +6390,10 @@ function planBuildHTML() {
           return dayStr >= start && dayStr <= end;
         });
 
-        h += '<div onclick="planCellClick(\'' + member.replace(/'/g,"\\'") + '\',\'' + dayStr + '\')" style="min-height:54px;border-radius:6px;background:' + (isToday?'rgba(42,120,214,.06)':'rgba(255,255,255,.02)') + ';border:0.5px solid ' + (isToday?'rgba(42,120,214,.3)':'rgba(255,255,255,.05)') + ';padding:4px;cursor:pointer;position:relative;transition:background .1s" onmouseover="this.style.background=\'' + (isToday?'rgba(42,120,214,.1)':'rgba(255,255,255,.05)') + '\'" onmouseout="this.style.background=\'' + (isToday?'rgba(42,120,214,.06)':'rgba(255,255,255,.02)') + '\'">';
+        var cellBg0 = isToday?'rgba(42,120,214,.06)':'rgba(255,255,255,.02)';
+        var cellBord = isToday?'rgba(42,120,214,.3)':'rgba(255,255,255,.05)';
+        var cellPad = dayActs.length===1?'0':'4px';
+        h += '<div onclick="planCellClick(\'' + member.replace(/\'/g,"\\'") + '\',\'' + dayStr + '\')" style="min-height:54px;border-radius:6px;background:' + (dayActs.length===0?cellBg0:'transparent') + ';border:0.5px solid ' + cellBord + ';padding:' + cellPad + ';cursor:pointer;position:relative;transition:background .1s;overflow:hidden">';
 
         dayActs.forEach(function(a) {
           var isProg = a.estatus === 'En progreso';
@@ -6398,7 +6401,12 @@ function planBuildHTML() {
           var bg = isProg ? 'rgba(42,120,214,.2)' : isVenc ? 'rgba(226,75,74,.15)' : 'rgba(255,255,255,.06)';
           var tc = isProg ? '#7ab8f5' : isVenc ? '#ff6b6b' : 'var(--dim)';
           var tipTxt = [(a.proyecto||''),(a.folio||''),(a.actividad||'')].filter(Boolean).join(' · ');
-          h += '<div style="font-size:9px;padding:3px 5px;border-radius:3px;background:' + bg + ';color:' + tc + ';margin-bottom:2px;line-height:1.4" title="' + tipTxt + '">';
+          // Si es la única actividad del día, ocupa toda la celda
+          var isOnly = dayActs.length === 1;
+          var actStyle = isOnly
+            ? 'font-size:9px;padding:4px 6px;border-radius:4px;background:' + bg + ';color:' + tc + ';line-height:1.4;height:100%;min-height:46px;display:flex;flex-direction:column;justify-content:center'
+            : 'font-size:9px;padding:3px 5px;border-radius:3px;background:' + bg + ';color:' + tc + ';margin-bottom:2px;line-height:1.4';
+          h += '<div style="' + actStyle + '" title="' + tipTxt + '">';
           if(a.proyecto) h += '<div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + a.proyecto.slice(0,20) + '</div>';
           if(a.folio)    h += '<div style="font-size:8px;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:monospace">' + a.folio.slice(0,20) + '</div>';
           if(a.actividad)h += '<div style="font-size:8px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + a.actividad.slice(0,22) + '</div>';
@@ -6601,6 +6609,23 @@ function planExportPDF() {
     html += '</tbody></table>';
   });
 
+  // Simbología
+  html += '<div style="margin-top:20px;padding:12px 16px;border:1px solid #e5e7eb;border-radius:8px;background:#f8fafc">';
+  html += '<div style="font-size:10px;font-weight:700;color:#0f2744;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Simbología</div>';
+  html += '<div style="display:flex;gap:20px;flex-wrap:wrap">';
+  html += '<div style="display:flex;align-items:flex-start;gap:8px">';
+  html += '<div style="width:28px;height:28px;border-radius:4px;background:#dbeafe;border:1px solid #bfdbfe;flex-shrink:0;margin-top:1px"></div>';
+  html += '<div><div style="font-size:11px;font-weight:700;color:#1d4ed8">Azul — En progreso</div><div style="font-size:10px;color:#6b7280;margin-top:1px">Actividad actualmente en ejecución por el proyectista</div></div>';
+  html += '</div>';
+  html += '<div style="display:flex;align-items:flex-start;gap:8px">';
+  html += '<div style="width:28px;height:28px;border-radius:4px;background:#f3f4f6;border:1px solid #e5e7eb;flex-shrink:0;margin-top:1px"></div>';
+  html += '<div><div style="font-size:11px;font-weight:700;color:#374151">Gris — Sin iniciar</div><div style="font-size:10px;color:#6b7280;margin-top:1px">Actividad programada pero pendiente de arrancar</div></div>';
+  html += '</div>';
+  html += '<div style="display:flex;align-items:flex-start;gap:8px">';
+  html += '<div style="width:28px;height:28px;border-radius:4px;background:#fee2e2;border:1px solid #fecaca;flex-shrink:0;margin-top:1px"></div>';
+  html += '<div><div style="font-size:11px;font-weight:700;color:#b91c1c">Rojo — Vencida</div><div style="font-size:10px;color:#6b7280;margin-top:1px">Actividad con fecha de término superada sin concluir</div></div>';
+  html += '</div>';
+  html += '</div></div>';
   html += '<div class="footer">C3NTRO Telecom · Coordinación de Ingeniería · Plan de Trabajo · ' + genStr + '</div>';
   html += '</body></html>';
 
