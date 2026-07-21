@@ -6331,6 +6331,7 @@ function planOpen() {
   modal.onclick = function(e) { e.stopPropagation(); };
   if (!window.PLAN_WEEKS) window.PLAN_WEEKS = 3;
   if (!window.PLAN_WEEKS_OPEN) window.PLAN_WEEKS_OPEN = {0:true,1:false,2:false,3:false};
+  if (!window.PLAN_START) window.PLAN_START = new Date(); window.PLAN_START.setHours(0,0,0,0);
   modal.innerHTML = planBuildHTML();
   bg.appendChild(modal);
   document.body.appendChild(bg);
@@ -6341,8 +6342,9 @@ function planBuildHTML() {
   today.setHours(0,0,0,0);
   var todayStr = today.toISOString().slice(0,10);
   var numWeeks = window.PLAN_WEEKS || 3;
-  var weeks = planGetWeeks(today, numWeeks);
-
+  var numWeeks = window.PLAN_WEEKS || 3;
+  var planStart = window.PLAN_START || today;
+  var weeks = planGetWeeks(planStart, numWeeks);
   var MEMBER_COLORS = {'Isabel Adriana':'#4a5568','Llense Omar':'#2d6a4f','Edgar Daniel':'#7b2d8b','Jonathan Isidro':'#1a56db','Mauricio Garduño':'#b45309','Sergio Daniel':'#065f46'};
   function getMColor(name) {
     var k = Object.keys(MEMBER_COLORS).find(function(k){ return name.indexOf(k.split(' ')[0]) >= 0; });
@@ -6366,7 +6368,14 @@ function planBuildHTML() {
   h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:0.5px solid var(--border);background:rgba(255,255,255,.02);flex-wrap:wrap;gap:10px">';
   h += '<div><div style="font-size:15px;font-weight:700">📅 Plan de trabajo del equipo</div><div style="font-size:11px;color:var(--dim);margin-top:2px">Próximas '+periodLabel+' · desde hoy '+today.toLocaleDateString('es-MX',{day:'numeric',month:'long'})+'</div></div>';
   h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
+  var planStartStr = window.PLAN_START ? window.PLAN_START.toISOString().slice(0,10) : today.toISOString().slice(0,10);
+  h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">';
+  h += '<div style="display:flex;align-items:center;gap:6px">';
+  h += '<span style="font-size:11px;color:var(--dim)">Desde:</span>';
+  h += '<input type="date" id="planStartDate" value="'+planStartStr+'" onchange="planSetStart(this.value)" style="font-size:11px;padding:4px 8px;border-radius:8px;border:0.5px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer">';
+  h += '</div>';
   h += '<div style="display:flex;gap:4px">'+[[1,'1 sem'],[2,'2 sem'],[3,'3 sem'],[4,'1 mes']].map(function(o){var a=numWeeks===o[0];return '<button onclick="planSetWeeks('+o[0]+')" style="font-size:11px;padding:5px 12px;border-radius:20px;border:0.5px solid '+(a?'var(--accent)':'rgba(255,255,255,.15)')+';background:'+(a?'rgba(74,143,212,.15)':'transparent')+';color:'+(a?'var(--accent)':'var(--dim)')+';cursor:pointer;font-family:var(--font)">'+o[1]+'</button>';}).join('')+'</div>';
+  h += '</div>';
   h += '<button onclick="planExportPDF()" style="font-size:11px;padding:6px 14px;border-radius:7px;border:0.5px solid rgba(255,92,92,.3);background:transparent;color:#ff7a7a;cursor:pointer;font-family:var(--font)">⬇ Exportar PDF</button>';
   h += '<button onclick="document.getElementById(\'planModalBg\').remove()" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer;padding:0 4px;line-height:1">×</button>';
   h += '</div></div>';
@@ -6503,6 +6512,16 @@ function planGetWeeks(startDate, numWeeks) {
   return weeks;
 }
 
+function planSetStart(dateStr) {
+  if(!dateStr) return;
+  var d = new Date(dateStr + 'T00:00:00');
+  if(isNaN(d)) return;
+  window.PLAN_START = d;
+  window.PLAN_WEEKS_OPEN = {0: true};
+  var modal = document.querySelector('#planModalBg > div');
+  if(modal) modal.innerHTML = planBuildHTML();
+}
+
 function planSetWeeks(n) {
   window.PLAN_WEEKS = n;
   window.PLAN_WEEKS_OPEN = {0: true};
@@ -6545,7 +6564,8 @@ function planExportPDF() {
   today.setHours(0,0,0,0);
   var todayStr = today.toISOString().slice(0,10);
   var numWeeks = window.PLAN_WEEKS || 3;
-  var weeks = planGetWeeks(today, numWeeks);
+  var planStart = window.PLAN_START || today;
+  var weeks = planGetWeeks(planStart, numWeeks);
   var genStr = today.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   var pLabel = numWeeks===4?'1 mes':numWeeks+(numWeeks===1?' semana':' semanas');
 
@@ -6586,6 +6606,7 @@ function planExportPDF() {
     +'.pbt{text-align:center;margin:14px 0}'
     +'.pbt button{padding:10px 28px;background:#0f2744;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:Arial,sans-serif}'
     +'@media print{.pbt{display:none}@page{margin:.6cm;size:landscape}}';
+  css += '*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}';
 
   var h='<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Plan de Trabajo C3NTRO</title><style>'+css+'</style></head><body>';
 
@@ -6636,7 +6657,8 @@ function planExportPDF() {
           var cls=isProg?'cp':isV?'cv':'cs';
           h+='<div class="chip '+cls+'">';
           if(a.proyecto) h+='<b>'+a.proyecto+'</b>';
-          if(a.tipo==='Conectividad (Bobinas)'&&a.numBobina) h+='<br>Bna #'+a.numBobina;
+          var isConPDF=(a.tipo==='Conectividad (Bobinas)'||a.tipo==='Planos de Conectividad');
+          if(isConPDF&&a.numBobina) h+='<br><b>Bna #'+a.numBobina+'</b>';
           if(a.folio) h+='<br><span style="font-family:monospace;font-size:7px">'+a.folio+'</span>';
           if(a.actividad) h+='<br>'+a.actividad;
           h+='</div>';
@@ -6663,7 +6685,8 @@ function planExportPDF() {
         var ec=isProg?'#1a4fa0':isV?'#b91c1c':'#374151';
         h+='<tr><td style="white-space:nowrap"><span class="av" style="background:'+col+'">'+ini+'</span>'+member.split(' ').slice(0,2).join(' ')+'</td>';
         h+='<td>'+(a.actividad||'--')+'</td>';
-        h+='<td style="font-family:monospace;font-size:8px;color:#1a4fa0">'+(a.folio||'--')+(a.numBobina?' #'+a.numBobina:'')+'</td>';
+        var isConLst=(a.tipo==='Conectividad (Bobinas)'||a.tipo==='Planos de Conectividad');
+        h+='<td style="font-family:monospace;font-size:8px;color:#1a4fa0">'+(a.folio||'--')+(isConLst&&a.numBobina?' | Bna #'+a.numBobina:'')+'</td>';
         h+='<td>'+(a.proyecto||'--')+'</td><td>'+(a.tipo||'--')+'</td>';
         h+='<td style="white-space:nowrap">'+fd(a.fechaAsig)+'</td>';
         h+='<td style="white-space:nowrap">'+fd(a.fechaTermino)+'</td>';
