@@ -6330,6 +6330,7 @@ function planOpen() {
   modal.style.cssText = 'background:var(--surface);border:0.5px solid var(--border);border-radius:14px;width:100%;max-width:1100px;overflow:hidden';
   modal.onclick = function(e) { e.stopPropagation(); };
   if (!window.PLAN_WEEKS) window.PLAN_WEEKS = 3;
+  if (!window.PLAN_WEEKS_OPEN) window.PLAN_WEEKS_OPEN = {0:true,1:false,2:false,3:false};
   modal.innerHTML = planBuildHTML();
   bg.appendChild(modal);
   document.body.appendChild(bg);
@@ -6372,7 +6373,7 @@ function planBuildHTML() {
   h += '<div style="padding:16px 20px;overflow-x:auto">';
 
   weeks.forEach(function(week, wi) {
-    var isOpen = PLAN_WEEKS_OPEN[wi] !== false;
+    var isOpen = (window.PLAN_WEEKS_OPEN||{})[wi] !== false;
     var weekLabel = 'Semana ' + (wi+1) + ' — ' + fmtWeekLabel(week);
 
     // Header de semana colapsable
@@ -6495,14 +6496,14 @@ function planGetWeeks(startDate, numWeeks) {
 
 function planSetWeeks(n) {
   window.PLAN_WEEKS = n;
-  PLAN_WEEKS_OPEN = {0: true};
-  for (var i = 1; i < n; i++) PLAN_WEEKS_OPEN[i] = false;
+  window.PLAN_WEEKS_OPEN = {0: true};
+  for (var i = 1; i < n; i++) window.PLAN_WEEKS_OPEN[i] = false;
   var modal = document.querySelector('#planModalBg > div');
   if (modal) modal.innerHTML = planBuildHTML();
 }
 
 function planToggleWeek(wi) {
-  PLAN_WEEKS_OPEN[wi] = !PLAN_WEEKS_OPEN[wi];
+  if(!window.PLAN_WEEKS_OPEN) window.PLAN_WEEKS_OPEN={}; window.PLAN_WEEKS_OPEN[wi] = !window.PLAN_WEEKS_OPEN[wi];
   var modal = document.querySelector('#planModalBg > div');
   if (modal) modal.innerHTML = planBuildHTML();
 }
@@ -9507,8 +9508,8 @@ function paInlineEnlace(id, currentVal){
 }
 function paTipoChange(){
   const t = document.getElementById('paFTipo').value;
-  const isProj = t==='Proyecto'||t==='Planos de Conectividad';
-  const showFolio = isProj||t==='Impresiones';
+  const isProj = t==='Proyecto'||t==='Planos de Conectividad'||t==='Conectividad (Bobinas)';
+  const showFolio = isProj||t==='Impresiones'||t==='Conectividad (Bobinas)';
   document.getElementById('paFolioWrap').style.display = showFolio ? '' : 'none';
   document.getElementById('paProyectoRow').style.display = isProj ? '' : 'none';
   document.getElementById('paPropietarioWrap').style.display = isProj ? '' : 'none';
