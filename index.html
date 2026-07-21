@@ -2521,7 +2521,32 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           </div>
           <div class="pa-field" id="paFolioWrap">
             <label>Folio / Identificador</label>
-            <input type="text" id="paFFolio" placeholder="Ej. 2025-QRO-FED-191">
+            <div style="display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap">
+              <select id="paFolioYear" onchange="paFolioUpdate()" style="font-size:11px;padding:4px 6px;border-radius:6px;border:0.5px solid var(--border);background:var(--surface);color:var(--text);width:72px">
+                <option value="">Año</option>
+                <option value="2025">2025</option>
+                <option value="2026">2026</option>
+                <option value="2027">2027</option>
+              </select>
+              <select id="paFolioEdo" onchange="paFolioUpdate()" style="font-size:11px;padding:4px 6px;border-radius:6px;border:0.5px solid var(--border);background:var(--surface);color:var(--text);width:74px">
+                <option value="">Estado</option>
+                <option>AGS</option><option>BCN</option><option>BCS</option><option>CAM</option>
+                <option>CHH</option><option>CHS</option><option>CMX</option><option>COA</option>
+                <option>COL</option><option>DGO</option><option>GRO</option><option>GTO</option>
+                <option>HGO</option><option>JAL</option><option>MCH</option><option>MEX</option>
+                <option>MOR</option><option>NAY</option><option>NLE</option><option>OAX</option>
+                <option>PUE</option><option>QRO</option><option>ROO</option><option>SIN</option>
+                <option>SLP</option><option>SON</option><option>TAB</option><option>TAM</option>
+                <option>TLX</option><option>VER</option><option>YUC</option><option>ZAC</option>
+              </select>
+              <select id="paFolioTipo" onchange="paFolioUpdate()" style="font-size:11px;padding:4px 6px;border-radius:6px;border:0.5px solid var(--border);background:var(--surface);color:var(--text);width:74px">
+                <option value="">Tipo</option>
+                <option>FED</option><option>MUN</option><option>EJI</option>
+                <option>PRIV</option><option>EST</option>
+              </select>
+              <input type="text" id="paFolioNum" onchange="paFolioUpdate()" oninput="paFolioUpdate()" placeholder="Núm" style="font-size:11px;padding:4px 6px;border-radius:6px;border:0.5px solid var(--border);background:var(--surface);color:var(--text);width:60px">
+            </div>
+            <input type="text" id="paFFolio" placeholder="Ej. 2025-QRO-FED-191 o escribe libremente" style="margin-top:2px">
           </div>
           <div class="pa-field" id="paNumBobinaWrap" style="display:none;max-width:120px">
             <label># Bobina</label>
@@ -2533,9 +2558,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           <label>Actividad / Descripción *</label>
           <select id="paFActividadSel" onchange="paActSelChange()" style="display:none;margin-bottom:6px">
             <option value="">— Selecciona —</option>
-            <option value="Impresión, doblado y recolección de firmas">Impresión, doblado y recolección de firmas</option>
-            <option value="Impresión y doblado">Impresión y doblado</option>
-            <option value="__otro__">Otra (escribir)</option>
+            <option value="Impresión, doblado y recolección de firmas" data-tipo="Impresiones">Impresión, doblado y recolección de firmas</option>
+            <option value="Impresión y doblado" data-tipo="Impresiones">Impresión y doblado</option>
+            <option value="AP (planos, kmz, volumétrico)" data-tipo="Conectividad (Bobinas)">AP (planos, kmz, volumétrico)</option>
+            <option value="Información básica kmz y excel" data-tipo="Conectividad (Bobinas)">Información básica kmz y excel</option>
+            <option value="__otro__">Otro (escribir)</option>
           </select>
           <input type="text" id="paFActividad" placeholder="Ej. Diseño de red FTTH colonia Centro">
         </div>
@@ -6389,12 +6416,26 @@ function planBuildHTML() {
           var end = a.fechaTermino || a.fechaAsig;
           return dayStr >= start && dayStr <= end;
         });
+        // Verificar vacaciones
+        var memberVacs = (VAC_DATA||[]).filter(function(v){
+          return (v.nombre===member||member.indexOf(v.nombre.split(' ')[0])>=0) && v.inicio && v.fin && dayStr>=v.inicio && dayStr<=v.fin;
+        });
+        var isVac = memberVacs.length > 0;
 
         var cellBg0 = isToday?'rgba(42,120,214,.06)':'rgba(255,255,255,.02)';
         var cellBord = isToday?'rgba(42,120,214,.3)':'rgba(255,255,255,.05)';
         var isOnly = dayActs.length === 1;
-        var cellBg = dayActs.length===0 ? cellBg0 : 'transparent';
-        h += '<div onclick="planCellClick(\'' + member.replace(/\'/g,"\\'") + '\',\'' + dayStr + '\')" style="min-height:54px;border-radius:6px;background:'+cellBg+';border:0.5px solid '+cellBord+';cursor:pointer;overflow:hidden;position:relative">';
+        var cellBg = isVac ? 'rgba(155,89,182,.08)' : dayActs.length===0 ? cellBg0 : 'transparent';
+        var vacBord = isVac ? 'rgba(155,89,182,.3)' : cellBord;
+        h += '<div onclick="planCellClick(\'' + member.replace(/\'/g,"\\'") + '\',\'' + dayStr + '\')" style="min-height:54px;border-radius:6px;background:'+cellBg+';border:0.5px solid '+vacBord+';cursor:pointer;overflow:hidden;position:relative">';
+        if(isVac && dayActs.length===0){
+          h += '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">';
+          h += '<div style="font-size:14px">🏖</div>';
+          h += '<div style="font-size:8px;color:rgba(155,89,182,.8);font-weight:600">VACACIONES</div>';
+          h += '</div>';
+        } else if(isVac) {
+          h += '<div style="font-size:8px;color:rgba(155,89,182,.7);font-weight:600;padding:2px 4px">🏖 Vac</div>';
+        }
 
         dayActs.forEach(function(a) {
           var isProg = a.estatus === 'En progreso';
@@ -9476,17 +9517,32 @@ function paTipoChange(){
   // Mostrar select de actividad solo para Impresiones
   const actSel = document.getElementById('paFActividadSel');
   const actInp = document.getElementById('paFActividad');
-  if(t==='Impresiones'){
+  if(t==='Impresiones' || t==='Conectividad (Bobinas)' || t==='Planos de Conectividad'){
+    // Filtrar opciones según tipo
+    [...actSel.options].forEach(opt=>{
+      const dt = opt.getAttribute('data-tipo');
+      opt.style.display = (!dt || dt===t || opt.value==='' || opt.value==='__otro__') ? '' : 'none';
+    });
     actSel.style.display = '';
-    // Si el input ya tiene valor del select, mostrarlo seleccionado
     const cur = actInp.value;
-    const opt = [...actSel.options].find(o=>o.value===cur);
+    const opt = [...actSel.options].find(o=>o.value===cur&&o.style.display!=='none');
     if(opt) actSel.value = cur;
     else if(cur){ actSel.value='__otro__'; actInp.style.display=''; }
     else { actSel.value=''; actInp.style.display='none'; actInp.value=''; }
   } else {
     actSel.style.display = 'none';
     actInp.style.display = '';
+  }
+}
+
+function paFolioUpdate(){
+  var y = document.getElementById('paFolioYear').value;
+  var e = document.getElementById('paFolioEdo').value;
+  var t = document.getElementById('paFolioTipo').value;
+  var n = document.getElementById('paFolioNum').value.trim();
+  var parts = [y,e,'UM',t,n].filter(Boolean);
+  if(parts.length > 1){
+    document.getElementById('paFFolio').value = parts.join('-');
   }
 }
 
@@ -9552,6 +9608,8 @@ function paOpenModal(id, preselectedTipo){
     document.getElementById('paModalId').value = '';
     document.getElementById('paFTipo').value = preselectedTipo||'Proyecto';
     document.getElementById('paFFolio').value = '';
+    ['paFolioYear','paFolioEdo','paFolioTipo'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+    var fn=document.getElementById('paFolioNum'); if(fn) fn.value='';
     document.getElementById('paFNumBobina').value = '';
     document.getElementById('paFActividad').value = '';
     document.getElementById('paFProyecto').value = '';
@@ -10132,6 +10190,19 @@ function pdmGeneratePDF(period){
   const retrasadas = all.filter(a=>a.estatus!=='Terminado'&&a.fechaTermino&&new Date(a.fechaTermino+'T00:00:00')<now).length;
   const pct = n => all.length ? Math.round(n/all.length*100) : 0;
 
+  // #2 Ocupación por proyecto
+  const byProy = {};
+  all.forEach(a=>{ const p=a.proyecto||a.propietario||'Otros'; byProy[p]=(byProy[p]||0)+1; });
+  const proySort = Object.keys(byProy).sort((a,b)=>byProy[b]-byProy[a]);
+
+  // #3 Cumplimiento de fechas
+  const conFechaReal  = all.filter(a=>a.estatus==='Terminado'&&a.fechaReal&&a.fechaTermino);
+  const enTiempoActs  = conFechaReal.filter(a=>a.fechaReal<=a.fechaTermino).length;
+  const fueraTiempo   = conFechaReal.filter(a=>a.fechaReal>a.fechaTermino).length;
+  const sinFechaActs  = all.filter(a=>!a.fechaTermino).length;
+  const enRiesgoActs  = all.filter(a=>a.estatus!=='Terminado'&&a.fechaTermino&&a.fechaTermino<now.toISOString().slice(0,10)).length;
+  const pctCumpl = conFechaReal.length ? Math.round(enTiempoActs/conFechaReal.length*100) : 0;
+
   const fmtS = d => d ? new Date(d+'T00:00:00').toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
 
   const SECTIONS_PDF = [
@@ -10240,6 +10311,50 @@ function pdmGeneratePDF(period){
         <span>${t}: <strong>${c}</strong></span>
       </div>`).join('<span style="color:#ddd">|</span>')}
   </div>
+
+  <!-- Indicador ocupación por proyecto (#2) -->
+  <div style="margin:16px 0;padding:14px 16px;background:#f8fafc;border:1px solid #e2eaf3;border-radius:8px;page-break-inside:avoid">
+    <div style="font-size:10px;font-weight:700;color:#0f2744;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Distribución de carga por proyecto</div>
+    ${proySort.slice(0,5).map(p=>{
+      const pct2=Math.round(byProy[p]/all.length*100);
+      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+        +'<div style="font-size:11px;font-weight:500;color:#1a1a2e;width:140px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p+'</div>'
+        +'<div style="flex:1;height:10px;background:#e5e7eb;border-radius:5px;overflow:hidden">'
+        +'<div style="width:'+pct2+'%;height:100%;background:#2a78d6;border-radius:5px"></div></div>'
+        +'<div style="font-size:11px;font-weight:700;color:#2a78d6;min-width:45px;text-align:right">'+pct2+'% ('+byProy[p]+')</div>'
+        +'</div>';
+    }).join('')}
+  </div>
+
+  <!-- Indicador cumplimiento (#3) -->
+  <div style="margin:16px 0;padding:14px 16px;background:#f8fafc;border:1px solid #e2eaf3;border-radius:8px;page-break-inside:avoid">
+    <div style="font-size:10px;font-weight:700;color:#0f2744;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Cumplimiento de fechas</div>
+    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <div style="display:flex;height:14px;border-radius:7px;overflow:hidden;background:#e5e7eb;margin-bottom:8px">
+          ${enTiempoActs>0?'<div style="width:'+Math.round(enTiempoActs/all.length*100)+'%;background:#1baf7a"></div>':''}
+          ${fueraTiempo>0?'<div style="width:'+Math.round(fueraTiempo/all.length*100)+'%;background:#e24b4a"></div>':''}
+          ${enRiesgoActs>0?'<div style="width:'+Math.round(enRiesgoActs/all.length*100)+'%;background:#eda100"></div>':''}
+          ${sinFechaActs>0?'<div style="width:'+Math.round(sinFechaActs/all.length*100)+'%;background:#d1d5db"></div>':''}
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:10px">
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#1baf7a;display:inline-block"></span>En tiempo: <strong>${enTiempoActs}</strong></span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#e24b4a;display:inline-block"></span>Fuera de tiempo: <strong>${fueraTiempo}</strong></span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#eda100;display:inline-block"></span>En riesgo: <strong>${enRiesgoActs}</strong></span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#d1d5db;display:inline-block"></span>Sin fecha: <strong>${sinFechaActs}</strong></span>
+        </div>
+      </div>
+      <div style="text-align:center;flex-shrink:0">
+        <div style="width:64px;height:64px;border-radius:50%;background:conic-gradient(#1baf7a ${pctCumpl*3.6}deg,#e5e7eb 0deg);display:flex;align-items:center;justify-content:center;margin:0 auto 4px">
+          <div style="width:46px;height:46px;border-radius:50%;background:#f8fafc;display:flex;align-items:center;justify-content:center">
+            <span style="font-size:14px;font-weight:800;color:#0f2744">${pctCumpl}%</span>
+          </div>
+        </div>
+        <div style="font-size:9px;color:#6b7280;font-weight:500">cumplimiento</div>
+      </div>
+    </div>
+  </div>
+
   ${sectionsHTML}
   <div class="rpt-footer">
     <span>C3NTRO Telecom · Coordinación de Ingeniería</span>
