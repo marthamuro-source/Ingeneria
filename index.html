@@ -6417,11 +6417,18 @@ function planBuildHTML() {
           var end = a.fechaTermino || a.fechaAsig;
           return dayStr >= start && dayStr <= end;
         });
-        // Verificar vacaciones
-        var memberVacs = (VAC_DATA||[]).filter(function(v){
-          return (v.nombre===member||member.indexOf(v.nombre.split(' ')[0])>=0) && v.inicio && v.fin && dayStr>=v.inicio && dayStr<=v.fin;
-        });
-        var isVac = memberVacs.length > 0;
+        // Verificar vacaciones usando VACACIONES[nombre].has(fecha)
+        var isVac = false;
+        if(typeof VACACIONES !== 'undefined' && VACACIONES) {
+          var vacSet = VACACIONES[member];
+          if(!vacSet) {
+            // Buscar por nombre parcial
+            Object.keys(VACACIONES).forEach(function(k){
+              if(member.indexOf(k.split(' ')[0])>=0 || k.indexOf(member.split(' ')[0])>=0) vacSet = VACACIONES[k];
+            });
+          }
+          if(vacSet && vacSet.has) isVac = vacSet.has(dayStr);
+        }
 
         var cellBg0 = isToday?'rgba(42,120,214,.06)':'rgba(255,255,255,.02)';
         var cellBord = isToday?'rgba(42,120,214,.3)':'rgba(255,255,255,.05)';
