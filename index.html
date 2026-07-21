@@ -6618,26 +6618,18 @@ function planExportPDF() {
         var cellStyle = pdfIsVac && dayActs.length===0
           ? 'background:#f3e8ff;border-color:#c084fc'
           : '';
-        var pdfIsOnly = dayActs.length === 1 && !pdfIsVac;
-        html += '<div class="cal-cell" style="' + cellStyle + (pdfIsOnly?';padding:0;overflow:hidden':'') + '">';
+        html += '<div class="cal-cell" style="' + cellStyle + '">';
         if(pdfIsVac && dayActs.length===0) {
           html += '<div style="text-align:center;padding:4px 0;color:#9333ea;font-size:8px;font-weight:700">🏖 VAC</div>';
         } else if(pdfIsVac) {
-          html += '<div style="font-size:7px;color:#9333ea;font-weight:700">🏖 Vac</div>';
+          html += '<div style="font-size:7px;color:#9333ea;font-weight:700;margin-bottom:2px">🏖 Vac</div>';
         }
         dayActs.forEach(function(a) {
           var isProg = a.estatus==='En progreso';
           var isVenc = a.fechaTermino && a.fechaTermino < todayStr && a.estatus!=='Terminado';
           var cls = isProg ? 'chip-prog' : (isVenc?'chip-venc':'chip-sin');
           var isConectPDF = a.tipo==='Conectividad (Bobinas)';
-          var chipStyle = pdfIsOnly
-            ? (isProg?'background:#dbeafe;color:#1d4ed8':isVenc?'background:#fee2e2;color:#b91c1c':'background:#f3f4f6;color:#374151')
-            : '';
-          var wStyle = pdfIsOnly
-            ? 'position:absolute;inset:0;padding:3px 4px;display:flex;flex-direction:column;justify-content:center;' + chipStyle
-            : '';
-          if(pdfIsOnly) html += '<div style="' + wStyle + '">';
-          else html += '<div class="act-chip ' + cls + '">';
+          html += '<div class="act-chip ' + cls + '">';
           if(a.proyecto) html += '<div style="font-weight:700;overflow:hidden;text-overflow:ellipsis">' + a.proyecto.slice(0,18) + '</div>';
           if(isConectPDF&&a.numBobina) html += '<div style="font-size:7px;opacity:.9;font-family:monospace;overflow:hidden;text-overflow:ellipsis">Bna #' + a.numBobina + '</div>';
           if(a.folio)    html += '<div style="font-size:7px;opacity:.8;font-family:monospace;overflow:hidden;text-overflow:ellipsis">' + a.folio.slice(0,18) + '</div>';
@@ -6736,6 +6728,8 @@ function planExportPDF() {
   html += '</div>';
   html += '</div></div>';
   html += '<div class="footer">C3NTRO Telecom · Coordinación de Ingeniería · Plan de Trabajo · ' + genStr + '</div>';
+  // Botón imprimir
+  html += '<div style="text-align:center;margin:20px 0;padding:16px"><button onclick="window.print()" style="padding:10px 28px;background:#0f2744;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:Arial,sans-serif">🖨 Imprimir / Guardar como PDF</button></div>';
   html += '</body></html>';
 
   var blob = new Blob([html],{type:'text/html;charset=utf-8'});
