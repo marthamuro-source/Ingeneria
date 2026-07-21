@@ -6607,7 +6607,21 @@ function planExportPDF() {
           if (a.responsable !== member || !a.fechaAsig) return false;
           return dayStr >= a.fechaAsig && dayStr <= (a.fechaTermino || a.fechaAsig);
         });
-        html += '<div class="cal-cell">';
+        // Verificar vacaciones en PDF
+        var pdfVacSet = (typeof VACACIONES!=='undefined'&&VACACIONES) ? VACACIONES[member] : null;
+        if(!pdfVacSet && typeof VACACIONES!=='undefined'&&VACACIONES) {
+          Object.keys(VACACIONES).forEach(function(k){ if(member.indexOf(k.split(' ')[0])>=0) pdfVacSet=VACACIONES[k]; });
+        }
+        var pdfIsVac = pdfVacSet && pdfVacSet.has && pdfVacSet.has(dayStr);
+        var cellStyle = pdfIsVac && dayActs.length===0
+          ? 'background:#f3e8ff;border-color:#c084fc'
+          : '';
+        html += '<div class="cal-cell" style="' + cellStyle + '">';
+        if(pdfIsVac && dayActs.length===0) {
+          html += '<div style="text-align:center;padding:4px 0;color:#9333ea;font-size:8px;font-weight:700">🏖 VAC</div>';
+        } else if(pdfIsVac) {
+          html += '<div style="font-size:7px;color:#9333ea;font-weight:700">🏖 Vac</div>';
+        }
         dayActs.forEach(function(a) {
           var cls = a.estatus==='En progreso' ? 'chip-prog' : (a.fechaTermino&&a.fechaTermino<todayStr?'chip-venc':'chip-sin');
           html += '<div class="act-chip ' + cls + '">';
@@ -6672,6 +6686,10 @@ function planExportPDF() {
   html += '<div style="display:flex;align-items:flex-start;gap:8px">';
   html += '<div style="width:28px;height:28px;border-radius:4px;background:#fee2e2;border:1px solid #fecaca;flex-shrink:0;margin-top:1px"></div>';
   html += '<div><div style="font-size:11px;font-weight:700;color:#b91c1c">Rojo — Vencida</div><div style="font-size:10px;color:#6b7280;margin-top:1px">Actividad con fecha de término superada sin concluir</div></div>';
+  html += '</div>';
+  html += '<div style="display:flex;align-items:flex-start;gap:8px">';
+  html += '<div style="width:28px;height:28px;border-radius:4px;background:#f3e8ff;border:1px solid #c084fc;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:14px">🏖</div>';
+  html += '<div><div style="font-size:11px;font-weight:700;color:#9333ea">Morado — Vacaciones</div><div style="font-size:10px;color:#6b7280;margin-top:1px">Proyectista en periodo de vacaciones</div></div>';
   html += '</div>';
   html += '</div></div>';
   html += '<div class="footer">C3NTRO Telecom · Coordinación de Ingeniería · Plan de Trabajo · ' + genStr + '</div>';
