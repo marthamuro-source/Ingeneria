@@ -6450,12 +6450,14 @@ function planBuildHTML() {
           var isVenc = a.fechaTermino && a.fechaTermino < todayStr && a.estatus !== 'Terminado';
           var bg = isProg ? 'rgba(42,120,214,.2)' : isVenc ? 'rgba(226,75,74,.15)' : 'rgba(255,255,255,.06)';
           var tc = isProg ? '#7ab8f5' : isVenc ? '#ff6b6b' : 'var(--dim)';
-          var tipTxt = [(a.proyecto||''),(a.folio||''),(a.actividad||'')].filter(Boolean).join(' · ');
+          var isConect = a.tipo==='Conectividad (Bobinas)';
+          var tipTxt = [(a.proyecto||''),(isConect&&a.numBobina?'#'+a.numBobina:''),(a.folio||''),(a.actividad||'')].filter(Boolean).join(' · ');
           var wrapStyle = isOnly
             ? 'position:absolute;inset:0;padding:5px 6px;background:'+bg+';display:flex;flex-direction:column;justify-content:center;gap:1px'
             : 'padding:3px 5px;background:'+bg+';margin-bottom:2px;border-radius:0';
           h += '<div style="'+wrapStyle+'" title="'+tipTxt+'">';
           if(a.proyecto) h += '<div style="font-size:9px;font-weight:700;color:'+tc+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+a.proyecto+'</div>';
+          if(isConect&&a.numBobina) h += '<div style="font-size:8px;color:'+tc+';opacity:.9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace">Bna #'+a.numBobina+'</div>';
           if(a.folio)    h += '<div style="font-size:8px;color:'+tc+';opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace">'+a.folio+'</div>';
           if(a.actividad)h += '<div style="font-size:8px;color:'+tc+';opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+a.actividad+'</div>';
           h += '</div>';
@@ -6616,18 +6618,30 @@ function planExportPDF() {
         var cellStyle = pdfIsVac && dayActs.length===0
           ? 'background:#f3e8ff;border-color:#c084fc'
           : '';
-        html += '<div class="cal-cell" style="' + cellStyle + '">';
+        var pdfIsOnly = dayActs.length === 1 && !pdfIsVac;
+        html += '<div class="cal-cell" style="' + cellStyle + (pdfIsOnly?';padding:0;overflow:hidden':'') + '">';
         if(pdfIsVac && dayActs.length===0) {
           html += '<div style="text-align:center;padding:4px 0;color:#9333ea;font-size:8px;font-weight:700">🏖 VAC</div>';
         } else if(pdfIsVac) {
           html += '<div style="font-size:7px;color:#9333ea;font-weight:700">🏖 Vac</div>';
         }
         dayActs.forEach(function(a) {
-          var cls = a.estatus==='En progreso' ? 'chip-prog' : (a.fechaTermino&&a.fechaTermino<todayStr?'chip-venc':'chip-sin');
-          html += '<div class="act-chip ' + cls + '">';
-          if(a.proyecto) html += '<div style="font-weight:700;overflow:hidden;text-overflow:ellipsis">' + a.proyecto.slice(0,16) + '</div>';
-          if(a.folio)    html += '<div style="font-size:7px;opacity:.8;font-family:monospace;overflow:hidden;text-overflow:ellipsis">' + a.folio.slice(0,16) + '</div>';
-          if(a.actividad)html += '<div style="font-size:7px;opacity:.75;overflow:hidden;text-overflow:ellipsis">' + a.actividad.slice(0,18) + '</div>';
+          var isProg = a.estatus==='En progreso';
+          var isVenc = a.fechaTermino && a.fechaTermino < todayStr && a.estatus!=='Terminado';
+          var cls = isProg ? 'chip-prog' : (isVenc?'chip-venc':'chip-sin');
+          var isConectPDF = a.tipo==='Conectividad (Bobinas)';
+          var chipStyle = pdfIsOnly
+            ? (isProg?'background:#dbeafe;color:#1d4ed8':isVenc?'background:#fee2e2;color:#b91c1c':'background:#f3f4f6;color:#374151')
+            : '';
+          var wStyle = pdfIsOnly
+            ? 'position:absolute;inset:0;padding:3px 4px;display:flex;flex-direction:column;justify-content:center;' + chipStyle
+            : '';
+          if(pdfIsOnly) html += '<div style="' + wStyle + '">';
+          else html += '<div class="act-chip ' + cls + '">';
+          if(a.proyecto) html += '<div style="font-weight:700;overflow:hidden;text-overflow:ellipsis">' + a.proyecto.slice(0,18) + '</div>';
+          if(isConectPDF&&a.numBobina) html += '<div style="font-size:7px;opacity:.9;font-family:monospace;overflow:hidden;text-overflow:ellipsis">Bna #' + a.numBobina + '</div>';
+          if(a.folio)    html += '<div style="font-size:7px;opacity:.8;font-family:monospace;overflow:hidden;text-overflow:ellipsis">' + a.folio.slice(0,18) + '</div>';
+          if(a.actividad)html += '<div style="font-size:7px;opacity:.75;overflow:hidden;text-overflow:ellipsis">' + a.actividad.slice(0,20) + '</div>';
           html += '</div>';
         });
         html += '</div>';
@@ -6635,6 +6649,35 @@ function planExportPDF() {
     });
     html += '</div>';
   });
+
+  // ── Indicador de proyectos ──
+  var proyPlan = {};
+  weeks.forEach(function(week) {
+    var wStart = week[0].toISOString().slice(0,10);
+    var wEnd = week[4].toISOString().slice(0,10);
+    PA_ITEMS.forEach(function(a) {
+      if(!a.fechaAsig) return;
+      var end = a.fechaTermino||a.fechaAsig;
+      if(a.fechaAsig<=wEnd && end>=wStart) {
+        var key = (a.proyecto||a.propietario||'Sin proyecto') + (a.tipo?' — '+a.tipo:'');
+        proyPlan[key] = (proyPlan[key]||0)+1;
+      }
+    });
+  });
+  var proyPlanKeys = Object.keys(proyPlan).sort(function(a,b){return proyPlan[b]-proyPlan[a];});
+  var PLAN_COLORS = ['#2a78d6','#1baf7a','#eda100','#e24b4a','#9b59b6','#eb6834','#065f46','#b45309'];
+  html += '<div style="margin:16px 0 24px;padding:14px 16px;background:#f0f4f8;border-radius:8px;page-break-inside:avoid">';
+  html += '<div style="font-size:10px;font-weight:700;color:#0f2744;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Proyectos en el período</div>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:8px">';
+  proyPlanKeys.forEach(function(k, i) {
+    var col = PLAN_COLORS[i % PLAN_COLORS.length];
+    html += '<div style="display:flex;align-items:center;gap:5px;background:#fff;border:1px solid #e2eaf3;border-radius:20px;padding:4px 12px">';
+    html += '<div style="width:8px;height:8px;border-radius:50%;background:'+col+';flex-shrink:0"></div>';
+    html += '<span style="font-size:11px;font-weight:500;color:#1a1a2e">'+k+'</span>';
+    html += '<span style="font-size:10px;color:#6b7280">('+proyPlan[k]+')</span>';
+    html += '</div>';
+  });
+  html += '</div></div>';
 
   // ── SECCIÓN 2: LISTA ──
   html += '<div class="section-title" style="margin-top:24px">Lista de actividades por proyectista</div>';
