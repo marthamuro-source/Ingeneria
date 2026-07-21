@@ -6657,6 +6657,7 @@ function planExportPDF() {
           var cls=isProg?'cp':isV?'cv':'cs';
           h+='<div class="chip '+cls+'">';
           if(a.proyecto) h+='<b>'+a.proyecto+'</b>';
+          if(a.tipo) h+='<br><b style="font-size:7px">'+a.tipo+'</b>';
           var isConPDF=(a.tipo==='Conectividad (Bobinas)'||a.tipo==='Planos de Conectividad');
           if(isConPDF&&a.numBobina) h+='<br><b>Bna #'+a.numBobina+'</b>';
           if(a.folio) h+='<br><span style="font-family:monospace;font-size:7px">'+a.folio+'</span>';
@@ -6675,7 +6676,7 @@ function planExportPDF() {
   weeks.forEach(function(week,wi){
     var wS=week[0].toISOString().slice(0,10),wE=week[4].toISOString().slice(0,10);
     h+='<div class="whdr">Semana '+(wi+1)+' - '+fWk(week)+'</div>';
-    h+='<table class="lst"><thead><tr><th>Proyectista</th><th>Actividad</th><th>Folio</th><th>Proyecto</th><th>Tipo</th><th>Inicio</th><th>Termino</th><th>Estatus</th></tr></thead><tbody>';
+    h+='<table class="lst"><thead><tr><th>Proyectista</th><th>Actividad</th><th>Proyecto / Tipo</th><th>Folio</th><th>Inicio</th><th>Termino</th><th>Estatus</th></tr></thead><tbody>';
     PA_MEMBERS.forEach(function(member){
       var acts=PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return a.fechaAsig<=wE&&(a.fechaTermino||a.fechaAsig)>=wS;});
       acts.forEach(function(a){
@@ -6686,8 +6687,8 @@ function planExportPDF() {
         h+='<tr><td style="white-space:nowrap"><span class="av" style="background:'+col+'">'+ini+'</span>'+member.split(' ').slice(0,2).join(' ')+'</td>';
         h+='<td>'+(a.actividad||'--')+'</td>';
         var isConLst=(a.tipo==='Conectividad (Bobinas)'||a.tipo==='Planos de Conectividad');
-        h+='<td style="font-family:monospace;font-size:8px;color:#1a4fa0">'+(a.folio||'--')+(isConLst&&a.numBobina?' | Bna #'+a.numBobina:'')+'</td>';
-        h+='<td>'+(a.proyecto||'--')+'</td><td>'+(a.tipo||'--')+'</td>';
+        h+='<td><b>'+(a.proyecto||'--')+'</b><br><b style="font-size:9px;color:#374151">'+(a.tipo||'--')+'</b>'+(isConLst&&a.numBobina?' &nbsp;Bna #'+a.numBobina:'')+'</td>';
+        h+='<td style="font-family:monospace;font-size:8px;color:#1a4fa0">'+(a.folio||'--')+'</td>';
         h+='<td style="white-space:nowrap">'+fd(a.fechaAsig)+'</td>';
         h+='<td style="white-space:nowrap">'+fd(a.fechaTermino)+'</td>';
         h+='<td style="color:'+ec+';font-weight:600">'+a.estatus+'</td></tr>';
