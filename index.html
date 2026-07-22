@@ -6664,17 +6664,20 @@ function planExportPDF() {
     +'.pbadge{display:inline-flex;align-items:center;gap:5px;background:#f0f4f8;border:1px solid #e2eaf3;border-radius:20px;padding:3px 10px;margin:2px;font-size:10px}'
     +'.pdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}'
     +'.cal-table{width:100%;border-collapse:collapse;table-layout:fixed;margin-bottom:6px}'
-    +'.cal-table td,.cal-table th{border:1px solid #e5e7eb;padding:3px;vertical-align:top;font-size:8px}'
-    +'.cal-table th{background:#f0f4f8;color:#0f2744;text-align:center;font-size:9px;font-weight:600;white-space:nowrap}'
-    +'.ncel{width:90px;white-space:nowrap;background:#f9fafb;vertical-align:middle}'
+    +'.cal-table td,.cal-table th{border:1px solid #e5e7eb;padding:4px;vertical-align:top;font-size:9.5px}'
+    +'.cal-table th{background:#f0f4f8;color:#0f2744;text-align:center;font-size:10px;font-weight:600;white-space:nowrap}'
+    +'.ncel{width:90px;white-space:nowrap;background:#f9fafb;vertical-align:middle;font-size:10px}'
     +'.day-cell{display:flex;flex-direction:column;gap:4px;height:100%}'
-    +'.chip{border-radius:5px;padding:4px 6px;font-size:8px;line-height:1.5;word-break:break-word;box-sizing:border-box}'
-    +'.chip-solo{flex:1;display:flex;flex-direction:column;justify-content:center;padding:8px 9px;border-radius:6px}'
+    +'.chip{border-radius:5px;padding:5px 7px;font-size:9.5px;line-height:1.35;word-break:break-word;box-sizing:border-box}'
+    +'.chip-solo{flex:1;display:flex;flex-direction:column;justify-content:center;padding:9px 10px;border-radius:6px}'
+    +'.chip-body{display:block}'
+    +'.chip b{font-size:10.5px}'
+    +'.chip .sec-line{font-size:9px;opacity:.9;display:block;margin-top:2px}'
     +'.cp{background:#1a4fa0;color:#fff}'
     +'.cv{background:#b91c1c;color:#fff}'
     +'.cs{background:#e5e7eb;color:#374151}'
     +'.vc{background:#f3e8ff}'
-    +'.cvac{font-size:8px;font-weight:700;color:#9333ea}'
+    +'.cvac{font-size:9px;font-weight:700;color:#9333ea}'
     +'.av{width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#fff;vertical-align:middle;margin-right:3px}'
     +'table.lst{width:100%;border-collapse:collapse;font-size:9px;margin-bottom:8px}'
     +'table.lst th{background:#0f2744;color:#fff;padding:5px 7px;text-align:left;font-size:8px}'
@@ -6749,12 +6752,14 @@ function planExportPDF() {
           var isV=a.fechaTermino&&a.fechaTermino<todayStr&&a.estatus!=='Terminado';
           var cls=isProg?'cp':isV?'cv':'cs';
           h+='<div class="chip '+cls+(isOnly?' chip-solo':'')+'">';
+          h+='<div class="chip-body">';
           if(a.proyecto) h+='<b>'+a.proyecto+'</b>';
-          if(a.tipo) h+='<br><b style="font-size:7px">'+a.tipo+'</b>';
+          if(a.tipo) h+='<span class="sec-line"><b>'+a.tipo+'</b></span>';
           var isConPDF=(a.tipo==='Conectividad (Bobinas)'||a.tipo==='Planos de Conectividad');
-          if(isConPDF&&a.numBobina) h+='<br><b>Bna #'+a.numBobina+'</b>';
-          if(a.folio) h+='<br><span style="font-family:monospace;font-size:7px">'+a.folio+'</span>';
-          if(a.actividad) h+='<br>'+a.actividad;
+          if(isConPDF&&a.numBobina) h+='<span class="sec-line"><b>Bna #'+a.numBobina+'</b></span>';
+          if(a.folio) h+='<span class="sec-line" style="font-family:monospace">'+a.folio+'</span>';
+          if(a.actividad) h+='<span class="sec-line">'+a.actividad+'</span>';
+          h+='</div>';
           h+='</div>';
         });
         h+='</div>';
