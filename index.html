@@ -6654,14 +6654,14 @@ function planExportPDF() {
   function fWk(w){var o={day:'numeric',month:'short'};return w[0].toLocaleDateString('es-MX',o)+' - '+w[4].toLocaleDateString('es-MX',o);}
 
   var css='*{box-sizing:border-box;margin:0;padding:0}'
-    +'body{font-family:Arial,sans-serif;font-size:11px;color:#1a1a2e;background:#fff;padding:20px}'
-    +'.hdr{display:flex;justify-content:space-between;border-bottom:3px solid #0f2744;padding-bottom:12px;margin-bottom:16px}'
-    +'.logo{font-size:20px;font-weight:900;color:#0f2744}'
-    +'.rtitle{text-align:right}.rtitle h1{font-size:15px;font-weight:700}'
-    +'.rtitle p{font-size:10px;color:#6b7280;margin-top:3px;line-height:1.6}'
-    +'.sec{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#0f2744;padding:8px 0 6px;border-bottom:2px solid #0f2744;margin:18px 0 10px}'
+    +'body{font-family:Arial,sans-serif;font-size:11px;color:#1a1a2e;background:#fff;padding:14px 18px}'
+    +'.hdr{display:flex;justify-content:space-between;border-bottom:3px solid #0f2744;padding-bottom:8px;margin-bottom:8px}'
+    +'.logo{font-size:16px;font-weight:900;color:#0f2744}'
+    +'.rtitle{text-align:right}.rtitle h1{font-size:13px;font-weight:700}'
+    +'.rtitle p{font-size:9px;color:#6b7280;margin-top:2px;line-height:1.35}'
+    +'.sec{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#0f2744;padding:5px 0 3px;border-bottom:2px solid #0f2744;margin:8px 0 6px;display:flex;align-items:center;justify-content:space-between}'
     +'.whdr{background:#0f2744;color:#fff;font-size:10px;font-weight:700;padding:5px 10px;border-radius:4px;margin:10px 0 5px;page-break-after:avoid;break-after:avoid;page-break-inside:avoid}'
-    +'.pbadge{display:inline-flex;align-items:center;gap:5px;background:#f0f4f8;border:1px solid #e2eaf3;border-radius:20px;padding:3px 10px;margin:2px;font-size:10px}'
+    +'.pbadge{display:inline-flex;align-items:center;gap:5px;background:#f0f4f8;border:1px solid #e2eaf3;border-radius:20px;padding:2px 8px;margin:2px;font-size:9.5px}'
     +'.pdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}'
     +'.cal-table{width:100%;border-collapse:collapse;table-layout:fixed;margin-bottom:6px}'
     +'.cal-table thead{display:table-header-group}'
@@ -6688,8 +6688,10 @@ function planExportPDF() {
     +'table.lst tr:nth-child(even) td{background:#f9fafb}'
     +'.sym{display:flex;gap:14px;flex-wrap:wrap;padding:10px 14px;background:#f8fafc;border:1px solid #e2eaf3;border-radius:6px;margin-top:14px;align-items:center}'
     +'.sb{width:20px;height:12px;border-radius:3px;flex-shrink:0}'
-    +'.pbt{text-align:center;margin:14px 0}'
-    +'.pbt button{padding:10px 28px;background:#0f2744;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:Arial,sans-serif}'
+    +'.mini-sym{display:flex;gap:9px;align-items:center;flex-wrap:nowrap;font-size:8px;color:#6b7280;font-weight:400;text-transform:none;letter-spacing:normal}'
+    +'.mini-sym .sb2{width:9px;height:9px;border-radius:2px;flex-shrink:0}'
+    +'.pbt{text-align:center;margin:8px 0}'
+    +'.pbt button{padding:7px 22px;background:#0f2744;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:Arial,sans-serif}'
     +'@media print{.pbt{display:none}@page{margin:.6cm;size:landscape}}';
   css += '*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}';
 
@@ -6730,7 +6732,12 @@ function planExportPDF() {
   h+='</div>';
 
   // 2. CALENDARIO
-  h+='<div class="sec">Vista Calendario</div>';
+  h+='<div class="sec">Vista Calendario<span class="mini-sym">'
+    +'<span style="display:flex;align-items:center;gap:3px"><span class="sb2" style="background:#1a4fa0"></span>En progreso</span>'
+    +'<span style="display:flex;align-items:center;gap:3px"><span class="sb2" style="background:#e5e7eb;border:1px solid #ccc"></span>Sin iniciar</span>'
+    +'<span style="display:flex;align-items:center;gap:3px"><span class="sb2" style="background:#b91c1c"></span>Vencida</span>'
+    +'<span style="display:flex;align-items:center;gap:3px"><span class="sb2" style="background:#f3e8ff;border:1px solid #c084fc"></span>Vacaciones</span>'
+    +'</span></div>';
   weeks.forEach(function(week,wi){
     h+='<div class="whdr">Semana '+(wi+1)+' - '+fWk(week)+'</div>';
     h+='<table class="cal-table"><thead><tr><th class="ncel">Proyectista</th>';
