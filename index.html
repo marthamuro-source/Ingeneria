@@ -6649,24 +6649,24 @@ function planExportPDF() {
         if(!vs&&typeof VACACIONES!=='undefined'&&VACACIONES){Object.keys(VACACIONES).forEach(function(k){if(member.indexOf(k.split(' ')[0])>=0)vs=VACACIONES[k];});}
         var isVac=vs&&vs.has&&vs.has(ds);
         var isOnly=acts.length===1&&!isVac;
-        h+='<td'+(isVac?' class="vc"':'')
-          +(isOnly?' style="padding:0;vertical-align:top;min-width:80px"':' style="min-width:80px"')+'>';
+        h+='<td'+(isVac?' class="vc"':'')+' style="min-width:80px;'+(isOnly?'padding:0;vertical-align:top':'')+'">';
         if(isVac&&acts.length===0){h+='<div class="cvac">Vacaciones</div>';}
         else if(isVac){h+='<div class="cvac">Vac</div>';}
         acts.forEach(function(a){
           var isProg=a.estatus==='En progreso';
           var isV=a.fechaTermino&&a.fechaTermino<todayStr&&a.estatus!=='Terminado';
           var cls=isProg?'cp':isV?'cv':'cs';
-          h+='<div class="chip '+cls+'">';
+          var cS=isOnly?"display:block;padding:5px 6px;border-radius:0;margin:0;font-size:8px;line-height:1.6;word-break:break-word":"border-radius:3px;padding:2px 4px;margin-bottom:2px;font-size:8px;line-height:1.5;word-break:break-word";
+          h+='<div class="'+cls+'" style="'+cS+'">';
           if(a.proyecto) h+='<b>'+a.proyecto+'</b>';
-          var cS=isOnly?"display:block;padding:5px 6px;border-radius:0;margin:0;font-size:8px;line-height:1.6":"border-radius:3px;padding:2px 4px;margin-bottom:2px;font-size:8px;line-height:1.5";
-          h+='<div class="'+cls+'" style="'+cS+'">'; 
+          if(a.tipo) h+='<br><b style="font-size:7px">'+a.tipo+'</b>';
           var isConPDF=(a.tipo==='Conectividad (Bobinas)'||a.tipo==='Planos de Conectividad');
           if(isConPDF&&a.numBobina) h+='<br><b>Bna #'+a.numBobina+'</b>';
           if(a.folio) h+='<br><span style="font-family:monospace;font-size:7px">'+a.folio+'</span>';
           if(a.actividad) h+='<br>'+a.actividad;
           h+='</div>';
         });
+        h+='</td>';
         h+='</td>';
       });
       h+='</tr>';
