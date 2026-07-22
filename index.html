@@ -6317,6 +6317,82 @@ function pumFechaBadge(f) {
 // ══════════════════════════════════════════════════════════════════════════════
 var PLAN_WEEKS_OPEN = {0: true, 1: false, 2: false};
 
+
+window.PLAN_PROYECTOS = [];
+
+function planOpenProyectos() {
+  var existBg = document.getElementById('planProyBg');
+  if(existBg) existBg.remove();
+  var bg = document.createElement('div');
+  bg.id = 'planProyBg';
+  bg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9500;display:flex;align-items:center;justify-content:center;padding:20px';
+  bg.onclick = function(e){ if(e.target===bg) bg.remove(); };
+  var modal = document.createElement('div');
+  modal.style.cssText = 'background:var(--surface);border:0.5px solid var(--border);border-radius:14px;width:100%;max-width:520px';
+  modal.onclick = function(e){ e.stopPropagation(); };
+  modal.innerHTML = planProyHTML();
+  bg.appendChild(modal);
+  document.body.appendChild(bg);
+}
+
+function planProyHTML() {
+  var rows = '';
+  var plist = window.PLAN_PROYECTOS || [];
+  for(var i=0; i<plist.length; i++) {
+    var p = plist[i];
+    rows += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">';
+    rows += '<input id="planProy_'+i+'" placeholder="Proyecto" style="flex:1;font-size:12px;padding:7px 10px;border-radius:7px;border:0.5px solid var(--border);background:var(--bg);color:var(--text);font-family:var(--font)" value="'+p.proyecto+'">';
+    rows += '<input id="planSub_'+i+'" placeholder="Sub-nombre" style="flex:1;font-size:12px;padding:7px 10px;border-radius:7px;border:0.5px solid var(--border);background:var(--bg);color:var(--text);font-family:var(--font)" value="'+p.sub+'">';
+    rows += '<button onclick="planProyRemove('+i+')" style="background:rgba(255,92,92,.1);border:none;color:#ff7a7a;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px;flex-shrink:0">x</button>';
+    rows += '</div>';
+  }
+  var h = '';
+  h += '<div style="padding:16px 20px;border-bottom:0.5px solid var(--border);display:flex;align-items:center;justify-content:space-between">';
+  h += '<div style="font-size:14px;font-weight:700">Proyectos del periodo</div>';
+  h += '<button onclick="planProyClose()" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer;line-height:1">x</button>';
+  h += '</div>';
+  h += '<div style="padding:16px 20px">';
+  h += '<div style="font-size:11px;color:var(--dim);margin-bottom:12px">Esta lista aparecera en el reporte PDF.</div>';
+  h += '<div id="planProyRows">'+rows+'</div>';
+  h += '<button onclick="planProyAdd()" style="width:100%;font-size:12px;padding:8px;border-radius:7px;border:0.5px dashed var(--border);background:transparent;color:var(--dim);cursor:pointer;font-family:var(--font);margin-top:4px">+ Agregar proyecto</button>';
+  h += '</div>';
+  h += '<div style="padding:12px 20px;border-top:0.5px solid var(--border);display:flex;gap:8px;justify-content:flex-end">';
+  h += '<button onclick="planProyClose()" style="font-size:12px;padding:7px 16px;border-radius:7px;border:0.5px solid var(--border);background:transparent;color:var(--dim);cursor:pointer;font-family:var(--font)">Cancelar</button>';
+  h += '<button onclick="planProySave()" style="font-size:12px;padding:7px 16px;border-radius:7px;border:none;background:#2a78d6;color:#fff;cursor:pointer;font-family:var(--font)">Guardar</button>';
+  h += '</div>';
+  return h;
+}
+
+function planProyAdd() {
+  window.PLAN_PROYECTOS = window.PLAN_PROYECTOS || [];
+  window.PLAN_PROYECTOS.push({proyecto:'', sub:''});
+  var m = document.querySelector('#planProyBg > div');
+  if(m) m.innerHTML = planProyHTML();
+}
+
+function planProyRemove(i) {
+  window.PLAN_PROYECTOS.splice(i, 1);
+  var m = document.querySelector('#planProyBg > div');
+  if(m) m.innerHTML = planProyHTML();
+}
+
+function planProyClose(){ var b=document.getElementById("planProyBg"); if(b) b.remove(); }
+
+function planProySave() {
+  var list = [];
+  var rows = document.getElementById('planProyRows');
+  if(!rows) return;
+  var inputs = rows.querySelectorAll('[id^="planProy_"]');
+  for(var i=0; i<inputs.length; i++) {
+    var pv = (document.getElementById('planProy_'+i)||{}).value || '';
+    var sv = (document.getElementById('planSub_'+i)||{}).value || '';
+    if(pv.trim()) list.push({proyecto:pv.trim(), sub:sv.trim()});
+  }
+  window.PLAN_PROYECTOS = list;
+  document.getElementById('planProyBg').remove();
+}
+
+
 function planOpen() {
   var old = document.getElementById('planModalBg');
   if (old) old.remove();
