@@ -6667,7 +6667,9 @@ function planExportPDF() {
     +'.cal-table td,.cal-table th{border:1px solid #e5e7eb;padding:3px;vertical-align:top;font-size:8px}'
     +'.cal-table th{background:#f0f4f8;color:#0f2744;text-align:center;font-size:9px;font-weight:600;white-space:nowrap}'
     +'.ncel{width:90px;white-space:nowrap;background:#f9fafb;vertical-align:middle}'
-    +'.chip{border-radius:3px;padding:2px 4px;margin-bottom:2px;font-size:8px;line-height:1.5;word-break:break-word}'
+    +'.day-cell{display:flex;flex-direction:column;gap:4px;height:100%}'
+    +'.chip{border-radius:5px;padding:4px 6px;font-size:8px;line-height:1.5;word-break:break-word;box-sizing:border-box}'
+    +'.chip-solo{flex:1;display:flex;flex-direction:column;justify-content:center;padding:8px 9px;border-radius:6px}'
     +'.cp{background:#1a4fa0;color:#fff}'
     +'.cv{background:#b91c1c;color:#fff}'
     +'.cs{background:#e5e7eb;color:#374151}'
@@ -6738,15 +6740,15 @@ function planExportPDF() {
         if(!vs&&typeof VACACIONES!=='undefined'&&VACACIONES){Object.keys(VACACIONES).forEach(function(k){if(member.indexOf(k.split(' ')[0])>=0)vs=VACACIONES[k];});}
         var isVac=vs&&vs.has&&vs.has(ds);
         var isOnly=acts.length===1&&!isVac;
-        h+='<td'+(isVac?' class="vc"':'')+' style="min-width:80px;'+(isOnly?'padding:0;vertical-align:top':'')+'">';
-        if(isVac&&acts.length===0){h+='<div class="cvac">Vacaciones</div>';}
+        h+='<td'+(isVac?' class="vc"':'')+' style="min-width:80px;padding:4px;vertical-align:top">';
+        h+='<div class="day-cell">';
+        if(isVac&&acts.length===0){h+='<div class="cvac" style="flex:1;display:flex;align-items:center;justify-content:center">Vacaciones</div>';}
         else if(isVac){h+='<div class="cvac">Vac</div>';}
         acts.forEach(function(a){
           var isProg=a.estatus==='En progreso';
           var isV=a.fechaTermino&&a.fechaTermino<todayStr&&a.estatus!=='Terminado';
           var cls=isProg?'cp':isV?'cv':'cs';
-          var cSolo="display:block;padding:6px 8px;border-radius:4px;font-size:8px;line-height:1.6;word-break:break-word;min-height:50px";var cMulti="border-radius:4px;padding:3px 5px;margin-bottom:3px;font-size:8px;line-height:1.5;word-break:break-word";var cS=isOnly?cSolo:cMulti;
-          h+='<div class="'+cls+'" style="'+cS+'">';
+          h+='<div class="chip '+cls+(isOnly?' chip-solo':'')+'">';
           if(a.proyecto) h+='<b>'+a.proyecto+'</b>';
           if(a.tipo) h+='<br><b style="font-size:7px">'+a.tipo+'</b>';
           var isConPDF=(a.tipo==='Conectividad (Bobinas)'||a.tipo==='Planos de Conectividad');
@@ -6755,7 +6757,7 @@ function planExportPDF() {
           if(a.actividad) h+='<br>'+a.actividad;
           h+='</div>';
         });
-        h+='</td>';
+        h+='</div>';
         h+='</td>';
       });
       h+='</tr>';
