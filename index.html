@@ -6376,6 +6376,7 @@ function planBuildHTML() {
   h += '</div>';
   h += '<div style="display:flex;gap:4px">'+[[1,'1 sem'],[2,'2 sem'],[3,'3 sem'],[4,'1 mes']].map(function(o){var a=numWeeks===o[0];return '<button onclick="planSetWeeks('+o[0]+')" style="font-size:11px;padding:5px 12px;border-radius:20px;border:0.5px solid '+(a?'var(--accent)':'rgba(255,255,255,.15)')+';background:'+(a?'rgba(74,143,212,.15)':'transparent')+';color:'+(a?'var(--accent)':'var(--dim)')+';cursor:pointer;font-family:var(--font)">'+o[1]+'</button>';}).join('')+'</div>';
   h += '</div>';
+  h += '<button onclick="planOpenProyectos()" style="font-size:11px;padding:6px 14px;border-radius:7px;border:0.5px solid rgba(27,175,122,.3);background:transparent;color:#1baf7a;cursor:pointer;font-family:var(--font)">📋 Proyectos del período</button>';
   h += '<button onclick="planExportPDF()" style="font-size:11px;padding:6px 14px;border-radius:7px;border:0.5px solid rgba(255,92,92,.3);background:transparent;color:#ff7a7a;cursor:pointer;font-family:var(--font)">⬇ Exportar PDF</button>';
   h += '<button onclick="document.getElementById(\'planModalBg\').remove()" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer;padding:0 4px;line-height:1">×</button>';
   h += '</div></div>';
@@ -6616,20 +6617,32 @@ function planExportPDF() {
 
   // 1. PROYECTOS
   h+='<div class="sec">Proyectos en el periodo</div>';
-  var pm={};
   var PC=['#2a78d6','#1baf7a','#eda100','#e24b4a','#9b59b6','#eb6834','#065f46','#b45309'];
-  weeks.forEach(function(week){
-    var wS=week[0].toISOString().slice(0,10),wE=week[4].toISOString().slice(0,10);
-    PA_ITEMS.forEach(function(a){
-      if(!a.fechaAsig) return;
-      var e=a.fechaTermino||a.fechaAsig;
-      if(a.fechaAsig<=wE&&e>=wS){var k=(a.proyecto||a.propietario||'Sin proyecto')+' - '+(a.tipo||'');pm[k]=(pm[k]||0)+1;}
-    });
-  });
   h+='<div style="margin-bottom:8px">';
-  Object.keys(pm).sort(function(a,b){return pm[b]-pm[a];}).forEach(function(k,i){
-    h+='<span class="pbadge"><span class="pdot" style="background:'+PC[i%PC.length]+'"></span><b>'+k+'</b><span style="color:#6b7280;margin-left:3px">('+pm[k]+')</span></span>';
-  });
+  var planProy = window.PLAN_PROYECTOS && window.PLAN_PROYECTOS.length > 0 ? window.PLAN_PROYECTOS : null;
+  if(planProy) {
+    // Usar lista manual
+    planProy.forEach(function(p, i){
+      h+='<span class="pbadge"><span class="pdot" style="background:'+PC[i%PC.length]+'"></span>';
+      h+='<b>'+p.proyecto+'</b>';
+      if(p.sub) h+=' <span style="color:#6b7280">'+p.sub+'</span>';
+      h+='</span>';
+    });
+  } else {
+    // Generar automáticamente desde actividades
+    var pm={};
+    weeks.forEach(function(week){
+      var wS=week[0].toISOString().slice(0,10),wE=week[4].toISOString().slice(0,10);
+      PA_ITEMS.forEach(function(a){
+        if(!a.fechaAsig) return;
+        var e=a.fechaTermino||a.fechaAsig;
+        if(a.fechaAsig<=wE&&e>=wS){var k=(a.proyecto||a.propietario||'Sin proyecto')+' - '+(a.tipo||'');pm[k]=(pm[k]||0)+1;}
+      });
+    });
+    Object.keys(pm).sort(function(a,b){return pm[b]-pm[a];}).forEach(function(k,i){
+      h+='<span class="pbadge"><span class="pdot" style="background:'+PC[i%PC.length]+'"></span><b>'+k+'</b><span style="color:#6b7280;margin-left:3px">('+pm[k]+')</span></span>';
+    });
+  }
   h+='</div>';
 
   // 2. CALENDARIO
@@ -6656,7 +6669,7 @@ function planExportPDF() {
           var isProg=a.estatus==='En progreso';
           var isV=a.fechaTermino&&a.fechaTermino<todayStr&&a.estatus!=='Terminado';
           var cls=isProg?'cp':isV?'cv':'cs';
-          var cS=isOnly?"display:block;padding:5px 6px;border-radius:0;margin:0;font-size:8px;line-height:1.6;word-break:break-word":"border-radius:3px;padding:2px 4px;margin-bottom:2px;font-size:8px;line-height:1.5;word-break:break-word";
+          var cSolo="display:block;padding:6px 8px;border-radius:4px;font-size:8px;line-height:1.6;word-break:break-word;min-height:50px";var cMulti="border-radius:4px;padding:3px 5px;margin-bottom:3px;font-size:8px;line-height:1.5;word-break:break-word";var cS=isOnly?cSolo:cMulti;
           h+='<div class="'+cls+'" style="'+cS+'">';
           if(a.proyecto) h+='<b>'+a.proyecto+'</b>';
           if(a.tipo) h+='<br><b style="font-size:7px">'+a.tipo+'</b>';
