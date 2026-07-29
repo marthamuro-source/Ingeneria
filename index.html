@@ -60,6 +60,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .herr-desc{font-size:11px;color:var(--muted);line-height:1.5;flex:1;}
 .herr-go{font-size:10px;color:var(--accent);font-weight:600;margin-top:14px;letter-spacing:.02em;}
 .herr-note{font-size:11px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;line-height:1.5;}
+.herr-manage-btn{display:flex;align-items:center;gap:6px;background:transparent;border:1px solid rgba(0,229,255,.35);color:#8fd9ff;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;font-family:var(--font);white-space:nowrap;}
+.herr-manage-btn:hover{background:rgba(0,229,255,.1);border-color:rgba(0,229,255,.6);}
+.herr-mgr-list{display:flex;flex-direction:column;gap:8px;margin-bottom:18px;max-height:280px;overflow-y:auto;}
+.herr-mgr-row{display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;}
+.herr-mgr-row .hm-icon{font-size:18px;flex-shrink:0;}
+.herr-mgr-row .hm-info{flex:1;min-width:0;}
+.herr-mgr-row .hm-title{font-size:12px;font-weight:600;color:var(--text);}
+.herr-mgr-row .hm-desc{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.herr-mgr-del{background:none;border:none;color:#ff8a8a;cursor:pointer;font-size:16px;padding:4px 8px;border-radius:6px;flex-shrink:0;}
+.herr-mgr-del:hover{background:rgba(255,92,92,.12);}
+.herr-mgr-add{border-top:1px solid var(--border);padding-top:14px;}
+.herr-mgr-add-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;}
 
 /* ── Calculadora de Rendimientos ── */
 .rend-calc{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;margin-top:20px;}
@@ -1311,53 +1323,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   <div id="v-herramientas" style="display:none">
     <div class="topbar">
       <div><h1>Herramientas de trabajo</h1><div class="tmeta">Accesos directos a machotes, normas y material de apoyo en Drive</div></div>
+      <button class="herr-manage-btn" onclick="herrOpenManager()" title="Agregar o quitar accesos">⚙️ Editar accesos</button>
     </div>
     <div class="content">
-      <div class="herr-grid">
-
-        <a class="herr-card" href="https://drive.google.com/drive/folders/1KyQqu0aeviikyRnlR25BEKBQf9YhK2of" target="_blank" rel="noopener" title="Abrir en Drive">
-          <span class="herr-icon">📜</span>
-          <div class="herr-title">Normas y/o Información Oficial</div>
-          <div class="herr-desc">Reglamentos, normativas y documentos oficiales de referencia</div>
-          <span class="herr-go">Abrir carpeta ↗</span>
-        </a>
-
-        <a class="herr-card" href="https://drive.google.com/drive/folders/1loRllXW_pLwwrXRdgaZ5wyOdO94Av9Xr" target="_blank" rel="noopener" title="Abrir en Drive">
-          <span class="herr-icon">📐</span>
-          <div class="herr-title">Machotes Solapas y Memorias</div>
-          <div class="herr-desc">Plantillas para planos, solapas y memorias de cálculo</div>
-          <span class="herr-go">Abrir carpeta ↗</span>
-        </a>
-
-        <a class="herr-card" href="https://drive.google.com/drive/folders/1mAb3Bswyd0eZ4VUMf-h_NRsxMG91EBEq" target="_blank" rel="noopener" title="Abrir en Drive">
-          <span class="herr-icon">📝</span>
-          <div class="herr-title">Notas</div>
-          <div class="herr-desc">Apuntes y notas de trabajo del equipo</div>
-          <span class="herr-go">Abrir carpeta ↗</span>
-        </a>
-
-        <a class="herr-card" href="https://drive.google.com/drive/folders/1dWOtQbWlzIQUc6qLl2fMNICIQ6C24jWw" target="_blank" rel="noopener" title="Abrir en Drive">
-          <span class="herr-icon">📚</span>
-          <div class="herr-title">Material de apoyo</div>
-          <div class="herr-desc">Recursos y referencias generales de consulta</div>
-          <span class="herr-go">Abrir carpeta ↗</span>
-        </a>
-
-        <a class="herr-card" href="https://drive.google.com/drive/folders/1fk1A3WaGeEP0zMYECExgvyrpQF6rRsjh" target="_blank" rel="noopener" title="Abrir en Drive">
-          <span class="herr-icon">📋</span>
-          <div class="herr-title">Fichas Técnicas y/o Folletos</div>
-          <div class="herr-desc">Especificaciones técnicas y folletos de materiales/equipos</div>
-          <span class="herr-go">Abrir carpeta ↗</span>
-        </a>
-
-        <a class="herr-card" href="https://drive.google.com/drive/folders/1mXohBHNOgg4hZeT8fEGNOgXuj3LZ5-V3" target="_blank" rel="noopener" title="Abrir en Drive">
-          <span class="herr-icon">📖</span>
-          <div class="herr-title">Manuales Internos y/o Oficiales</div>
-          <div class="herr-desc">Manuales de procedimientos internos y oficiales</div>
-          <span class="herr-go">Abrir carpeta ↗</span>
-        </a>
-
-      </div>
+      <div class="herr-grid" id="herrGridMount"></div>
 
       <div class="herr-note">
         💡 Estas tarjetas abren tu Drive de C3NTRO en una pestaña nueva. Si alguna no carga, confirma que tu sesión esté iniciada con tu cuenta de C3NTRO en este navegador.
@@ -1503,6 +1472,46 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 
     </div><!-- /content -->
   </div><!-- /v-herramientas -->
+
+  <!-- MODAL: Gestionar accesos de Herramientas de trabajo -->
+  <div class="pa-modal-bg" id="herrMgrBg">
+    <div class="pa-modal" style="max-width:640px">
+      <div class="pa-modal-hd">
+        <div class="pa-modal-title">Editar accesos de Herramientas de trabajo</div>
+        <button class="pa-modal-close" onclick="herrCloseManager()">&times;</button>
+      </div>
+      <div class="pa-modal-body">
+        <div id="herrMgrList" class="herr-mgr-list"></div>
+
+        <div class="herr-mgr-add">
+          <div class="herr-mgr-add-title">+ Agregar nuevo acceso</div>
+          <div class="pa-row2">
+            <div class="pa-field">
+              <label>Ícono (emoji)</label>
+              <input type="text" id="herrNewIcon" placeholder="🔗" maxlength="4">
+            </div>
+            <div class="pa-field">
+              <label>Título</label>
+              <input type="text" id="herrNewTitle" placeholder="Ej. Formatos de Bitácora">
+            </div>
+          </div>
+          <div class="pa-field">
+            <label>Descripción</label>
+            <input type="text" id="herrNewDesc" placeholder="Breve descripción de la carpeta o enlace">
+          </div>
+          <div class="pa-field">
+            <label>Enlace (URL de Drive o web)</label>
+            <input type="text" id="herrNewUrl" placeholder="https://drive.google.com/drive/folders/...">
+          </div>
+          <div id="herrMgrError" style="display:none;color:#ff8a8a;font-size:11px;margin-bottom:8px"></div>
+        </div>
+      </div>
+      <div class="pa-modal-ft">
+        <button class="pa-modal-close" style="font-size:13px;padding:8px 16px;border:1px solid var(--border);border-radius:8px" onclick="herrCloseManager()">Cerrar</button>
+        <button class="herr-manage-btn" onclick="herrAddCard()">+ Agregar acceso</button>
+      </div>
+    </div>
+  </div>
 
   <!-- OVERVIEW -->
   <div id="v-overview" style="display: none;">
@@ -2562,6 +2571,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
             <option value="Impresión y doblado" data-tipo="Impresiones">Impresión y doblado</option>
             <option value="AP (planos, kmz, volumétrico)" data-tipo="Conectividad (Bobinas)">AP (planos, kmz, volumétrico)</option>
             <option value="Información básica kmz y excel" data-tipo="Conectividad (Bobinas)">Información básica kmz y excel</option>
+            <option value="Ap completo" data-tipo="Conectividad (Bobinas)">Ap completo</option>
+            <option value="Actualización de AP" data-tipo="Conectividad (Bobinas)">Actualización de AP</option>
             <option value="__otro__">Otro (escribir)</option>
           </select>
           <input type="text" id="paFActividad" placeholder="Ej. Diseño de red FTTH colonia Centro">
@@ -8336,7 +8347,112 @@ function refresh(){
   else if(curView==='panel') renderPanel();
   else if(curView==='equipo') renderEquipo();
   else if(curView==='ausencias') renderAusencias();
+  else if(curView==='herramientas') herrRenderGrid();
   else if(curView==='charts' && ROWS.length>0) setTimeout(buildCharts,30);
+}
+
+// ─── HERRAMIENTAS DE TRABAJO: accesos editables ────────────────────────────
+const HERR_DEFAULT = [
+  {icon:'📜', title:'Normas y/o Información Oficial', desc:'Reglamentos, normativas y documentos oficiales de referencia', url:'https://drive.google.com/drive/folders/1KyQqu0aeviikyRnlR25BEKBQf9YhK2of'},
+  {icon:'📐', title:'Machotes Solapas y Memorias', desc:'Plantillas para planos, solapas y memorias de cálculo', url:'https://drive.google.com/drive/folders/1loRllXW_pLwwrXRdgaZ5wyOdO94Av9Xr'},
+  {icon:'📝', title:'Notas', desc:'Apuntes y notas de trabajo del equipo', url:'https://drive.google.com/drive/folders/1mAb3Bswyd0eZ4VUMf-h_NRsxMG91EBEq'},
+  {icon:'📚', title:'Material de apoyo', desc:'Recursos y referencias generales de consulta', url:'https://drive.google.com/drive/folders/1dWOtQbWlzIQUc6qLl2fMNICIQ6C24jWw'},
+  {icon:'📋', title:'Fichas Técnicas y/o Folletos', desc:'Especificaciones técnicas y folletos de materiales/equipos', url:'https://drive.google.com/drive/folders/1fk1A3WaGeEP0zMYECExgvyrpQF6rRsjh'},
+  {icon:'📖', title:'Manuales Internos y/o Oficiales', desc:'Manuales de procedimientos internos y oficiales', url:'https://drive.google.com/drive/folders/1mXohBHNOgg4hZeT8fEGNOgXuj3LZ5-V3'}
+];
+const HERR_LS_KEY = 'herrCards_v1';
+
+function herrGetCards(){
+  try{
+    const raw = localStorage.getItem(HERR_LS_KEY);
+    if(!raw) return HERR_DEFAULT.slice();
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : HERR_DEFAULT.slice();
+  }catch(e){ return HERR_DEFAULT.slice(); }
+}
+function herrSaveCards(list){
+  try{ localStorage.setItem(HERR_LS_KEY, JSON.stringify(list)); }catch(e){ console.warn('herrSaveCards error', e); }
+}
+function herrEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function herrRenderGrid(){
+  const mount = document.getElementById('herrGridMount');
+  if(!mount) return;
+  const cards = herrGetCards();
+  if(!cards.length){
+    mount.innerHTML = '<div class="herr-note" style="grid-column:1/-1">No tienes accesos configurados todavía. Usa "⚙️ Editar accesos" para agregar el primero.</div>';
+    return;
+  }
+  mount.innerHTML = cards.map(c => (
+    '<a class="herr-card" href="'+herrEsc(c.url)+'" target="_blank" rel="noopener" title="Abrir en Drive">'
+    + '<span class="herr-icon">'+herrEsc(c.icon||'🔗')+'</span>'
+    + '<div class="herr-title">'+herrEsc(c.title)+'</div>'
+    + '<div class="herr-desc">'+herrEsc(c.desc)+'</div>'
+    + '<span class="herr-go">Abrir carpeta ↗</span>'
+    + '</a>'
+  )).join('');
+}
+
+function herrRenderMgrList(){
+  const list = document.getElementById('herrMgrList');
+  if(!list) return;
+  const cards = herrGetCards();
+  if(!cards.length){
+    list.innerHTML = '<div class="herr-note">Sin accesos configurados.</div>';
+    return;
+  }
+  list.innerHTML = cards.map((c,i) => (
+    '<div class="herr-mgr-row">'
+    + '<span class="hm-icon">'+herrEsc(c.icon||'🔗')+'</span>'
+    + '<div class="hm-info"><div class="hm-title">'+herrEsc(c.title)+'</div><div class="hm-desc">'+herrEsc(c.desc)+'</div></div>'
+    + '<button class="herr-mgr-del" title="Quitar este acceso" onclick="herrDeleteCard('+i+')">✕</button>'
+    + '</div>'
+  )).join('');
+}
+
+function herrOpenManager(){
+  herrRenderMgrList();
+  const err = document.getElementById('herrMgrError');
+  if(err){ err.style.display='none'; err.textContent=''; }
+  document.getElementById('herrMgrBg').classList.add('open');
+}
+function herrCloseManager(){
+  document.getElementById('herrMgrBg').classList.remove('open');
+}
+function herrDeleteCard(idx){
+  const cards = herrGetCards();
+  if(!confirm('¿Quitar "'+cards[idx].title+'" de Herramientas de trabajo?')) return;
+  cards.splice(idx,1);
+  herrSaveCards(cards);
+  herrRenderMgrList();
+  herrRenderGrid();
+}
+function herrAddCard(){
+  const icon = document.getElementById('herrNewIcon').value.trim() || '🔗';
+  const title = document.getElementById('herrNewTitle').value.trim();
+  const desc = document.getElementById('herrNewDesc').value.trim();
+  const url = document.getElementById('herrNewUrl').value.trim();
+  const err = document.getElementById('herrMgrError');
+  if(!title || !url){
+    err.textContent = 'Escribe al menos un título y un enlace para agregar el acceso.';
+    err.style.display='';
+    return;
+  }
+  if(!/^https?:\/\//i.test(url)){
+    err.textContent = 'El enlace debe comenzar con http:// o https://';
+    err.style.display='';
+    return;
+  }
+  err.style.display='none';
+  const cards = herrGetCards();
+  cards.push({icon, title, desc, url});
+  herrSaveCards(cards);
+  document.getElementById('herrNewIcon').value='';
+  document.getElementById('herrNewTitle').value='';
+  document.getElementById('herrNewDesc').value='';
+  document.getElementById('herrNewUrl').value='';
+  herrRenderMgrList();
+  herrRenderGrid();
 }
 
 // ─── DASHBOARDS (galería + tableros) ──────────────────────────────────────────
@@ -10178,16 +10294,20 @@ function pdmOpen(name){
     const dColor = paDaysColor(dEst, dReal);
     const overdue = a.fechaTermino && a.estatus!=='Terminado' && (()=>{ const t=new Date(); t.setHours(0,0,0,0); return new Date(a.fechaTermino+'T00:00:00') < t; })();
     const scCls = PA_STATUS_CFG[a.estatus]?.cls||'bgr';
+    const isConect = a.tipo==='Conectividad (Bobinas)'||a.tipo==='Planos de Conectividad';
+    const TIPO_LBL = {'Proyecto':{lbl:'Proyecto',color:'#4a8fd4'},'Planos de Conectividad':{lbl:'Conectividad',color:'#c47d10'},'Conectividad (Bobinas)':{lbl:'Conectividad',color:'#c47d10'},'Impresiones':{lbl:'Impresión',color:'#8a63d2'},'Trabajo Operativo':{lbl:'Trabajo Operativo',color:'#3dd68c'}};
+    const tipoInfo = TIPO_LBL[a.tipo] || {lbl:a.tipo||'—',color:'var(--muted)'};
 
     return `<div class="pdm-act-card" id="pdm-card-${a.id}" style="${overdue?'border-color:rgba(255,92,92,.3);background:rgba(255,92,92,.04)':''}">
       <div style="flex:1">
         <div class="pdm-act-title">${a.actividad||'—'}${overdue?' <span style="color:var(--red);font-size:10px">● Vencida</span>':''}</div>
         <div class="pdm-act-meta">
+          <span style="display:inline-flex;align-items:center;gap:4px;font-weight:600;color:${tipoInfo.color}"><span style="width:6px;height:6px;border-radius:50%;background:${tipoInfo.color};display:inline-block"></span>${tipoInfo.lbl}</span>
+          ${isConect&&a.numBobina?`<span style="font-weight:600;color:var(--text)">Bna #${a.numBobina}</span>`:''}
           ${a.folio?`<span style="font-family:var(--mono);color:var(--accent);font-size:9px">${a.folio}</span>`:''}
           ${a.proyecto?`<span>${a.proyecto}</span>`:''}
           ${a.fechaAsig?`<span>Asig: ${fmtD(a.fechaAsig)}</span>`:''}
           ${a.fechaTermino?`<span>Término: ${fmtD(a.fechaTermino)}</span>`:''}
-          ${a.tipo?`<span style="opacity:.6">${a.tipo}</span>`:''}
         </div>
         ${a.notas?`<div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">📝 ${a.notas}</div>`:''}
         <div class="pdm-act-actions">
@@ -10214,7 +10334,7 @@ function pdmOpen(name){
     .map(s => `
       <div class="pdm-section">
         <div class="pdm-section-title" style="color:${s.color}">${s.label} <span style="background:${s.color};color:#000;font-size:9px;padding:1px 6px;border-radius:10px;font-weight:700;opacity:.8">${s.items.length}</span></div>
-        ${s.items.sort((a,b)=>(a.fechaTermino||'9').localeCompare(b.fechaTermino||'9')).map(actCard).join('')}
+        ${(s.label==='Terminadas' ? s.items : s.items.slice().sort((a,b)=>(a.fechaTermino||'9').localeCompare(b.fechaTermino||'9'))).map(actCard).join('')}
       </div>`)
     .join('') || `<div class="pdm-empty">Sin actividades registradas para este proyectista.</div>`;
 
@@ -10326,10 +10446,19 @@ function pdmGeneratePDF(period){
   const retrasadas = all.filter(a=>a.estatus!=='Terminado'&&a.fechaTermino&&new Date(a.fechaTermino+'T00:00:00')<now).length;
   const pct = n => all.length ? Math.round(n/all.length*100) : 0;
 
-  // #2 Ocupación por proyecto
+  // #2 Ocupación por proyecto (agrupado según el catálogo predeterminado)
+  const PROYECTOS_FIJOS = ['TIKVA MEXICO','TIKVA USA','Microsoft','Pesma','Mantenimiento','Obra Común','Especiales'];
   const byProy = {};
-  all.forEach(a=>{ const p=a.proyecto||a.propietario||'Otros'; byProy[p]=(byProy[p]||0)+1; });
-  const proySort = Object.keys(byProy).sort((a,b)=>byProy[b]-byProy[a]);
+  all.forEach(a=>{
+    const raw = (a.proyecto||a.propietario||'').trim();
+    const p = PROYECTOS_FIJOS.includes(raw) ? raw : 'Otros';
+    byProy[p]=(byProy[p]||0)+1;
+  });
+  const proySort = Object.keys(byProy).sort((a,b)=>{
+    if(a==='Otros') return 1;
+    if(b==='Otros') return -1;
+    return byProy[b]-byProy[a];
+  });
 
   // #3 Cumplimiento de fechas
   const conFechaReal  = all.filter(a=>a.estatus==='Terminado'&&a.fechaReal&&a.fechaTermino);
@@ -10451,7 +10580,7 @@ function pdmGeneratePDF(period){
   <!-- Indicador ocupación por proyecto (#2) -->
   <div style="margin:16px 0;padding:14px 16px;background:#f8fafc;border:1px solid #e2eaf3;border-radius:8px;page-break-inside:avoid">
     <div style="font-size:10px;font-weight:700;color:#0f2744;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Distribución de carga por proyecto</div>
-    ${proySort.slice(0,5).map(p=>{
+    ${proySort.map(p=>{
       const pct2=Math.round(byProy[p]/all.length*100);
       return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
         +'<div style="font-size:11px;font-weight:500;color:#1a1a2e;width:140px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p+'</div>'
