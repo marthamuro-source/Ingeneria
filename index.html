@@ -2075,7 +2075,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
         <div class="ph"><div><div class="pt">Ponderación del score general</div><div class="ps">Los 4 módulos deben sumar 100%</div></div><div id="pesosSuma" style="font-size:13px;font-family:var(--mono);color:var(--green)">100%</div></div>
         <div class="pb" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
           <div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:500">Actividades</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:500">Avance</div>
             <div style="display:flex;align-items:center;gap:8px">
               <input type="range" id="pesoActividades" min="0" max="100" value="25" oninput="updatePesos()" style="flex:1;accent-color:var(--accent)">
               <span id="pesoActVal" style="font-size:13px;font-family:var(--mono);color:var(--accent);width:36px">25%</span>
@@ -7928,42 +7928,58 @@ function getEvalData(){
 
 function buildPersonEval(p){
   const pesos=getPesos();
+  const hoyStr = repDateKey(new Date());
 
-  // ACTIVIDADES
+  // AVANCE (antes "Actividades") — de Panel de Seguimiento: cumplimiento real de fechas de entrega
   let actScore=null,actData=null;
-  if(ROWS.length){
-    const rows=ROWS.filter(r=>samePersonMatch(r.responsable||'',p));
+  {
+    const rows = PA_ITEMS.filter(a=>a.responsable && samePersonMatch(a.responsable,p));
     if(rows.length){
-      const total=rows.length;
-      const done=rows.filter(r=>normS(r.estatus)==='finalizado').length;
-      const inP=rows.filter(r=>normS(r.estatus)==='en proceso').length;
-      const bloq=rows.filter(r=>normS(r.estatus)==='bloqueado').length;
-      const pend=rows.filter(r=>normS(r.estatus)==='pendiente').length;
-      actScore=Math.round((done*100+inP*70+pend*30)/total);
-      actData={total,done,inP,bloq,pend};
+      let aTiempo=0, tarde=0, vencidas=0, enProceso=0, pend=0;
+      rows.forEach(a=>{
+        if(a.estatus==='Terminado'){
+          if(a.fechaReal && a.fechaTermino){
+            if(a.fechaReal<=a.fechaTermino) aTiempo++; else tarde++;
+          } else aTiempo++;
+        } else if(a.estatus==='Sin iniciar'){
+          pend++;
+        } else {
+          enProceso++;
+          if(a.fechaTermino && a.fechaTermino<hoyStr) vencidas++;
+        }
+      });
+      const totalResuelto = aTiempo+tarde+vencidas;
+      if(totalResuelto>0){
+        actScore = Math.round(aTiempo/totalResuelto*100);
+        actData = {total:rows.length, done:aTiempo+tarde, inP:enProceso, bloq:vencidas, pend};
+      }
     }
   }
 
-  // REPORTEO
+  // REPORTEO — de Panel de Seguimiento: cumplimiento de reporte diario del mes en curso
   let repScore=null,repData=null;
-  if(REP_ROWS.length){
-    const repRows=REP_ROWS.filter(r=>samePersonMatch(r.nombre||'',p));
-    if(repRows.length){
-      const year=repYear();
-      const {start:qStart,end:qEnd}=getQRange(activeQ||'Q2',year);
-      const today=new Date(); today.setHours(0,0,0,0);
-      const effectiveEnd=qEnd>today?today:qEnd;
-      const reportedSet=new Set(repRows.map(r=>r.fechaStr));
-      let oblig=0,reported=0,missed=0;
-      let cur=new Date(qStart);
-      while(cur<=effectiveEnd){
-        if(!isWeekend(cur)&&!isFestivo(cur)&&!isVac(p,cur)){
-          oblig++; if(reportedSet.has(repDateKey(cur))) reported++; else missed++;
-        }
-        cur=new Date(cur); cur.setDate(cur.getDate()+1);
-      }
-      repScore=oblig>0?Math.round(reported/oblig*100):0;
-      repData={pct:repScore,reported,oblig,missed};
+  {
+    const now=new Date(); const year=now.getFullYear(), month=now.getMonth();
+    const daysInMonth=new Date(year,month+1,0).getDate();
+    const diasHabiles=[];
+    for(let d=1; d<=daysInMonth; d++){
+      const dStr=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      if(dStr>hoyStr) break;
+      const dow=new Date(year,month,d).getDay();
+      if(dow===0||dow===6) continue;
+      if(typeof FESTIVOS!=='undefined' && FESTIVOS.includes(dStr)) continue;
+      diasHabiles.push(dStr);
+    }
+    const reportadas=new Set();
+    CRONO_ITEMS.forEach(item=>{
+      if(!item.responsable || !samePersonMatch(item.responsable,p)) return;
+      (item.reportes||[]).forEach(r=>{ if(r.fecha) reportadas.add(r.fecha); });
+    });
+    if(diasHabiles.length){
+      const reported=diasHabiles.filter(d=>reportadas.has(d)).length;
+      const missed=diasHabiles.length-reported;
+      repScore=Math.round(reported/diasHabiles.length*100);
+      repData={pct:repScore,reported,oblig:diasHabiles.length,missed};
     }
   }
 
@@ -7983,23 +7999,30 @@ function buildPersonEval(p){
     }
   }
 
-  // UDEMY
+  // UDEMY — de Panel de Seguimiento > Udemy (estado actual por curso)
   let udScore=null,udData=null;
-  if(UD_ROWS.length){
-    const udRow=UD_ROWS.find(r=>samePersonMatch(r.nombre||'',p));
-    if(udRow){
-      const allCourses=Object.values(UD_CATS).flat();
-      const statuses=allCourses.map(c=>normUdStatus(udRow.raw[c.statusCol]));
-      // If no Udemy account: score = 100 (not their fault, don't penalize)
-      if(!udRow.udemy){
-        udScore=100;
-        udData={done:0,total:0,inprog:0,hasAccount:false,noAccount:true};
-      } else {
-        const applicable=statuses.filter(s=>s!=='na'&&s!=='noaccount');
-        const done=statuses.filter(s=>s==='done').length;
-        const inprog=statuses.filter(s=>s==='inprogress').length;
-        udScore=applicable.length?Math.round(done/applicable.length*100):0;
-        udData={done,total:applicable.length,inprog,hasAccount:true,noAccount:false};
+  {
+    if(typeof udLoadLocal==='function') udLoadLocal();
+    const udName = (typeof UD_TEAM!=='undefined') ? UD_TEAM.find(u=>samePersonMatch(u,p)) : null;
+    if(udName){
+      const cats = typeof udGetEffectiveCats==='function' ? udGetEffectiveCats() : {};
+      const allCourses = Object.values(cats).flat();
+      if(allCourses.length){
+        let done=0, inprog=0, noaccount=0, total=0;
+        allCourses.forEach(c=>{
+          const s = udGetStatus(udName, c.name);
+          if(s==='noaccount'){ noaccount++; return; }
+          total++;
+          if(s==='done') done++;
+          else if(s==='inprogress') inprog++;
+        });
+        if(noaccount===allCourses.length){
+          udScore=100;
+          udData={done:0,total:0,inprog:0,hasAccount:false,noAccount:true};
+        } else {
+          udScore = total>0?Math.round(done/total*100):0;
+          udData={done,total,inprog,hasAccount:true,noAccount:false};
+        }
       }
     }
   }
@@ -8023,12 +8046,12 @@ function renderEvaluaciones(){
   // Store all eval data by uid for PDF generation
   data.forEach(d=>{ EVAL_STORE[d.p.replace(/[\s']/g,'_')]=d; });
   const sorted=[...data].sort((a,b)=>(b.globalScore??0)-(a.globalScore??0));
-  const loaded=[ROWS.length?'Actividades':'',REP_ROWS.length?'Reporteo':'',CAL_ROWS.length?'Calidad':'',UD_ROWS.length?'Udemy':''].filter(Boolean);
+  const loaded=[PA_ITEMS.length?'Avance':'',CRONO_ITEMS.length?'Reporteo':'',CAL_ROWS.length?'Calidad':'',UD_TEAM.length?'Udemy':''].filter(Boolean);
   document.getElementById('evalMeta').textContent=
-    loaded.length ? `${sorted.length} proyectistas · ${loaded.join(' · ')}` : 'Carga al menos un CSV para ver las evaluaciones';
+    loaded.length ? `${sorted.length} proyectistas · ${loaded.join(' · ')}` : 'Sin datos disponibles todavía';
   document.getElementById('evalGrid').innerHTML=
     loaded.length ? sorted.map(d=>buildEvalCard(d)).join('') :
-    `<div class="empty" style="grid-column:1/-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" style="width:38px;height:38px;margin:0 auto 12px;display:block;opacity:.25"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg><p>Sin datos cargados</p><small>Carga los CSV de Actividades, Reporteo, Calidad y/o Udemy</small></div>`;
+    `<div class="empty" style="grid-column:1/-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" style="width:38px;height:38px;margin:0 auto 12px;display:block;opacity:.25"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg><p>Sin datos disponibles</p><small>Avance y Reporteo se toman de Panel de Seguimiento, Udemy de Panel de Seguimiento &gt; Udemy, y Calidad del CSV que cargues.</small></div>`;
 }
 
 function scoreColor(s){return s>=80?'#3dd68c':s>=60?'#f5a623':'#ff5c5c';}
@@ -8044,7 +8067,7 @@ function buildEvalCard(d){
   const uid=p.replace(/[\s']/g,'_');
 
   const chips=[
-    actScore!=null?`<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(74,143,212,.12);color:#7fa8ff">Act ${actScore}%</span>`:'',
+    actScore!=null?`<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(74,143,212,.12);color:#7fa8ff">Ava ${actScore}%</span>`:'',
     repScore!=null?`<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(61,214,140,.1);color:#5ce8a6">Rep ${repScore}%</span>`:'',
     calScore!=null?`<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(245,166,35,.1);color:#f5b84a">Cal ${calScore}%</span>`:'',
     udScore!=null ?`<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(45,212,191,.1);color:#5de8dc">Udm ${udScore}%</span>`:'',
@@ -8062,12 +8085,12 @@ function buildEvalCard(d){
     </div>`;
   }
 
-  const actBox = actData ? moduleBox('Actividades',actScore,'#4a8fd4',[
+  const actBox = actData ? moduleBox('Avance',actScore,'#4a8fd4',[
     ['Total',actData.total,'var(--text)'],
-    ['Finalizadas',actData.done,'#3dd68c'],
+    ['A tiempo/tarde',actData.done,'#3dd68c'],
     ['En proceso',actData.inP,'#4a8fd4'],
-    ['Pendientes',actData.pend,'#f5a623'],
-    ['Bloqueadas',actData.bloq,actData.bloq>0?'#ff5c5c':'var(--dim)'],
+    ['Sin iniciar',actData.pend,'#f5a623'],
+    ['Vencidas',actData.bloq,actData.bloq>0?'#ff5c5c':'var(--dim)'],
   ]) : '';
 
   const repBox = repData ? moduleBox('Reporteo',repScore,'#3dd68c',[
@@ -8141,14 +8164,14 @@ function generatePDF(uid){
   // ── Alerts & Recognitions ───────────────────────────────────────────────────
   const alerts=[], stars=[];
   if(actData){
-    if(actData.bloq>0)  alerts.push(`${actData.bloq} actividad${actData.bloq>1?'es':''} bloqueada${actData.bloq>1?'s':''} pendiente${actData.bloq>1?'s':''} de resolver.`);
+    if(actData.bloq>0)  alerts.push(`${actData.bloq} actividad${actData.bloq>1?'es':''} vencida${actData.bloq>1?'s':''} sin terminar.`);
     if(actData.inP>=3)  alerts.push(`Carga simultánea elevada: ${actData.inP} actividades en proceso al mismo tiempo.`);
     if(actData.done===actData.total&&actData.total>0) stars.push(`Completó el 100% de sus actividades asignadas en el periodo.`);
     else if(actData.done>=actData.total*0.8&&actData.total>0) stars.push(`${actData.done} de ${actData.total} actividades cerradas — alto índice de cierre.`);
   }
   if(repData){
-    if(repData.missed>3) alerts.push(`${repData.missed} días sin reporte en el ${quarter} — supera el límite recomendado de 3.`);
-    if(repData.missed===0) stars.push(`Reporte diario impecable: sin ninguna falta en todo el ${quarter}.`);
+    if(repData.missed>3) alerts.push(`${repData.missed} días sin reporte en el mes en curso — supera el límite recomendado de 3.`);
+    if(repData.missed===0) stars.push(`Reporte diario impecable: sin ninguna falta en el mes en curso.`);
     else if(repData.pct>=90) stars.push(`${repData.pct}% de cumplimiento en reporteo — constancia sobresaliente.`);
   }
   if(calData){
@@ -8164,9 +8187,9 @@ function generatePDF(uid){
   if(udData?.noAccount) alerts.push(`Sin cuenta Udemy asignada — pendiente gestión de acceso.`);
 
   // ── Narrative ───────────────────────────────────────────────────────────────
-  const narrative=`${p} obtuvo un score general de ${sc}% en el periodo ${quarter} ${year}, ubicándose en la categoría "${scLabel}". `+
-    (actData?`En gestión de actividades, administró un total de ${actData.total} tarea${actData.total>1?'s':''}, de las cuales ${actData.done} fueron completadas${actData.bloq>0?`, ${actData.bloq} permanecen bloqueadas`:''}. `:'') +
-    (repData?`Respecto al reporte diario, cumplió ${repData.reported} de ${repData.oblig} días obligatorios (${repData.pct}%)${repData.missed>0?`, con ${repData.missed} ausencia${repData.missed>1?'s':''}`:', sin ninguna falta'}. `:'') +
+  const narrative=`${p} obtuvo un score general de ${sc}% al corte del ${today}, ubicándose en la categoría "${scLabel}". `+
+    (actData?`En avance de asignaciones, administró un total de ${actData.total} tarea${actData.total>1?'s':''}, de las cuales ${actData.done} ya se resolvieron (a tiempo o tarde)${actData.bloq>0?`, ${actData.bloq} permanecen vencidas sin terminar`:''}. `:'') +
+    (repData?`Respecto al reporte diario del mes en curso, cumplió ${repData.reported} de ${repData.oblig} días hábiles (${repData.pct}%)${repData.missed>0?`, con ${repData.missed} ausencia${repData.missed>1?'s':''}`:', sin ninguna falta'}. `:'') +
     (calData?`En calidad técnica, sus ${calData.revs} revisión${calData.revs>1?'es':''} arrojaron un score de ${calScore}%, con ${calData.ok} ítems correctos, ${calData.def} con deficiencia y ${calData.nc} sin cumplir. `:'') +
     (udData&&!udData.noAccount?`En formación Udemy finalizó ${udData.done} de ${udData.total} cursos asignados (${udScore}%). `:'') +
     (udData?.noAccount?`No cuenta con acceso a Udemy actualmente. `:'') +
