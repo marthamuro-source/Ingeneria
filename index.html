@@ -113,6 +113,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .dgc-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:5px;}
 .dgc-desc{font-size:11px;color:var(--muted);line-height:1.5;}
 .dgc-badge{position:absolute;top:16px;right:16px;font-size:9px;padding:3px 10px;border-radius:10px;background:rgba(61,214,140,.15);color:var(--green);font-weight:600;letter-spacing:.03em;}
+.dash-vis-toggle{position:absolute;top:14px;left:14px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;width:28px;height:28px;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.dash-vis-toggle:hover{background:rgba(0,229,255,.12);border-color:rgba(0,229,255,.35);}
+.dash-vis-toggle.off{opacity:.55;}
 .dash-back{font-size:11px;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:color .15s;}
 .dash-back:hover{color:var(--accent);}
 .dash-subtabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:20px;overflow-x:auto;}
@@ -1227,13 +1230,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       </div>
       <div class="content">
         <div class="dash-gallery-grid">
-          <div class="dash-gallery-card" onclick="dashOpenTablero('equipo-prod')">
+          <div class="dash-gallery-card" data-dash-id="equipo-prod" onclick="dashOpenTablero('equipo-prod')">
+            <button class="dash-vis-toggle" onclick="dashToggleVisibility(event,'equipo-prod')" title="Visible para proyectistas — clic para ocultar">👁️</button>
             <span class="dgc-icon">📊</span>
             <div class="dgc-title">Equipo & Productividad</div>
             <div class="dgc-desc">Resumen, productividad, calidad, Udemy y reporteo del equipo</div>
             <span class="dgc-badge">Activo</span>
           </div>
-          <div class="dash-gallery-card" onclick="dashOpenTablero('permisos-um')">
+          <div class="dash-gallery-card" data-dash-id="permisos-um" onclick="dashOpenTablero('permisos-um')">
+            <button class="dash-vis-toggle" onclick="dashToggleVisibility(event,'permisos-um')" title="Visible para proyectistas — clic para ocultar">👁️</button>
             <span class="dgc-icon">📋</span>
             <div class="dgc-title">Permisos UM</div>
             <div class="dgc-desc">Seguimiento de permisos Últimas Millas por responsable, tipo y dependencias</div>
@@ -7049,10 +7054,31 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
   // Guardar en variables globales para acceso desde los handlers
   window._calProySubtareas = subtareasDisponibles;
   window._calProyFechaHoy = fecha;
+  if(!Array.isArray(window._calProyPendientes) || window._calProyPendienteFecha !== fecha){
+    window._calProyPendientes = [];
+    window._calProyPendienteFecha = fecha;
+  }
+  const pendientes = window._calProyPendientes;
 
   const stOpts = subtareasDisponibles.map((x,i)=>
     `<option value="${i}">${x.folio||x.proyecto} — ${x.st.nombre} (${x.st.unidad})</option>`
   ).join('');
+
+  // Lista de subtareas ya agregadas a este reporte (pendientes de guardar)
+  if(pendientes.length){
+    html+=`<div style="margin-bottom:12px">
+      <div style="font-size:11px;color:var(--accent);font-weight:600;margin-bottom:6px">📝 Por guardar (${pendientes.length})</div>
+      ${pendientes.map((p,pi)=>`
+        <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text);padding:6px 8px;margin-bottom:4px;background:rgba(74,143,212,.06);border:0.5px solid rgba(74,143,212,.2);border-radius:6px">
+          <div style="flex:1">
+            <span style="color:var(--accent)">${p.stData.st.nombre}</span> · +${p.cantidad} ${p.stData.st.unidad} · ${p.estatus.replace('_',' ')}${p.nota?' · '+p.nota:''}
+          </div>
+          <button onclick="calProyQuitarPendiente(${pi})" title="Quitar de la lista"
+            style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:13px;padding:2px 6px;border-radius:4px;flex-shrink:0"
+            onmouseover="this.style.color='#ff6b6b'" onmouseout="this.style.color='var(--dim)'">✕</button>
+        </div>`).join('')}
+    </div>`;
+  }
 
   html+=`
     <div style="margin-bottom:10px">
@@ -7087,12 +7113,50 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
       <textarea id="calProyNota" rows="2" placeholder="¿Qué avanzaste hoy? ¿Algún bloqueo?" 
         style="width:100%;resize:vertical;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px"></textarea>
     </div>
-    <button class="pa-btn pa-btn-primary" onclick="calProyGuardarReporteHoy()" style="width:100%">
-      💾 Guardar reporte del día
-    </button>
+    <div style="display:flex;gap:8px">
+      <button class="pa-btn pa-btn-ghost" onclick="calProyAgregarPendiente()" style="flex:1">
+        ➕ Agregar otra subtarea
+      </button>
+      <button class="pa-btn pa-btn-primary" onclick="calProyGuardarReporteHoy()" style="flex:1">
+        💾 Guardar reporte del día${pendientes.length?` (${pendientes.length+1})`:''}
+      </button>
+    </div>
   </div>`;
 
   panel.innerHTML=html;
+}
+
+function calProyLeerFormActual(){
+  const subtareas = window._calProySubtareas||[];
+  const sel = document.getElementById('calProyStSel');
+  const idx = parseInt(sel?.value);
+  if(isNaN(idx)||idx<0||!subtareas[idx]) return null;
+  const cantidad = parseFloat(document.getElementById('calProyCant')?.value)||0;
+  const estatus = document.getElementById('calProyEstatus')?.value||'en_progreso';
+  const nota = document.getElementById('calProyNota')?.value.trim()||'';
+  if(!nota && !cantidad) return null;
+  return { stData: subtareas[idx], cantidad, estatus, nota };
+}
+function calProyLimpiarFormActual(){
+  const sel = document.getElementById('calProyStSel'); if(sel) sel.value='';
+  const cant = document.getElementById('calProyCant'); if(cant) cant.value='';
+  const est = document.getElementById('calProyEstatus'); if(est) est.value='en_progreso';
+  const nota = document.getElementById('calProyNota'); if(nota) nota.value='';
+  const unidEl = document.getElementById('calProyUnidad'); if(unidEl) unidEl.textContent='—';
+  const infoEl = document.getElementById('calProyStInfo'); if(infoEl) infoEl.textContent='';
+}
+function calProyAgregarPendiente(){
+  const entry = calProyLeerFormActual();
+  if(!entry){ alert('Selecciona una subtarea y agrega al menos una cantidad o nota antes de agregarla a la lista.'); return; }
+  if(!Array.isArray(window._calProyPendientes)) window._calProyPendientes=[];
+  window._calProyPendientes.push(entry);
+  calProyLimpiarFormActual();
+  renderCronoCalProyectista();
+}
+function calProyQuitarPendiente(idx){
+  if(!Array.isArray(window._calProyPendientes)) return;
+  window._calProyPendientes.splice(idx,1);
+  renderCronoCalProyectista();
 }
 
 function calProyStChangeHoy(){
@@ -7113,47 +7177,53 @@ function calProyStChange(subtareas){
 }
 
 async function calProyGuardarReporteHoy(){
-  const subtareas = window._calProySubtareas||[];
   const fecha = window._calProyFechaHoy||repDateKey(new Date());
-  const sel = document.getElementById('calProyStSel');
-  const idx = parseInt(sel?.value);
-  if(isNaN(idx)||idx<0||!subtareas[idx]){ alert('Selecciona una subtarea'); return; }
-  const stData = subtareas[idx];
-  const cantidad = parseFloat(document.getElementById('calProyCant')?.value)||0;
-  const estatus = document.getElementById('calProyEstatus')?.value||'en_progreso';
-  const nota = document.getElementById('calProyNota')?.value.trim()||'';
-  if(!nota&&!cantidad){ alert('Agrega al menos una cantidad o nota'); return; }
+  const pendientes = Array.isArray(window._calProyPendientes) ? [...window._calProyPendientes] : [];
+
+  // Incluir lo que esté cargado en el formulario (si hay algo válido) como una entrada más
+  const formEntry = calProyLeerFormActual();
+  if(formEntry) pendientes.push(formEntry);
+
+  if(!pendientes.length){ alert('Selecciona al menos una subtarea y agrega una cantidad o nota.'); return; }
 
   // Recargar de Supabase antes de guardar para no pisar datos
   await cronoRecargarDeSupabase();
-  const item = CRONO_ITEMS.find(x=>x.actividadId===stData.actividadId);
-  const st = item?.subtareas?.find(s=>s.id===stData.st.id);
-  if(!st||!item){ alert('No se encontró la subtarea'); return; }
 
-  st.avanceAcum = (st.avanceAcum||0) + cantidad;
-  st.estatus = estatus;
-  if(!item.reportes) item.reportes=[];
-  item.reportes.push({
-    id:'rep_'+Date.now(),
-    fecha,
-    quien: _miNombre||'—',
-    subtareaId: st.id,
-    subtareaNombre: st.nombre,
-    unidad: st.unidad,
-    cantidad, nota, estatus
-  });
-  cronoSaveItem(item.actividadId);
+  const itemsAfectados = new Set();
+  for(const entry of pendientes){
+    const item = CRONO_ITEMS.find(x=>x.actividadId===entry.stData.actividadId);
+    const st = item?.subtareas?.find(s=>s.id===entry.stData.st.id);
+    if(!st||!item) continue;
 
-  // Notificar a Raquel
-  if(typeof notifAdd==='function'){
-    notifAdd('📋',`${(_miNombre||'').split(' ')[0]} reportó avance`,
-      `${st.nombre}: +${cantidad} ${st.unidad}${nota?' — '+nota.slice(0,35):''}`, 'avance', false);
+    st.avanceAcum = (st.avanceAcum||0) + entry.cantidad;
+    st.estatus = entry.estatus;
+    if(!item.reportes) item.reportes=[];
+    item.reportes.push({
+      id:'rep_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+      fecha,
+      quien: _miNombre||'—',
+      subtareaId: st.id,
+      subtareaNombre: st.nombre,
+      unidad: st.unidad,
+      cantidad: entry.cantidad, nota: entry.nota, estatus: entry.estatus
+    });
+    itemsAfectados.add(item.actividadId);
+
+    // Notificar a Raquel por cada subtarea reportada
+    if(typeof notifAdd==='function'){
+      notifAdd('📋',`${(_miNombre||'').split(' ')[0]} reportó avance`,
+        `${st.nombre}: +${entry.cantidad} ${st.unidad}${entry.nota?' — '+entry.nota.slice(0,35):''}`, 'avance', false);
+    }
   }
+  itemsAfectados.forEach(id=>cronoSaveItem(id));
+
+  // Limpiar pendientes ya guardados
+  window._calProyPendientes = [];
 
   // Confirmación visual y refrescar
   const btn = document.querySelector('#calProyPanelHoy .pa-btn-primary');
   if(btn){
-    btn.innerHTML = '✓ Guardado';
+    btn.innerHTML = `✓ ${pendientes.length} subtarea${pendientes.length!==1?'s':''} guardada${pendientes.length!==1?'s':''}`;
     btn.style.background = 'var(--green)';
     btn.disabled = true;
     setTimeout(()=>{ renderCronoCalProyectista(); }, 800);
@@ -8489,6 +8559,49 @@ let dashActiveSubtab = 'resumen';
 function dashShowGaleria(){
   document.getElementById('dashGaleria').style.display='';
   document.querySelectorAll('[id^="dashTablero-"]').forEach(el=>el.style.display='none');
+}
+// ── Visibilidad de dashboards por rol (admin controla qué ven los proyectistas) ──
+const DASH_VIS_KEY = 'dash_visibility_v1';
+function dashGetVisibility(){
+  try{
+    const raw = localStorage.getItem(DASH_VIS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  }catch(e){ return {}; }
+}
+function dashSetVisibility(id, visible){
+  const v = dashGetVisibility();
+  v[id] = visible;
+  try{ localStorage.setItem(DASH_VIS_KEY, JSON.stringify(v)); }catch(e){ console.warn('dashSetVisibility error', e); }
+}
+function dashToggleVisibility(ev, id){
+  ev.stopPropagation();
+  const v = dashGetVisibility();
+  const curVisible = v[id] !== false; // por defecto visible
+  dashSetVisibility(id, !curVisible);
+  dashApplyVisibility();
+}
+function dashApplyVisibility(){
+  const v = dashGetVisibility();
+  document.querySelectorAll('.dash-gallery-card[data-dash-id]').forEach(card=>{
+    const id = card.dataset.dashId;
+    const visible = v[id] !== false;
+    const eyeBtn = card.querySelector('.dash-vis-toggle');
+    if(eyeBtn){
+      if(_userRole === 'proyectista'){
+        eyeBtn.style.display = 'none'; // los proyectistas no ven ni pueden tocar el control
+      } else {
+        eyeBtn.style.display = '';
+        eyeBtn.textContent = visible ? '👁️' : '🙈';
+        eyeBtn.title = visible ? 'Visible para proyectistas — clic para ocultar' : 'Oculto para proyectistas — clic para mostrar';
+        eyeBtn.classList.toggle('off', !visible);
+      }
+    }
+    if(_userRole === 'proyectista'){
+      card.style.display = visible ? '' : 'none';
+    } else {
+      card.style.display = '';
+    }
+  });
 }
 function dashOpenTablero(id){
   document.getElementById('dashGaleria').style.display='none';
@@ -12531,12 +12644,17 @@ function setupGoViewGuard(){
       }
     }
     _origGoView(name);
+    if(name === 'dashboards' && typeof dashApplyVisibility === 'function'){
+      setTimeout(dashApplyVisibility, 50);
+    }
   };
 }
 
 // ── Aplicar restricciones de solo lectura para proyectista ──
 function applyProyectistaReadOnly(){
   if(_userRole !== 'proyectista') return;
+
+  if(typeof dashApplyVisibility === 'function') dashApplyVisibility();
 
   // Ocultar calculadora en herramientas
   var calcBtn = document.getElementById('rendCalcToggleBtn');
