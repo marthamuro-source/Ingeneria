@@ -9212,12 +9212,12 @@ function paRenderTipo(tipo){
         ${propietarioTd}
         ${responsableTd}${fechaAsigTd}${fechaTermTd}${fechaRealTd}
         <td style="color:var(--text);font-size:11px;text-align:right${_puedoEditar?';cursor:pointer':''}" ${_puedoEditar ? `onclick="paInlineKm('${a.id}','${a.km||''}',this)" title="Clic para editar km"` : ''}>${a.km||'—'}</td>
-        ${pronSubTd}${estatusTd}${dCells}${notasTd}${enlaceTd}${acciones}
+        ${estatusTd}${pronSubTd}${dCells}${notasTd}${enlaceTd}${acciones}
       </tr>`;
     } else if(tipo==='Trabajo Operativo'){
       return `<tr class="${hlCls}">
         <td style="padding-left:14px;min-width:180px;max-width:240px"><div class="cm" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(a.actividad||'').replace(/"/g,'&quot;')}">${a.actividad||'—'}</div></td>
-        ${respTd}${fechaAsigTd}${fechaTermTd}${fechaRealTd}${pronSubTd}${estatusTd}${dCells}${notasTd}${enlaceTd}${acciones}
+        ${respTd}${fechaAsigTd}${fechaTermTd}${fechaRealTd}${estatusTd}${pronSubTd}${dCells}${notasTd}${enlaceTd}${acciones}
       </tr>`;
     } else { // Impresiones
       const juegos = parseInt(a.juegos)||0;
@@ -9229,7 +9229,7 @@ function paRenderTipo(tipo){
         <td style="text-align:center;font-size:11px">${a.juegos||'—'}</td>
         <td style="text-align:center;font-size:11px;cursor:pointer" onclick="paInlinePlanosJuego('${a.id}','${a.planosJuego||''}',this)" title="Clic para editar">${a.planosJuego||'<span style=color:var(--dim)>+ agregar</span>'}</td>
         <td style="text-align:center;font-size:12px;font-weight:600;color:${totalPlanos?'var(--accent)':'var(--dim)'}">${totalPlanos??'—'}</td>
-        ${pronSubTd}${estatusTd}${dCells}${notasTd}${acciones}
+        ${estatusTd}${pronSubTd}${dCells}${notasTd}${acciones}
       </tr>`;
     }
   }).join('');
@@ -9672,7 +9672,7 @@ function renderDashAvance(){
   const items = PA_ITEMS.filter(a=>a.responsable);
 
   const porPersona = {};
-  PA_MEMBERS.forEach(m=>{ porPersona[m] = { aTiempo:0, tarde:0, vencidas:0, enRiesgo:0, diasTardeSum:0, diasTardeCount:0, sinFecha:0 }; });
+  PA_MEMBERS.forEach(m=>{ porPersona[m] = { aTiempo:0, tarde:0, vencidas:0, enRiesgo:0, enColaRiesgo:0, diasTardeSum:0, diasTardeCount:0, sinFecha:0 }; });
 
   items.forEach(a=>{
     const p = porPersona[a.responsable];
@@ -9689,6 +9689,13 @@ function renderDashAvance(){
         }
       } else {
         p.sinFecha++;
+      }
+    } else if(a.estatus==='Sin iniciar'){
+      // Aún no arranca: no cuenta como incumplimiento real (su fecha de inicio programada puede correrse),
+      // pero si su fecha de término ya está encima o pasó, es una señal temprana de riesgo de retraso.
+      if(a.fechaTermino){
+        const diasParaVencer = (paWorkdays(hoyStr, a.fechaTermino)||1)-1;
+        if(a.fechaTermino < hoyStr || diasParaVencer<=3) p.enColaRiesgo++;
       }
     } else {
       if(a.fechaTermino && a.fechaTermino < hoyStr){
@@ -9712,12 +9719,14 @@ function renderDashAvance(){
   const avgEquipo = conDatos.length ? Math.round(conDatos.reduce((s,r)=>s+r.pct,0)/conDatos.length) : 0;
   const totalVencidas = resumen.reduce((s,r)=>s+r.vencidas,0);
   const totalEnRiesgo = resumen.reduce((s,r)=>s+r.enRiesgo,0);
+  const totalEnColaRiesgo = resumen.reduce((s,r)=>s+r.enColaRiesgo,0);
 
   const redFlags = [];
   resumen.forEach(r=>{
     if(r.vencidas>=1) redFlags.push({sev:r.vencidas>=2?2:1, msg:`${r.nombre.split(' ').slice(0,2).join(' ')} tiene ${r.vencidas} actividad${r.vencidas>1?'es':''} vencida${r.vencidas>1?'s':''} sin terminar`});
     if(r.pct!==null && r.pct<70) redFlags.push({sev:2, msg:`${r.nombre.split(' ').slice(0,2).join(' ')} tiene un cumplimiento de solo ${r.pct}% en sus entregas — bajo rendimiento`});
     if(r.enRiesgo>=1) redFlags.push({sev:1, msg:`${r.nombre.split(' ').slice(0,2).join(' ')} tiene ${r.enRiesgo} actividad${r.enRiesgo>1?'es':''} por vencer en los próximos 3 días`});
+    if(r.enColaRiesgo>=1) redFlags.push({sev:0, msg:`${r.nombre.split(' ').slice(0,2).join(' ')} tiene ${r.enColaRiesgo} actividad${r.enColaRiesgo>1?'es':''} sin iniciar con fecha de término encima — riesgo de retraso si no arranca pronto`});
     if(r.promedioDiasTarde>=5) redFlags.push({sev:2, msg:`${r.nombre.split(' ').slice(0,2).join(' ')} entrega en promedio ${r.promedioDiasTarde} días hábiles tarde cuando no cumple la fecha`});
   });
   redFlags.sort((a,b)=>b.sev-a.sev);
@@ -9725,16 +9734,17 @@ function renderDashAvance(){
   let html = `
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px">
     <div class="kpi ${avgEquipo>=85?'kg':avgEquipo>=70?'ka':'kr'}"><div class="kl">Cumplimiento del equipo</div><div class="kv">${avgEquipo}%</div><div class="kd">entregas a tiempo</div></div>
-    <div class="kpi ${totalVencidas?'kr':'kg'}"><div class="kl">Actividades vencidas</div><div class="kv">${totalVencidas}</div><div class="kd">sin terminar, ya pasó la fecha</div></div>
+    <div class="kpi ${totalVencidas?'kr':'kg'}"><div class="kl">Actividades vencidas</div><div class="kv">${totalVencidas}</div><div class="kd">ya iniciadas, pasó la fecha</div></div>
     <div class="kpi ${totalEnRiesgo?'ka':'kg'}"><div class="kl">Por vencer</div><div class="kv">${totalEnRiesgo}</div><div class="kd">en los próximos 3 días</div></div>
+    <div class="kpi ${totalEnColaRiesgo?'ka':'kg'}"><div class="kl">Sin iniciar, en riesgo</div><div class="kv">${totalEnColaRiesgo}</div><div class="kd">aún no arrancan, fecha encima</div></div>
   </div>
 
   <div class="panel" style="margin-bottom:20px;border-color:${redFlags.length?'rgba(255,92,92,.4)':'rgba(61,214,140,.3)'}">
     <div class="ph"><div class="pt">🚩 Alertas</div></div>
     <div style="padding:14px 17px">
     ${redFlags.length ? redFlags.map(f=>`
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px;background:${f.sev>=2?'rgba(255,92,92,.08)':'rgba(245,166,35,.08)'};border:0.5px solid ${f.sev>=2?'rgba(255,92,92,.3)':'rgba(245,166,35,.3)'};border-radius:8px">
-        <span style="font-size:14px">${f.sev>=2?'🚩':'⚠️'}</span>
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px;background:${f.sev>=2?'rgba(255,92,92,.08)':f.sev===1?'rgba(245,166,35,.08)':'rgba(255,255,255,.04)'};border:0.5px solid ${f.sev>=2?'rgba(255,92,92,.3)':f.sev===1?'rgba(245,166,35,.3)':'var(--border)'};border-radius:8px">
+        <span style="font-size:14px">${f.sev>=2?'🚩':f.sev===1?'⚠️':'🕓'}</span>
         <div style="font-size:11.5px;color:var(--text)">${f.msg}</div>
       </div>`).join('') : `<div style="font-size:12px;color:var(--green)">✅ Sin alertas — el equipo está cumpliendo sus fechas comprometidas.</div>`}
     </div>
@@ -9766,6 +9776,7 @@ function renderDashAvance(){
         <th style="padding:6px 8px;color:var(--dim);text-align:center">🟠 Entregado tarde</th>
         <th style="padding:6px 8px;color:var(--dim);text-align:center">🚩 Vencidas</th>
         <th style="padding:6px 8px;color:var(--dim);text-align:center">⚠️ Por vencer</th>
+        <th style="padding:6px 8px;color:var(--dim);text-align:center">🕓 Sin iniciar, en riesgo</th>
         <th style="padding:6px 8px;color:var(--dim);text-align:center">Prom. días tarde</th>
       </tr></thead>
       <tbody>
@@ -9776,11 +9787,12 @@ function renderDashAvance(){
             <td style="padding:6px 8px;text-align:center;color:${r.tarde?'#f5a623':'var(--dim)'}">${r.tarde}</td>
             <td style="padding:6px 8px;text-align:center;color:${r.vencidas?'var(--red)':'var(--dim)'};font-weight:${r.vencidas?'700':'400'}">${r.vencidas}</td>
             <td style="padding:6px 8px;text-align:center;color:${r.enRiesgo?'#f5a623':'var(--dim)'}">${r.enRiesgo}</td>
+            <td style="padding:6px 8px;text-align:center;color:${r.enColaRiesgo?'var(--muted)':'var(--dim)'}">${r.enColaRiesgo}</td>
             <td style="padding:6px 8px;text-align:center;color:var(--dim)">${r.promedioDiasTarde>0?r.promedioDiasTarde+'d':'—'}</td>
           </tr>`).join('')}
       </tbody>
     </table>
-    <div style="font-size:10.5px;color:var(--dim);margin-top:10px">"A tiempo" y "Entregado tarde" solo cuentan actividades ya terminadas (comparando fecha de término comprometida vs. fecha real de entrega). "Vencidas" y "Por vencer" son actividades activas, aún sin terminar.</div>
+    <div style="font-size:10.5px;color:var(--dim);margin-top:10px">"A tiempo" y "Entregado tarde" solo cuentan actividades ya terminadas (comparando fecha de término comprometida vs. fecha real de entrega), y son la base del % de cumplimiento. "Vencidas" y "Por vencer" son actividades ya <b>iniciadas</b> que no han terminado. "Sin iniciar, en riesgo" son actividades que <b>todavía no arrancan</b> y cuya fecha de término ya está encima o pasó — no cuentan como incumplimiento (su fecha de inicio programada puede correrse), pero vale la pena tenerlas en el radar.</div>
     </div>
   </div>`;
 
