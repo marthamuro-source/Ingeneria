@@ -1262,6 +1262,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           <div class="dash-subtab" onclick="dashSubtab('productividad')">⚡ Productividad</div>
           <div class="dash-subtab" onclick="dashSubtab('calidad')">⭐ Calidad</div>
           <div class="dash-subtab" onclick="dashSubtab('udemy')">🎓 Udemy</div>
+          <div class="dash-subtab" onclick="dashSubtab('avance')">📈 Avance</div>
           <div class="dash-subtab" onclick="dashSubtab('reporteo2')">✅ Reporteo 2</div>
         </div>
 
@@ -1336,6 +1337,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
             </div>
           </div>
           <div id="dashReporteoMount"></div>
+        </div>
+
+        <!-- Sub-vista: Avance (cumplimiento de fechas por proyectista, tomado de Panel de Seguimiento) -->
+        <div id="dashSub-avance" class="dash-subview" style="display:none">
+          <div id="dashAvanceMount"></div>
         </div>
 
         <!-- Sub-vista: Reporteo 2 (cumplimiento de reporte diario, tomado de Panel de Seguimiento) -->
@@ -1581,6 +1587,35 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <div class="pa-modal-ft">
         <button class="pa-modal-close" style="font-size:13px;padding:8px 16px;border:1px solid var(--border);border-radius:8px" onclick="dashRep2CerrarModal()">Cancelar</button>
         <button class="herr-manage-btn" onclick="dashRep2GenerarPDF()">📄 Generar PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Generar reporte de Udemy -->
+  <div class="pa-modal-bg" id="dashUdRepModalBg">
+    <div class="pa-modal" style="max-width:480px">
+      <div class="pa-modal-hd">
+        <div class="pa-modal-title">Generar reporte de Udemy</div>
+        <button class="pa-modal-close" onclick="dashUdRepCerrarModal()">&times;</button>
+      </div>
+      <div class="pa-modal-body">
+        <div class="pa-field">
+          <label>Periodo (referencia del reporte)</label>
+          <select id="dashUdRepPeriodo">
+            <option value="mes_actual">Mes en curso</option>
+            <option value="ultimo_mes">Último mes</option>
+            <option value="q1">Q1 (Ene – Mar)</option>
+            <option value="q2">Q2 (Abr – Jun)</option>
+            <option value="q3">Q3 (Jul – Sep)</option>
+            <option value="q4">Q4 (Oct – Dic)</option>
+            <option value="historial">Historial completo</option>
+          </select>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">El progreso de Udemy se guarda como estado actual (no día por día), así que el reporte siempre refleja el avance más reciente — el periodo elegido solo se usa como referencia en el encabezado del PDF.</div>
+      </div>
+      <div class="pa-modal-ft">
+        <button class="pa-modal-close" style="font-size:13px;padding:8px 16px;border:1px solid var(--border);border-radius:8px" onclick="dashUdRepCerrarModal()">Cancelar</button>
+        <button class="herr-manage-btn" onclick="dashUdRepGenerarPDF()">📄 Generar PDF</button>
       </div>
     </div>
   </div>
@@ -8699,12 +8734,12 @@ function dashBackToGaleria(){
 function dashSubtab(tab){
   dashActiveSubtab = tab;
   document.querySelectorAll('.dash-subtab').forEach(t=>t.classList.remove('on'));
-  const btnMap = {resumen:0, productividad:1, calidad:2, udemy:3, reporteo2:4};
+  const btnMap = {resumen:0, productividad:1, calidad:2, udemy:3, avance:4, reporteo2:5};
   const btns = document.querySelectorAll('.dash-subtab');
   if(btns[btnMap[tab]]) btns[btnMap[tab]].classList.add('on');
 
   // Ocultar todas las sub-vistas
-  ['resumen','productividad','calidad','udemy','reporteo','reporteo2'].forEach(t=>{
+  ['resumen','productividad','calidad','udemy','avance','reporteo','reporteo2'].forEach(t=>{
     const el = document.getElementById('dashSub-'+t);
     if(el) el.style.display = (t===tab) ? '' : 'none';
   });
@@ -8712,6 +8747,7 @@ function dashSubtab(tab){
   // Para calidad: mover (reparent) el contenido real la primera vez
   if(tab==='calidad') dashMountReal('calidad','v-calidad');
   if(tab==='udemy') renderDashUdemyExec();
+  if(tab==='avance') renderDashAvance();
   if(tab==='reporteo2') renderDashReporteo2();
   if(tab==='resumen') renderDashResumen();
   if(tab==='productividad') renderDashProductividad();
@@ -9627,6 +9663,130 @@ function renderDashReporteo2(){
   }
 }
 
+// ── Avance: cumplimiento de fechas por proyectista (fuente: Panel de Seguimiento — actividades/subtareas) ──
+function renderDashAvance(){
+  const mount = document.getElementById('dashAvanceMount');
+  if(!mount) return;
+
+  const hoyStr = repDateKey(new Date());
+  const items = PA_ITEMS.filter(a=>a.responsable);
+
+  const porPersona = {};
+  PA_MEMBERS.forEach(m=>{ porPersona[m] = { aTiempo:0, tarde:0, vencidas:0, enRiesgo:0, diasTardeSum:0, diasTardeCount:0, sinFecha:0 }; });
+
+  items.forEach(a=>{
+    const p = porPersona[a.responsable];
+    if(!p) return;
+    if(a.estatus==='Terminado'){
+      if(a.fechaReal && a.fechaTermino){
+        if(a.fechaReal<=a.fechaTermino){
+          p.aTiempo++;
+        } else {
+          p.tarde++;
+          const diasTarde = Math.max((paWorkdays(a.fechaTermino,a.fechaReal)||1)-1, 1);
+          p.diasTardeSum += diasTarde;
+          p.diasTardeCount++;
+        }
+      } else {
+        p.sinFecha++;
+      }
+    } else {
+      if(a.fechaTermino && a.fechaTermino < hoyStr){
+        p.vencidas++;
+      } else if(a.fechaTermino){
+        const diasParaVencer = (paWorkdays(hoyStr, a.fechaTermino)||1)-1;
+        if(diasParaVencer>=0 && diasParaVencer<=3) p.enRiesgo++;
+      }
+    }
+  });
+
+  const resumen = PA_MEMBERS.map(m=>{
+    const p = porPersona[m];
+    const totalResuelto = p.aTiempo + p.tarde + p.vencidas;
+    const pct = totalResuelto>0 ? Math.round(p.aTiempo/totalResuelto*100) : null;
+    const promedioDiasTarde = p.diasTardeCount>0 ? Math.round((p.diasTardeSum/p.diasTardeCount)*10)/10 : 0;
+    return { nombre:m, ...p, pct, totalResuelto, promedioDiasTarde };
+  }).sort((a,b)=>(b.pct===null?-1:b.pct)-(a.pct===null?-1:a.pct));
+
+  const conDatos = resumen.filter(r=>r.pct!==null);
+  const avgEquipo = conDatos.length ? Math.round(conDatos.reduce((s,r)=>s+r.pct,0)/conDatos.length) : 0;
+  const totalVencidas = resumen.reduce((s,r)=>s+r.vencidas,0);
+  const totalEnRiesgo = resumen.reduce((s,r)=>s+r.enRiesgo,0);
+
+  const redFlags = [];
+  resumen.forEach(r=>{
+    if(r.vencidas>=1) redFlags.push({sev:r.vencidas>=2?2:1, msg:`${r.nombre.split(' ').slice(0,2).join(' ')} tiene ${r.vencidas} actividad${r.vencidas>1?'es':''} vencida${r.vencidas>1?'s':''} sin terminar`});
+    if(r.pct!==null && r.pct<70) redFlags.push({sev:2, msg:`${r.nombre.split(' ').slice(0,2).join(' ')} tiene un cumplimiento de solo ${r.pct}% en sus entregas — bajo rendimiento`});
+    if(r.enRiesgo>=1) redFlags.push({sev:1, msg:`${r.nombre.split(' ').slice(0,2).join(' ')} tiene ${r.enRiesgo} actividad${r.enRiesgo>1?'es':''} por vencer en los próximos 3 días`});
+    if(r.promedioDiasTarde>=5) redFlags.push({sev:2, msg:`${r.nombre.split(' ').slice(0,2).join(' ')} entrega en promedio ${r.promedioDiasTarde} días hábiles tarde cuando no cumple la fecha`});
+  });
+  redFlags.sort((a,b)=>b.sev-a.sev);
+
+  let html = `
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px">
+    <div class="kpi ${avgEquipo>=85?'kg':avgEquipo>=70?'ka':'kr'}"><div class="kl">Cumplimiento del equipo</div><div class="kv">${avgEquipo}%</div><div class="kd">entregas a tiempo</div></div>
+    <div class="kpi ${totalVencidas?'kr':'kg'}"><div class="kl">Actividades vencidas</div><div class="kv">${totalVencidas}</div><div class="kd">sin terminar, ya pasó la fecha</div></div>
+    <div class="kpi ${totalEnRiesgo?'ka':'kg'}"><div class="kl">Por vencer</div><div class="kv">${totalEnRiesgo}</div><div class="kd">en los próximos 3 días</div></div>
+  </div>
+
+  <div class="panel" style="margin-bottom:20px;border-color:${redFlags.length?'rgba(255,92,92,.4)':'rgba(61,214,140,.3)'}">
+    <div class="ph"><div class="pt">🚩 Alertas</div></div>
+    <div style="padding:14px 17px">
+    ${redFlags.length ? redFlags.map(f=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px;background:${f.sev>=2?'rgba(255,92,92,.08)':'rgba(245,166,35,.08)'};border:0.5px solid ${f.sev>=2?'rgba(255,92,92,.3)':'rgba(245,166,35,.3)'};border-radius:8px">
+        <span style="font-size:14px">${f.sev>=2?'🚩':'⚠️'}</span>
+        <div style="font-size:11.5px;color:var(--text)">${f.msg}</div>
+      </div>`).join('') : `<div style="font-size:12px;color:var(--green)">✅ Sin alertas — el equipo está cumpliendo sus fechas comprometidas.</div>`}
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:20px">
+    <div class="ph"><div class="pt">Cumplimiento de fechas por proyectista</div></div>
+    <div style="padding:14px 17px">
+    ${resumen.map(r=>{
+      const color = r.pct===null?'var(--dim)':r.pct>=85?'var(--green)':r.pct>=70?'#f5a623':'var(--red)';
+      return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+        <div style="width:150px;font-size:12px;color:var(--text);flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nombre.split(' ').slice(0,2).join(' ')}</div>
+        <div style="flex:1;height:14px;background:rgba(255,255,255,.06);border-radius:7px;overflow:hidden">
+          ${r.pct===null?'':`<div style="height:100%;width:${r.pct}%;background:${color};border-radius:7px;transition:width .3s"></div>`}
+        </div>
+        <div style="width:130px;text-align:right;font-size:11.5px;font-weight:600;color:${color};flex-shrink:0">${r.pct===null?'Sin historial':r.pct+'% ('+r.aTiempo+'/'+r.totalResuelto+')'}</div>
+      </div>`;
+    }).join('')}
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="ph"><div class="pt">Detalle por proyectista</div></div>
+    <div style="padding:14px 17px;overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead><tr>
+        <th style="text-align:left;padding:6px 8px;color:var(--dim)">Proyectista</th>
+        <th style="padding:6px 8px;color:var(--dim);text-align:center">✅ A tiempo</th>
+        <th style="padding:6px 8px;color:var(--dim);text-align:center">🟠 Entregado tarde</th>
+        <th style="padding:6px 8px;color:var(--dim);text-align:center">🚩 Vencidas</th>
+        <th style="padding:6px 8px;color:var(--dim);text-align:center">⚠️ Por vencer</th>
+        <th style="padding:6px 8px;color:var(--dim);text-align:center">Prom. días tarde</th>
+      </tr></thead>
+      <tbody>
+        ${resumen.map(r=>`
+          <tr style="border-top:1px solid var(--border)">
+            <td style="padding:6px 8px;color:var(--text)">${r.nombre.split(' ').slice(0,2).join(' ')}</td>
+            <td style="padding:6px 8px;text-align:center;color:var(--green)">${r.aTiempo}</td>
+            <td style="padding:6px 8px;text-align:center;color:${r.tarde?'#f5a623':'var(--dim)'}">${r.tarde}</td>
+            <td style="padding:6px 8px;text-align:center;color:${r.vencidas?'var(--red)':'var(--dim)'};font-weight:${r.vencidas?'700':'400'}">${r.vencidas}</td>
+            <td style="padding:6px 8px;text-align:center;color:${r.enRiesgo?'#f5a623':'var(--dim)'}">${r.enRiesgo}</td>
+            <td style="padding:6px 8px;text-align:center;color:var(--dim)">${r.promedioDiasTarde>0?r.promedioDiasTarde+'d':'—'}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+    <div style="font-size:10.5px;color:var(--dim);margin-top:10px">"A tiempo" y "Entregado tarde" solo cuentan actividades ya terminadas (comparando fecha de término comprometida vs. fecha real de entrega). "Vencidas" y "Por vencer" son actividades activas, aún sin terminar.</div>
+    </div>
+  </div>`;
+
+  mount.innerHTML = html;
+}
+
 // ── Resumen ejecutivo de Udemy (Dashboards > Equipo & Productividad > Udemy) ──
 // Usa la misma fuente de datos que Panel de Seguimiento > Udemy (UD_STATUS_LOCAL / udGetStatus)
 function renderDashUdemyExec(){
@@ -9656,12 +9816,69 @@ function renderDashUdemyExec(){
   const sinCuentaLista = perPerson.filter(p=>p.sinCuenta);
   const completos = perPerson.filter(p=>p.pct===100 && p.total>0).length;
 
+  // Avance por curso (quién ya lo terminó, % del equipo con acceso)
+  const porCurso = allCourses.map(c=>{
+    let done=0, inprog=0, total=0;
+    UD_TEAM.forEach(p=>{
+      const s = udGetStatus(p, c.name);
+      if(s==='noaccount') return;
+      total++;
+      if(s==='done') done++;
+      else if(s==='inprogress') inprog++;
+    });
+    const pct = total>0 ? Math.round(done/total*100) : 0;
+    return {nombre:c.name, duracion:c.duracion, done, inprog, total, pct};
+  }).sort((a,b)=>b.pct-a.pct);
+
+  // Red flags
+  const redFlags = [];
+  porCurso.forEach(c=>{
+    if(c.total>0 && c.done===0){
+      redFlags.push({tipo:'curso', msg:`Nadie del equipo ha terminado "${c.nombre}" todavía`});
+    }
+  });
+  perPerson.forEach(p=>{
+    if(!p.sinCuenta && p.total>0 && p.done===0 && p.inprog===0){
+      redFlags.push({tipo:'persona', msg:`${p.nombre.split(' ').slice(0,2).join(' ')} no ha avanzado en ningún curso (0 iniciados)`});
+    }
+  });
+  sinCuentaLista.forEach(p=>{
+    redFlags.push({tipo:'cuenta', msg:`${p.nombre.split(' ').slice(0,2).join(' ')} no tiene cuenta de Udemy activa`});
+  });
+
   let html = `
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px">
     <div class="kpi kb"><div class="kl">Avance general</div><div class="kv">${avgPct}%</div><div class="kd">del equipo</div></div>
     <div class="kpi ${completos===UD_TEAM.length && UD_TEAM.length>0 ?'kg':'ka'}"><div class="kl">100% completado</div><div class="kv">${completos}/${UD_TEAM.length}</div><div class="kd">proyectistas</div></div>
     <div class="kpi ${sinCuentaLista.length?'kr':'kg'}"><div class="kl">Sin cuenta Udemy</div><div class="kv">${sinCuentaLista.length}</div><div class="kd" style="max-width:200px">${sinCuentaLista.length? sinCuentaLista.map(p=>p.nombre.split(' ')[0]).join(', ') : 'todos con acceso'}</div></div>
     <div class="kpi ka"><div class="kl">Cursos asignados</div><div class="kv">${allCourses.length}</div><div class="kd">por proyectista</div></div>
+  </div>
+
+  <div class="panel" style="margin-bottom:20px;border-color:${redFlags.length?'rgba(255,92,92,.4)':'rgba(61,214,140,.3)'}">
+    <div class="ph"><div class="pt">🚩 Alertas</div></div>
+    <div style="padding:14px 17px">
+    ${redFlags.length ? redFlags.map(f=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px;background:rgba(255,92,92,.06);border:0.5px solid rgba(255,92,92,.25);border-radius:8px">
+        <span style="font-size:14px">🚩</span>
+        <div style="font-size:11.5px;color:var(--text)">${f.msg}</div>
+      </div>`).join('') : `<div style="font-size:12px;color:var(--green)">✅ Sin alertas — el equipo tiene acceso y avance en todos los cursos.</div>`}
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:20px">
+    <div class="ph"><div class="pt">Avance por curso — % del equipo que ya lo terminó</div></div>
+    <div style="padding:14px 17px">
+    ${porCurso.map(c=>{
+      const color = c.pct>=90?'var(--green)':c.pct>=50?'#f5a623':'var(--red)';
+      return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+        <div style="width:230px;font-size:11.5px;color:var(--text);flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${c.nombre}">${c.nombre}</div>
+        <div style="flex:1;height:14px;background:rgba(255,255,255,.06);border-radius:7px;overflow:hidden">
+          <div style="height:100%;width:${c.pct}%;background:${color};border-radius:7px;transition:width .3s"></div>
+        </div>
+        <div style="width:95px;text-align:right;font-size:11.5px;font-weight:600;color:${color};flex-shrink:0">${c.pct}% (${c.done}/${c.total})</div>
+      </div>`;
+    }).join('')}
+    </div>
   </div>
 
   <div class="panel">
@@ -9678,9 +9895,138 @@ function renderDashUdemyExec(){
       </div>`;
     }).join('')}
     </div>
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;margin-top:16px" id="dashUdRepBtnWrap">
+    <button class="pa-btn pa-btn-primary" onclick="dashUdRepAbrirModal()">📄 Generar reporte</button>
   </div>`;
 
   mount.innerHTML = html;
+  if(_userRole==='proyectista'){
+    const wrap = document.getElementById('dashUdRepBtnWrap');
+    if(wrap) wrap.style.display='none';
+  }
+}
+
+// ── Generar reporte de Udemy (snapshot actual, con periodo como referencia) ──
+function dashUdRepAbrirModal(){
+  document.getElementById('dashUdRepPeriodo').value = 'mes_actual';
+  document.getElementById('dashUdRepModalBg').classList.add('open');
+}
+function dashUdRepCerrarModal(){
+  document.getElementById('dashUdRepModalBg').classList.remove('open');
+}
+function dashUdRepGenerarPDF(){
+  const periodoSel = document.getElementById('dashUdRepPeriodo').value;
+  const labels = {
+    mes_actual:'Mes en curso', ultimo_mes:'Último mes',
+    q1:'Q1 (Ene – Mar)', q2:'Q2 (Abr – Jun)', q3:'Q3 (Jul – Sep)', q4:'Q4 (Oct – Dic)',
+    historial:'Historial completo'
+  };
+  const label = labels[periodoSel] || periodoSel;
+
+  if(typeof udLoadLocal==='function') udLoadLocal();
+  const cats = typeof udGetEffectiveCats==='function' ? udGetEffectiveCats() : {};
+  const allCourses = Object.values(cats).flat();
+
+  const perPerson = UD_TEAM.map(p=>{
+    let done=0, inprog=0, noaccount=0, total=0;
+    allCourses.forEach(c=>{
+      const s = udGetStatus(p, c.name);
+      if(s==='noaccount'){ noaccount++; return; }
+      total++;
+      if(s==='done') done++;
+      else if(s==='inprogress') inprog++;
+    });
+    const pct = total>0 ? Math.round(done/total*100) : 0;
+    const sinCuenta = allCourses.length>0 && noaccount===allCourses.length;
+    return {nombre:p, done, inprog, total, pct, sinCuenta};
+  }).sort((a,b)=>b.pct-a.pct);
+
+  const porCurso = allCourses.map(c=>{
+    let done=0, total=0;
+    UD_TEAM.forEach(p=>{
+      const s = udGetStatus(p, c.name);
+      if(s==='noaccount') return;
+      total++;
+      if(s==='done') done++;
+    });
+    const pct = total>0 ? Math.round(done/total*100) : 0;
+    return {nombre:c.name, done, total, pct};
+  }).sort((a,b)=>b.pct-a.pct);
+
+  const totalDone = perPerson.reduce((s,p)=>s+p.done,0);
+  const totalAsignado = perPerson.reduce((s,p)=>s+p.total,0);
+  const avgPct = totalAsignado>0 ? Math.round(totalDone/totalAsignado*100) : 0;
+  const sinCuentaLista = perPerson.filter(p=>p.sinCuenta);
+
+  const redFlags = [];
+  porCurso.forEach(c=>{ if(c.total>0 && c.done===0) redFlags.push(`Nadie del equipo ha terminado "${c.nombre}" todavía`); });
+  perPerson.forEach(p=>{ if(!p.sinCuenta && p.total>0 && p.done===0 && p.inprog===0) redFlags.push(`${p.nombre.split(' ').slice(0,2).join(' ')} no ha avanzado en ningún curso`); });
+  sinCuentaLista.forEach(p=>redFlags.push(`${p.nombre.split(' ').slice(0,2).join(' ')} no tiene cuenta de Udemy activa`));
+
+  const genStr = new Date().toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Reporte de Udemy — ${label}</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:12px;color:#1a1a2e;background:#fff;padding:24px}
+    .hdr{display:flex;justify-content:space-between;border-bottom:3px solid #0f2744;padding-bottom:10px;margin-bottom:16px}
+    .logo{font-size:18px;font-weight:900;color:#0f2744}
+    .rtitle{text-align:right}.rtitle h1{font-size:15px;font-weight:700}
+    .rtitle p{font-size:10px;color:#6b7280;margin-top:2px}
+    .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+    .kpi{background:#f8fafc;border:1px solid #e2eaf3;border-radius:8px;padding:12px 14px;text-align:center}
+    .kpi .v{font-size:22px;font-weight:800;color:#0f2744}
+    .kpi .l{font-size:9.5px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+    .sec{font-size:11px;font-weight:700;text-transform:uppercase;color:#0f2744;border-bottom:2px solid #0f2744;padding:6px 0;margin:16px 0 10px}
+    .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+    .bar-name{width:230px;font-size:11px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .bar-track{flex:1;height:12px;background:#eef1f6;border-radius:6px;overflow:hidden}
+    .bar-fill{height:100%;border-radius:6px}
+    .bar-pct{width:90px;text-align:right;font-size:11px;font-weight:700}
+    .flag{padding:6px 10px;margin-bottom:5px;background:#fff5f5;border:1px solid #ffd6d6;border-radius:6px;font-size:10.5px;color:#7a1f1f}
+    .pbt{text-align:center;margin:20px 0}
+    .pbt button{padding:9px 24px;background:#0f2744;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
+    @media print{.pbt{display:none}@page{margin:.6cm;size:landscape}}
+  </style></head><body>
+  <div class="hdr">
+    <div><div class="logo">C3NTRO Telecom</div><div style="font-size:11px;color:#6b7280;margin-top:2px">Coordinación de Ingeniería</div></div>
+    <div class="rtitle"><h1>Reporte de Avance — Udemy</h1><p>${label} (snapshot actual)<br>Generado el ${genStr}</p></div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="v">${avgPct}%</div><div class="l">Avance general del equipo</div></div>
+    <div class="kpi"><div class="v">${allCourses.length}</div><div class="l">Cursos asignados por proyectista</div></div>
+    <div class="kpi"><div class="v">${sinCuentaLista.length}</div><div class="l">Proyectistas sin cuenta activa</div></div>
+  </div>
+  ${redFlags.length ? `<div class="sec">🚩 Alertas</div>${redFlags.map(f=>`<div class="flag">🚩 ${f}</div>`).join('')}` : `<div class="sec">🚩 Alertas</div><div style="font-size:11px;color:#1a7f4b">✅ Sin alertas — el equipo tiene acceso y avance en todos los cursos.</div>`}
+  <div class="sec">Avance por curso</div>
+  ${porCurso.map(c=>{
+    const color = c.pct>=90?'#1a7f4b':c.pct>=50?'#b8860b':'#c0392b';
+    return `<div class="bar-row">
+      <div class="bar-name" title="${c.nombre}">${c.nombre}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${c.pct}%;background:${color}"></div></div>
+      <div class="bar-pct" style="color:${color}">${c.pct}% (${c.done}/${c.total})</div>
+    </div>`;
+  }).join('')}
+  <div class="sec">Avance por proyectista</div>
+  ${perPerson.map(p=>{
+    const color = p.sinCuenta?'#9ca3af':p.pct>=90?'#1a7f4b':p.pct>=50?'#b8860b':'#c0392b';
+    return `<div class="bar-row">
+      <div class="bar-name">${p.nombre.split(' ').slice(0,2).join(' ')}</div>
+      <div class="bar-track">${p.sinCuenta?'':`<div class="bar-fill" style="width:${p.pct}%;background:${color}"></div>`}</div>
+      <div class="bar-pct" style="color:${color}">${p.sinCuenta?'Sin cuenta':p.pct+'% ('+p.done+'/'+p.total+')'}</div>
+    </div>`;
+  }).join('')}
+  <div class="pbt"><button onclick="window.print()">Exportar PDF / Imprimir</button></div>
+  <scr`+`ipt>window.onload=()=>window.print();</scr`+`ipt>
+  </body></html>`;
+
+  const blob = new Blob([html], {type:'text/html;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if(!win) alert('Permite ventanas emergentes para generar el PDF.');
+  setTimeout(()=>URL.revokeObjectURL(url), 60000);
+  dashUdRepCerrarModal();
 }
 
 // ── Generar reporte de cumplimiento (Reporteo 2) por periodo ──
