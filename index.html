@@ -1295,13 +1295,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           <div id="dashCalidadMount"></div>
         </div>
 
-        <!-- Sub-vista: Udemy (vacía a propósito — Raquel meterá contenido nuevo aquí) -->
+        <!-- Sub-vista: Udemy (resumen ejecutivo, datos de Panel de Seguimiento > Udemy) -->
         <div id="dashSub-udemy" class="dash-subview" style="display:none">
-          <div style="padding:60px 20px;text-align:center;color:var(--dim)">
-            <div style="font-size:28px;margin-bottom:10px">🎓</div>
-            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">Udemy</div>
-            <div style="font-size:12px">Este espacio está reservado para nueva información. Avísame qué quieres mostrar aquí.</div>
-          </div>
+          <div id="dashUdemyExecMount"></div>
           <div style="display:none">
             <div class="dash-csv-loader" id="csvZone4">
               <label class="dash-csv-lbl" id="dropLbl4" for="csvInput4">
@@ -8715,6 +8711,7 @@ function dashSubtab(tab){
 
   // Para calidad: mover (reparent) el contenido real la primera vez
   if(tab==='calidad') dashMountReal('calidad','v-calidad');
+  if(tab==='udemy') renderDashUdemyExec();
   if(tab==='reporteo2') renderDashReporteo2();
   if(tab==='resumen') renderDashResumen();
   if(tab==='productividad') renderDashProductividad();
@@ -9628,6 +9625,62 @@ function renderDashReporteo2(){
     const wrap = document.getElementById('dashRep2GenBtnWrap');
     if(wrap) wrap.style.display='none';
   }
+}
+
+// ── Resumen ejecutivo de Udemy (Dashboards > Equipo & Productividad > Udemy) ──
+// Usa la misma fuente de datos que Panel de Seguimiento > Udemy (UD_STATUS_LOCAL / udGetStatus)
+function renderDashUdemyExec(){
+  const mount = document.getElementById('dashUdemyExecMount');
+  if(!mount) return;
+  if(typeof udLoadLocal==='function') udLoadLocal();
+  const cats = typeof udGetEffectiveCats==='function' ? udGetEffectiveCats() : {};
+  const allCourses = Object.values(cats).flat();
+
+  const perPerson = UD_TEAM.map(p=>{
+    let done=0, inprog=0, noaccount=0, total=0;
+    allCourses.forEach(c=>{
+      const s = udGetStatus(p, c.name);
+      if(s==='noaccount'){ noaccount++; return; }
+      total++;
+      if(s==='done') done++;
+      else if(s==='inprogress') inprog++;
+    });
+    const pct = total>0 ? Math.round(done/total*100) : 0;
+    const sinCuenta = allCourses.length>0 && noaccount===allCourses.length;
+    return {nombre:p, done, inprog, total, pct, sinCuenta};
+  }).sort((a,b)=>b.pct-a.pct);
+
+  const totalDone = perPerson.reduce((s,p)=>s+p.done,0);
+  const totalAsignado = perPerson.reduce((s,p)=>s+p.total,0);
+  const avgPct = totalAsignado>0 ? Math.round(totalDone/totalAsignado*100) : 0;
+  const sinCuentaLista = perPerson.filter(p=>p.sinCuenta);
+  const completos = perPerson.filter(p=>p.pct===100 && p.total>0).length;
+
+  let html = `
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px">
+    <div class="kpi kb"><div class="kl">Avance general</div><div class="kv">${avgPct}%</div><div class="kd">del equipo</div></div>
+    <div class="kpi ${completos===UD_TEAM.length && UD_TEAM.length>0 ?'kg':'ka'}"><div class="kl">100% completado</div><div class="kv">${completos}/${UD_TEAM.length}</div><div class="kd">proyectistas</div></div>
+    <div class="kpi ${sinCuentaLista.length?'kr':'kg'}"><div class="kl">Sin cuenta Udemy</div><div class="kv">${sinCuentaLista.length}</div><div class="kd" style="max-width:200px">${sinCuentaLista.length? sinCuentaLista.map(p=>p.nombre.split(' ')[0]).join(', ') : 'todos con acceso'}</div></div>
+    <div class="kpi ka"><div class="kl">Cursos asignados</div><div class="kv">${allCourses.length}</div><div class="kd">por proyectista</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="ph"><div class="pt">Avance por proyectista</div></div>
+    <div style="padding:14px 17px">
+    ${perPerson.map(p=>{
+      const color = p.sinCuenta?'var(--dim)':p.pct>=90?'var(--green)':p.pct>=50?'#f5a623':'var(--red)';
+      return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+        <div style="width:150px;font-size:12px;color:var(--text);flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nombre.split(' ').slice(0,2).join(' ')}</div>
+        <div style="flex:1;height:14px;background:rgba(255,255,255,.06);border-radius:7px;overflow:hidden">
+          ${p.sinCuenta?'':`<div style="height:100%;width:${p.pct}%;background:${color};border-radius:7px;transition:width .3s"></div>`}
+        </div>
+        <div style="width:110px;text-align:right;font-size:11.5px;font-weight:600;color:${color};flex-shrink:0">${p.sinCuenta?'Sin cuenta':p.pct+'% ('+p.done+'/'+p.total+')'}</div>
+      </div>`;
+    }).join('')}
+    </div>
+  </div>`;
+
+  mount.innerHTML = html;
 }
 
 // ── Generar reporte de cumplimiento (Reporteo 2) por periodo ──
