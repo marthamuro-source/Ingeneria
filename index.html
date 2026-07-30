@@ -5010,6 +5010,45 @@ const CRONO_CATALOGO_DEFAULT = [
 const CRONO_KEY = 'c3ntro_cronograma_v1';
 const CRONO_CAT_KEY = 'c3ntro_crono_catalogo_v1';
 let CRONO_ITEMS = []; // actividades con cronograma
+
+// ── Justificaciones de días no reportados (solo admin/jefe puede crear, visible para todos) ──
+let JUSTIFICACIONES = {}; // key `${fecha}|${persona}` -> {motivo, justificadoPor, creado}
+function justKey(fecha, persona){ return fecha+'|'+persona; }
+function justGet(fecha, persona){ return JUSTIFICACIONES[justKey(fecha,persona)] || null; }
+async function justLoad(){
+  if(!_supa) return;
+  try{
+    const { data, error } = await _supa.from('justificaciones_reporte').select('*');
+    if(error){ console.warn('justLoad error:', error); return; }
+    JUSTIFICACIONES = {};
+    (data||[]).forEach(row=>{
+      JUSTIFICACIONES[justKey(row.fecha, row.persona)] = {
+        motivo: row.motivo || '',
+        justificadoPor: row.justificado_por || '',
+        creado: row.created_at || ''
+      };
+    });
+  }catch(e){ console.warn('justLoad exception:', e); }
+}
+async function justSave(fecha, persona, motivo){
+  JUSTIFICACIONES[justKey(fecha,persona)] = { motivo, justificadoPor: _miNombre||'Admin', creado: new Date().toISOString() };
+  if(!_supa) return;
+  try{
+    const { error } = await _supa.from('justificaciones_reporte').upsert({
+      fecha, persona, motivo, justificado_por: _miNombre||'Admin', created_at: new Date().toISOString()
+    }, {onConflict:'fecha,persona'});
+    if(error){
+      console.error('❌ justSave Supabase:', error);
+      alert('Se guardó localmente en esta sesión, pero no se pudo guardar en Supabase, así que no se aplicará para el resto del equipo.\n\nMotivo: '+(error.message||error.code||'desconocido')+'\n\nEsto normalmente pasa si la tabla "justificaciones_reporte" no existe todavía en tu Supabase. Pídele a Claude que te ayude a crearla.');
+    }
+  }catch(e){ console.error('❌ justSave excepción:', e); }
+}
+async function justRemove(fecha, persona){
+  delete JUSTIFICACIONES[justKey(fecha,persona)];
+  if(!_supa) return;
+  try{ await _supa.from('justificaciones_reporte').delete().eq('fecha',fecha).eq('persona',persona); }
+  catch(e){ console.error('❌ justRemove excepción:', e); }
+}
 let CRONO_CATALOGO = [];
 
 function cronoLoadCatalogo(){
@@ -7008,6 +7047,7 @@ function renderCronoCalProyectista(){
     const esFuturo = fecha>hoyStr;
     const reps = misReportesPorDia[fecha]||[];
     const yaReporto = reps.length>0;
+    const justif = justGet(fecha, _miNombre||'');
 
     // Color según estado
     let bg, border, cursor;
@@ -7017,6 +7057,8 @@ function renderCronoCalProyectista(){
       bg='rgba(255,255,255,.01)'; border='rgba(255,255,255,.04)'; cursor='default';
     } else if(yaReporto){
       bg='rgba(61,214,140,.06)'; border='rgba(61,214,140,.2)'; cursor='pointer';
+    } else if(justif){
+      bg='rgba(192,132,252,.06)'; border='rgba(192,132,252,.2)'; cursor='default';
     } else {
       bg='rgba(255,92,92,.04)'; border='rgba(255,92,92,.15)'; cursor='default';
     }
@@ -7024,11 +7066,13 @@ function renderCronoCalProyectista(){
     const clickFn = esHoy ? `calProySelDia('${fecha}')` : (yaReporto && !esFuturo ? `calProyVerDia('${fecha}')` : '');
 
     html+=`<div onclick="${clickFn}" style="min-height:64px;border-radius:8px;padding:6px;border:0.5px solid ${border};background:${bg};cursor:${cursor};transition:background .15s"
-      ${esHoy?`onmouseover="this.style.background='rgba(74,143,212,.2)'" onmouseout="this.style.background='${bg}'"`:''}>
+      ${esHoy?`onmouseover="this.style.background='rgba(74,143,212,.2)'" onmouseout="this.style.background='${bg}'"`:''}
+      ${justif?`title="🔖 Justificado: ${justif.motivo}"`:''}>
       <div style="font-size:11px;font-weight:${esHoy?'700':'500'};color:${esHoy?'var(--accent)':esFinSem||esFuturo?'rgba(255,255,255,.2)':'var(--text)'}">${d}</div>
       ${esHoy?`<div style="font-size:9px;color:var(--accent);margin-top:3px;font-weight:600">${yaReporto?'✓ Reportado':'→ Reportar'}</div>`:''}
       ${!esHoy && yaReporto?`<div style="font-size:9px;color:var(--green);margin-top:3px">✓ ${reps.length} rep.</div>`:''}
-      ${!esHoy && !yaReporto && !esFinSem && !esFuturo?`<div style="font-size:9px;color:rgba(255,92,92,.5);margin-top:3px">Sin reporte</div>`:''}
+      ${!esHoy && !yaReporto && justif?`<div style="font-size:9px;color:#c084fc;margin-top:3px">🔖 Justificado</div>`:''}
+      ${!esHoy && !yaReporto && !justif && !esFinSem && !esFuturo?`<div style="font-size:9px;color:rgba(255,92,92,.5);margin-top:3px">Sin reporte</div>`:''}
     </div>`;
   }
 
@@ -7358,6 +7402,19 @@ let calMes = new Date().getMonth();
 let calAnio = new Date().getFullYear();
 let calDiaSeleccionado = null;
 
+async function calJustAgregar(fecha, persona, inputId){
+  const input = document.getElementById('justMotivo-'+inputId);
+  const motivo = (input?.value||'').trim();
+  if(!motivo){ alert('Escribe un motivo para justificar este día.'); return; }
+  await justSave(fecha, persona, motivo);
+  renderCronoCalendario();
+}
+async function calJustQuitar(fecha, persona){
+  if(!confirm(`¿Quitar la justificación de ${persona.split(' ')[0]} para el ${fecha}?`)) return;
+  await justRemove(fecha, persona);
+  renderCronoCalendario();
+}
+
 function renderCronoCalendario(){
   const el = document.getElementById('cronoCalendarioWrap');
   if(!el) return;
@@ -7435,6 +7492,8 @@ function renderCronoCalendario(){
 
     // Quiénes reportaron (únicos)
     const quienes = [...new Set(reps.map(r=>r.quien))];
+    // Justificaciones activas este día (para cualquier persona)
+    const justHoy = PA_MEMBERS.filter(m=>justGet(fecha,m));
 
     html += `<div onclick="calSelDia('${fecha}')"
       style="min-height:72px;border-radius:8px;padding:6px;cursor:pointer;transition:background .15s;
@@ -7442,7 +7501,10 @@ function renderCronoCalendario(){
         border:0.5px solid ${esSel?'rgba(74,143,212,.5)':esHoy?'rgba(74,143,212,.25)':'rgba(255,255,255,.05)'}"
       onmouseover="this.style.background='rgba(74,143,212,.08)'"
       onmouseout="this.style.background='${esSel?'rgba(74,143,212,.15)':esHoy?'rgba(74,143,212,.06)':esFinSem?'rgba(255,255,255,.01)':'rgba(255,255,255,.02)'}'">
-      <div style="font-size:11px;font-weight:${esHoy?'700':'500'};color:${esHoy?'var(--accent)':esFinSem?'var(--dim)':'var(--text)'};margin-bottom:4px">${d}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div style="font-size:11px;font-weight:${esHoy?'700':'500'};color:${esHoy?'var(--accent)':esFinSem?'var(--dim)':'var(--text)'}">${d}</div>
+        ${justHoy.length?`<span title="${justHoy.length} justificación${justHoy.length>1?'es':''} este día" style="font-size:9px;color:#c084fc">🔖${justHoy.length}</span>`:''}
+      </div>
       ${reps.length ? `
         <div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:3px">
           ${quienes.slice(0,3).map(q=>`
@@ -7459,17 +7521,27 @@ function renderCronoCalendario(){
   html += `</div></div>`;
 
   // Detalle del día seleccionado
-  if(calDiaSeleccionado && reportesPorDia[calDiaSeleccionado]){
-    const reps = reportesPorDia[calDiaSeleccionado];
-    const dObj = new Date(calDiaSeleccionado+'T00:00:00');
-    const fmtDia = dObj.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
+  if(calDiaSeleccionado){
+    const reps = reportesPorDia[calDiaSeleccionado]||[];
+    const dObjSel = new Date(calDiaSeleccionado+'T00:00:00');
+    const fmtDia = dObjSel.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
+    const dowSel = dObjSel.getDay();
+    const esFinSemSel = dowSel===0 || dowSel===6;
+    const esFestSel = typeof FESTIVOS!=='undefined' && FESTIVOS.includes(calDiaSeleccionado);
+    const requiereReporte = !esFinSemSel && !esFestSel;
+    const quienesReportaron = new Set(reps.map(r=>r.quien));
+    const sinReportar = PA_MEMBERS.filter(m=>!quienesReportaron.has(m));
+    const puedeJustificar = _userRole !== 'proyectista';
+
     html += `
     <div style="background:rgba(74,143,212,.05);border:0.5px solid rgba(74,143,212,.2);border-radius:10px;padding:14px 16px;margin-top:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div style="font-size:13px;font-weight:600;color:var(--text);text-transform:capitalize">${fmtDia}</div>
         <div style="font-size:11px;color:var(--dim)">${reps.length} reporte${reps.length!==1?'s':''}</div>
-      </div>
-      ${reps.map(r=>`
+      </div>`;
+
+    if(reps.length){
+      html += reps.map(r=>`
         <div style="display:flex;gap:10px;padding:10px 0;border-bottom:0.5px solid rgba(255,255,255,.06)">
           <div style="width:28px;height:28px;border-radius:50%;background:${quienColor(r.quien)};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">
             ${r.quien.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase()}
@@ -7483,15 +7555,38 @@ function renderCronoCalendario(){
             ${r.nota?`<div style="font-size:12px;color:var(--text);margin-bottom:3px">${r.nota}</div>`:''}
             ${r.cantidad?`<div style="font-size:11px;color:var(--accent);font-weight:500">+${r.cantidad} ${r.unidad}</div>`:''}
           </div>
-        </div>`).join('')}
-    </div>`;
-  } else if(calDiaSeleccionado){
-    const dObj = new Date(calDiaSeleccionado+'T00:00:00');
-    const fmtDia = dObj.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
-    html += `
-    <div style="background:rgba(255,255,255,.02);border:0.5px solid rgba(255,255,255,.07);border-radius:10px;padding:14px 16px;margin-top:10px;text-align:center;color:var(--dim);font-size:12px">
-      Sin reportes el ${fmtDia}
-    </div>`;
+        </div>`).join('');
+    } else {
+      html += `<div style="text-align:center;color:var(--dim);font-size:12px;padding:8px 0 14px">Sin reportes este día</div>`;
+    }
+
+    if(requiereReporte && sinReportar.length){
+      html += `<div style="margin-top:12px;padding-top:12px;border-top:0.5px solid rgba(255,255,255,.08)">
+        <div style="font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Sin reportar (${sinReportar.length})</div>
+        ${sinReportar.map(m=>{
+          const j = justGet(calDiaSeleccionado, m);
+          const mid = m.replace(/[^a-zA-Z0-9]/g,'');
+          if(j){
+            return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:5px;background:rgba(192,132,252,.08);border:0.5px solid rgba(192,132,252,.25);border-radius:8px">
+              <span style="font-size:11.5px;color:var(--text);flex:1">${m.split(' ').slice(0,2).join(' ')} — <span style="color:#c084fc">🔖 Justificado:</span> ${j.motivo}<span style="color:var(--dim)"> (por ${j.justificadoPor.split(' ')[0]})</span></span>
+              ${puedeJustificar?`<button onclick="calJustQuitar('${calDiaSeleccionado}','${m.replace(/'/g,"\\'")}')" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:12px;flex-shrink:0" title="Quitar justificación">✕</button>`:''}
+            </div>`;
+          } else if(puedeJustificar){
+            return `<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;margin-bottom:5px;background:rgba(255,92,92,.05);border:0.5px solid rgba(255,92,92,.18);border-radius:8px">
+              <span style="font-size:11.5px;color:var(--text);width:130px;flex-shrink:0">${m.split(' ').slice(0,2).join(' ')}</span>
+              <input id="justMotivo-${mid}" type="text" placeholder="Motivo (ej. permiso médico)" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:11px">
+              <button onclick="calJustAgregar('${calDiaSeleccionado}','${m.replace(/'/g,"\\'")}','${mid}')" style="background:rgba(192,132,252,.15);border:1px solid rgba(192,132,252,.4);color:#c084fc;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:11px;white-space:nowrap;flex-shrink:0">🔖 Justificar</button>
+            </div>`;
+          } else {
+            return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:5px;background:rgba(255,92,92,.05);border:0.5px solid rgba(255,92,92,.15);border-radius:8px">
+              <span style="font-size:11.5px;color:var(--dim)">${m.split(' ').slice(0,2).join(' ')} — sin reportar</span>
+            </div>`;
+          }
+        }).join('')}
+      </div>`;
+    }
+
+    html += `</div>`;
   }
 
   el.innerHTML = html;
@@ -8026,11 +8121,13 @@ function buildPersonEval(p){
       if(!item.responsable || !samePersonMatch(item.responsable,p)) return;
       (item.reportes||[]).forEach(r=>{ if(r.fecha) reportadas.add(r.fecha); });
     });
-    if(diasHabiles.length){
-      const reported=diasHabiles.filter(d=>reportadas.has(d)).length;
-      const missed=diasHabiles.length-reported;
-      repScore=Math.round(reported/diasHabiles.length*100);
-      repData={pct:repScore,reported,oblig:diasHabiles.length,missed};
+    const paName = PA_MEMBERS.find(m=>samePersonMatch(m,p));
+    const diasValidos = diasHabiles.filter(d=>!(paName && typeof justGet==='function' && justGet(d,paName)));
+    if(diasValidos.length){
+      const reported=diasValidos.filter(d=>reportadas.has(d)).length;
+      const missed=diasValidos.length-reported;
+      repScore=Math.round(reported/diasValidos.length*100);
+      repData={pct:repScore,reported,oblig:diasValidos.length,missed};
     }
   }
 
@@ -9581,20 +9678,23 @@ function renderDashReporteo2(){
   const nombresMesesQ = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'].slice(qStartMonth, qStartMonth+3).join(', ');
 
   const reportaronHoy = PA_MEMBERS.filter(m=>reportesPorPersona[m].has(hoyStr));
-  const noReportaronHoy = PA_MEMBERS.filter(m=>!reportesPorPersona[m].has(hoyStr));
+  const justificadosHoy = PA_MEMBERS.filter(m=>!reportesPorPersona[m].has(hoyStr) && justGet(hoyStr,m));
+  const noReportaronHoy = PA_MEMBERS.filter(m=>!reportesPorPersona[m].has(hoyStr) && !justGet(hoyStr,m));
 
   function calcCumplimiento(dias){
     return PA_MEMBERS.map(m=>{
-      const total = dias.length;
-      const cumplidos = dias.filter(d=>reportesPorPersona[m].has(d)).length;
+      const diasValidos = dias.filter(d=>!justGet(d,m)); // los días justificados no cuentan ni a favor ni en contra
+      const total = diasValidos.length;
+      const cumplidos = diasValidos.filter(d=>reportesPorPersona[m].has(d)).length;
       const pct = total>0 ? Math.round(cumplidos/total*100) : 0;
       return {nombre:m, cumplidos, total, pct};
     }).sort((a,b)=>b.pct-a.pct);
   }
-  // Cumplimiento del Q: cumplidos = días ya transcurridos que sí reportó; total = TODO el trimestre (acumulado, no solo lo transcurrido)
+  // Cumplimiento del Q: cumplidos = días ya transcurridos que sí reportó; total = TODO el trimestre (acumulado, no solo lo transcurrido), excluyendo justificados
   const cumplimientoQ = PA_MEMBERS.map(m=>{
-    const cumplidos = diasHabilesQ.filter(d=>reportesPorPersona[m].has(d)).length;
-    const total = diasHabilesQTotal.length;
+    const diasElapsedValidos = diasHabilesQ.filter(d=>!justGet(d,m));
+    const cumplidos = diasElapsedValidos.filter(d=>reportesPorPersona[m].has(d)).length;
+    const total = diasHabilesQTotal.filter(d=>!justGet(d,m)).length;
     const pct = total>0 ? Math.round(cumplidos/total*100) : 0;
     return {nombre:m, cumplidos, total, pct};
   }).sort((a,b)=>b.pct-a.pct);
@@ -9618,6 +9718,7 @@ function renderDashReporteo2(){
     let racha=0;
     for(const d of ventanaRacha){
       if(reportesPorPersona[m].has(d)) break;
+      if(justGet(d,m)) continue; // día justificado: no cuenta como falta, pero tampoco rompe la racha
       racha++;
     }
     return racha;
@@ -9647,7 +9748,7 @@ function renderDashReporteo2(){
     <div class="kpi ${esDiaHabilHoy && noReportaronHoy.length ? 'kr':'kg'}">
       <div class="kl">Sin reportar hoy</div>
       <div class="kv">${esDiaHabilHoy? noReportaronHoy.length : '—'}</div>
-      <div class="kd" style="max-width:220px">${esDiaHabilHoy && noReportaronHoy.length ? noReportaronHoy.map(n=>n.split(' ')[0]).join(', ') : (esDiaHabilHoy?'todos al día':'')}</div>
+      <div class="kd" style="max-width:220px">${esDiaHabilHoy && noReportaronHoy.length ? noReportaronHoy.map(n=>n.split(' ')[0]).join(', ') : (esDiaHabilHoy?'todos al día':'')}${esDiaHabilHoy && justificadosHoy.length?` · 🔖 ${justificadosHoy.length} justificado${justificadosHoy.length>1?'s':''}`:''}</div>
     </div>
     <div class="kpi kb">
       <div class="kl">Días hábiles del mes</div>
@@ -9714,13 +9815,16 @@ function renderDashReporteo2(){
             <td style="padding:5px 8px;color:var(--text);white-space:nowrap;position:sticky;left:0;background:var(--surface);z-index:1">${m.split(' ').slice(0,2).join(' ')}</td>
             ${diasHabiles.map(d=>{
               const ok = reportesPorPersona[m].has(d);
-              return `<td style="text-align:center;padding:4px 2px" title="${m} · ${d}">${ok?'<span style="color:var(--green);font-size:12px">●</span>':'<span style="color:var(--red);opacity:.55;font-size:12px">●</span>'}</td>`;
+              const j = !ok && justGet(d,m);
+              const symbol = ok?'<span style="color:var(--green);font-size:12px">●</span>':j?'<span style="color:#c084fc;font-size:12px">●</span>':'<span style="color:var(--red);opacity:.55;font-size:12px">●</span>';
+              return `<td style="text-align:center;padding:4px 2px" title="${m} · ${d}${j?' · 🔖 Justificado: '+j.motivo:''}">${symbol}</td>`;
             }).join('')}
           </tr>`).join('')}
       </tbody>
     </table>
     <div style="display:flex;gap:16px;margin-top:10px;font-size:10.5px;color:var(--dim)">
       <span><span style="color:var(--green)">●</span> Reportó ese día</span>
+      <span><span style="color:#c084fc">●</span> Justificado</span>
       <span><span style="color:var(--red);opacity:.55">●</span> Sin reporte ese día</span>
     </div>
     </div>
@@ -10205,8 +10309,9 @@ function dashRep2GenerarPDF(){
   }
 
   const cumplimiento = PA_MEMBERS.map(m=>{
-    const total = diasHabiles.length;
-    const cumplidos = diasHabiles.filter(d=>reportesPorPersona[m].has(d)).length;
+    const diasValidos = diasHabiles.filter(d=>!justGet(d,m));
+    const total = diasValidos.length;
+    const cumplidos = diasValidos.filter(d=>reportesPorPersona[m].has(d)).length;
     const pct = total>0 ? Math.round(cumplidos/total*100) : 0;
     return {nombre:m, cumplidos, total, pct};
   }).sort((a,b)=>b.pct-a.pct);
@@ -10264,7 +10369,8 @@ function dashRep2GenerarPDF(){
   </tr></thead><tbody>
     ${PA_MEMBERS.map(m=>`<tr><td>${m.split(' ').slice(0,2).join(' ')}</td>${diasHabiles.map(d=>{
       const ok = reportesPorPersona[m].has(d);
-      return `<td style="color:${ok?'#1a7f4b':'#c0392b'};font-weight:700">${ok?'●':'○'}</td>`;
+      const j = !ok && justGet(d,m);
+      return `<td style="color:${ok?'#1a7f4b':j?'#8b5cf6':'#c0392b'};font-weight:700" title="${j?'Justificado: '+j.motivo:''}">${ok?'●':j?'◆':'○'}</td>`;
     }).join('')}</tr>`).join('')}
   </tbody></table>
   <div class="pbt"><button onclick="window.print()">Exportar PDF / Imprimir</button></div>
@@ -13687,6 +13793,7 @@ function enterDashboard(){
     loadProyNotifs(),
     typeof dashLoadVisibility==='function' ? dashLoadVisibility() : Promise.resolve(),
     typeof evalLoadPesos==='function' ? evalLoadPesos() : Promise.resolve(),
+    typeof justLoad==='function' ? justLoad() : Promise.resolve(),
     typeof supaLoadAll==='function' ? supaLoadAll() : Promise.resolve(),
     (async()=>{
       if(!_supa) return;
