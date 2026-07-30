@@ -9443,7 +9443,7 @@ function renderDashReporteo2(){
   }
   const esDiaHabilHoy = diasHabiles.includes(hoyStr);
 
-  // Días hábiles del Q en curso, hasta hoy
+  // Días hábiles del Q en curso, hasta hoy (para contar lo ya cumplido)
   const qIdx = Math.floor(month/3);
   const qStartMonth = qIdx*3;
   const diasHabilesQ = [];
@@ -9454,6 +9454,18 @@ function renderDashReporteo2(){
     if(esHabil(dStr, curQ.getDay())) diasHabilesQ.push(dStr);
     curQ.setDate(curQ.getDate()+1);
   }
+
+  // Días hábiles del Q COMPLETO (Jul+Ago+Sep, por ejemplo), pasen o no — para usar como meta/denominador
+  const qEndMonth = qStartMonth+2;
+  const qEndDate = new Date(year, qEndMonth+1, 0);
+  const diasHabilesQTotal = [];
+  let curQ2 = new Date(year, qStartMonth, 1);
+  while(curQ2<=qEndDate){
+    const dStr = repDateKey(curQ2);
+    if(esHabil(dStr, curQ2.getDay())) diasHabilesQTotal.push(dStr);
+    curQ2.setDate(curQ2.getDate()+1);
+  }
+  const nombresMesesQ = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'].slice(qStartMonth, qStartMonth+3).join(', ');
 
   const reportaronHoy = PA_MEMBERS.filter(m=>reportesPorPersona[m].has(hoyStr));
   const noReportaronHoy = PA_MEMBERS.filter(m=>!reportesPorPersona[m].has(hoyStr));
@@ -9466,8 +9478,14 @@ function renderDashReporteo2(){
       return {nombre:m, cumplidos, total, pct};
     }).sort((a,b)=>b.pct-a.pct);
   }
+  // Cumplimiento del Q: cumplidos = días ya transcurridos que sí reportó; total = TODO el trimestre (acumulado, no solo lo transcurrido)
+  const cumplimientoQ = PA_MEMBERS.map(m=>{
+    const cumplidos = diasHabilesQ.filter(d=>reportesPorPersona[m].has(d)).length;
+    const total = diasHabilesQTotal.length;
+    const pct = total>0 ? Math.round(cumplidos/total*100) : 0;
+    return {nombre:m, cumplidos, total, pct};
+  }).sort((a,b)=>b.pct-a.pct);
   const cumplimiento = calcCumplimiento(diasHabiles);
-  const cumplimientoQ = calcCumplimiento(diasHabilesQ);
   const cumplimientoQPorNombre = {}; cumplimientoQ.forEach(c=>cumplimientoQPorNombre[c.nombre]=c);
 
   // Racha de días hábiles consecutivos sin reportar (ventana móvil de 10 días hábiles, sin importar mes)
@@ -9565,7 +9583,7 @@ function renderDashReporteo2(){
         <div style="width:80px;text-align:right;font-size:11.5px;font-weight:600;color:${color};flex-shrink:0">${c.pct}% (${c.cumplidos}/${c.total})</div>
       </div>`;
     }).join('')}
-    <div style="font-size:10.5px;color:var(--dim);margin-top:4px">Q${qIdx+1} ${year} · ${diasHabilesQ.length} días hábiles transcurridos</div>
+    <div style="font-size:10.5px;color:var(--dim);margin-top:4px">Q${qIdx+1} ${year} (${nombresMesesQ}) · ${diasHabilesQ.length} de ${diasHabilesQTotal.length} días hábiles transcurridos del trimestre completo</div>
     </div>
   </div>
 
