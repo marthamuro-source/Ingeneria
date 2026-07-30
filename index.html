@@ -1263,6 +1263,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           <div class="dash-subtab" onclick="dashSubtab('calidad')">⭐ Calidad</div>
           <div class="dash-subtab" onclick="dashSubtab('udemy')">🎓 Udemy</div>
           <div class="dash-subtab" onclick="dashSubtab('reporteo')">📅 Reporteo</div>
+          <div class="dash-subtab" onclick="dashSubtab('reporteo2')">✅ Reporteo 2</div>
         </div>
 
         <!-- Sub-vista: Resumen -->
@@ -1333,6 +1334,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
             </div>
           </div>
           <div id="dashReporteoMount"></div>
+        </div>
+
+        <!-- Sub-vista: Reporteo 2 (cumplimiento de reporte diario, tomado de Panel de Seguimiento) -->
+        <div id="dashSub-reporteo2" class="dash-subview" style="display:none">
+          <div id="dashReporteo2Mount"></div>
         </div>
       </div>
     </div>
@@ -8623,12 +8629,12 @@ function dashBackToGaleria(){
 function dashSubtab(tab){
   dashActiveSubtab = tab;
   document.querySelectorAll('.dash-subtab').forEach(t=>t.classList.remove('on'));
-  const btnMap = {resumen:0, productividad:1, calidad:2, udemy:3, reporteo:4};
+  const btnMap = {resumen:0, productividad:1, calidad:2, udemy:3, reporteo:4, reporteo2:5};
   const btns = document.querySelectorAll('.dash-subtab');
   if(btns[btnMap[tab]]) btns[btnMap[tab]].classList.add('on');
 
   // Ocultar todas las sub-vistas
-  ['resumen','productividad','calidad','udemy','reporteo'].forEach(t=>{
+  ['resumen','productividad','calidad','udemy','reporteo','reporteo2'].forEach(t=>{
     const el = document.getElementById('dashSub-'+t);
     if(el) el.style.display = (t===tab) ? '' : 'none';
   });
@@ -8637,6 +8643,7 @@ function dashSubtab(tab){
   if(tab==='calidad') dashMountReal('calidad','v-calidad');
   if(tab==='udemy')   dashMountReal('udemy','v-udemy');
   if(tab==='reporteo') dashMountReal('reporteo','v-reporteo');
+  if(tab==='reporteo2') renderDashReporteo2();
   if(tab==='resumen') renderDashResumen();
   if(tab==='productividad') renderDashProductividad();
 }
@@ -9332,6 +9339,113 @@ function fmtD(d){
 }
 
 // ─── DASHBOARDS · RESUMEN ──────────────────────────────────────────────────────
+// ── Reporteo 2: cumplimiento de reporte diario (fuente: Panel de Seguimiento > Reporte diario / Subtareas) ──
+function renderDashReporteo2(){
+  const mount = document.getElementById('dashReporteo2Mount');
+  if(!mount) return;
+  cronoLoad();
+
+  const hoyStr = repDateKey(new Date());
+  const now = new Date();
+  const year = now.getFullYear(), month = now.getMonth();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  // Fechas reportadas por persona (a partir de CRONO_ITEMS.reportes)
+  const reportesPorPersona = {};
+  PA_MEMBERS.forEach(name=>{ reportesPorPersona[name] = new Set(); });
+  CRONO_ITEMS.forEach(item=>{
+    const nombre = PA_MEMBERS.find(m=>toCanonical(m)===toCanonical(item.responsable||''));
+    if(!nombre) return;
+    (item.reportes||[]).forEach(r=>{ if(r.fecha) reportesPorPersona[nombre].add(r.fecha); });
+  });
+
+  // Días hábiles del mes en curso, hasta hoy (sin fines de semana ni festivos)
+  const diasHabiles = [];
+  for(let d=1; d<=daysInMonth; d++){
+    const dStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    if(dStr > hoyStr) break;
+    const dow = new Date(year,month,d).getDay();
+    if(dow===0 || dow===6) continue;
+    if(typeof FESTIVOS!=='undefined' && FESTIVOS.includes(dStr)) continue;
+    diasHabiles.push(dStr);
+  }
+  const esDiaHabilHoy = diasHabiles.includes(hoyStr);
+
+  const reportaronHoy = PA_MEMBERS.filter(m=>reportesPorPersona[m].has(hoyStr));
+  const noReportaronHoy = PA_MEMBERS.filter(m=>!reportesPorPersona[m].has(hoyStr));
+
+  const cumplimiento = PA_MEMBERS.map(m=>{
+    const total = diasHabiles.length;
+    const cumplidos = diasHabiles.filter(d=>reportesPorPersona[m].has(d)).length;
+    const pct = total>0 ? Math.round(cumplidos/total*100) : 0;
+    return {nombre:m, cumplidos, total, pct};
+  }).sort((a,b)=>b.pct-a.pct);
+
+  let html = `
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px">
+    <div class="kpi ${esDiaHabilHoy?(noReportaronHoy.length?'kr':'kg'):'kb'}">
+      <div class="kl">Reportaron hoy</div>
+      <div class="kv">${esDiaHabilHoy? reportaronHoy.length+'/'+PA_MEMBERS.length : '—'}</div>
+      <div class="kd">${esDiaHabilHoy?'proyectistas al corriente':'hoy no es día hábil'}</div>
+    </div>
+    <div class="kpi ${esDiaHabilHoy && noReportaronHoy.length ? 'kr':'kg'}">
+      <div class="kl">Sin reportar hoy</div>
+      <div class="kv">${esDiaHabilHoy? noReportaronHoy.length : '—'}</div>
+      <div class="kd" style="max-width:220px">${esDiaHabilHoy && noReportaronHoy.length ? noReportaronHoy.map(n=>n.split(' ')[0]).join(', ') : (esDiaHabilHoy?'todos al día':'')}</div>
+    </div>
+    <div class="kpi kb">
+      <div class="kl">Días hábiles del mes</div>
+      <div class="kv">${diasHabiles.length}</div>
+      <div class="kd">${meses[month]} ${year}, a la fecha</div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:20px">
+    <div class="ph"><div class="pt">Cumplimiento del mes por proyectista</div></div>
+    <div style="padding:14px 17px">
+    ${cumplimiento.map(c=>{
+      const color = c.pct>=90?'var(--green)':c.pct>=70?'#f5a623':'var(--red)';
+      return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+        <div style="width:150px;font-size:12px;color:var(--text);flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nombre.split(' ').slice(0,2).join(' ')}</div>
+        <div style="flex:1;height:14px;background:rgba(255,255,255,.06);border-radius:7px;overflow:hidden">
+          <div style="height:100%;width:${c.pct}%;background:${color};border-radius:7px;transition:width .3s"></div>
+        </div>
+        <div style="width:80px;text-align:right;font-size:11.5px;font-weight:600;color:${color};flex-shrink:0">${c.pct}% (${c.cumplidos}/${c.total})</div>
+      </div>`;
+    }).join('')}
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="ph"><div class="pt">Detalle diario — ${meses[month]} ${year}</div></div>
+    <div style="padding:14px 17px;overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:10.5px">
+      <thead><tr>
+        <th style="text-align:left;padding:5px 8px;color:var(--dim);position:sticky;left:0;background:var(--surface);z-index:1">Proyectista</th>
+        ${diasHabiles.map(d=>`<th style="padding:4px 2px;color:var(--dim);text-align:center;min-width:24px;font-weight:500">${parseInt(d.slice(8),10)}</th>`).join('')}
+      </tr></thead>
+      <tbody>
+        ${PA_MEMBERS.map(m=>`
+          <tr>
+            <td style="padding:5px 8px;color:var(--text);white-space:nowrap;position:sticky;left:0;background:var(--surface);z-index:1">${m.split(' ').slice(0,2).join(' ')}</td>
+            ${diasHabiles.map(d=>{
+              const ok = reportesPorPersona[m].has(d);
+              return `<td style="text-align:center;padding:4px 2px" title="${m} · ${d}">${ok?'<span style="color:var(--green);font-size:12px">●</span>':'<span style="color:var(--red);opacity:.55;font-size:12px">●</span>'}</td>`;
+            }).join('')}
+          </tr>`).join('')}
+      </tbody>
+    </table>
+    <div style="display:flex;gap:16px;margin-top:10px;font-size:10.5px;color:var(--dim)">
+      <span><span style="color:var(--green)">●</span> Reportó ese día</span>
+      <span><span style="color:var(--red);opacity:.55">●</span> Sin reporte ese día</span>
+    </div>
+    </div>
+  </div>`;
+
+  mount.innerHTML = html;
+}
+
 function renderDashResumen(){
   const el = document.getElementById('dashResumenContent');
   if(!el) return;
