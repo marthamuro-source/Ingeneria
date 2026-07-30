@@ -1295,24 +1295,31 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           <div id="dashCalidadMount"></div>
         </div>
 
-        <!-- Sub-vista: Udemy (contenido movido de v-udemy) -->
+        <!-- Sub-vista: Udemy (vacía a propósito — Raquel meterá contenido nuevo aquí) -->
         <div id="dashSub-udemy" class="dash-subview" style="display:none">
-          <div class="dash-csv-loader" id="csvZone4">
-            <label class="dash-csv-lbl" id="dropLbl4" for="csvInput4">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-              <span>Cargar progreso de Udemy (.csv) — arrastra o <strong>selecciona</strong></span>
-            </label>
-            <input type="file" id="csvInput4" accept=".csv">
-            <div class="dash-csv-loaded" id="csvLoaded4">
-              <div class="csv-chip">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-                <span id="csvName4">archivo.csv</span>
-                <button class="csv-clear" onclick="clearCSV4()">✕</button>
-              </div>
-              <div class="csv-pills" id="csvPills4"></div>
-            </div>
+          <div style="padding:60px 20px;text-align:center;color:var(--dim)">
+            <div style="font-size:28px;margin-bottom:10px">🎓</div>
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">Udemy</div>
+            <div style="font-size:12px">Este espacio está reservado para nueva información. Avísame qué quieres mostrar aquí.</div>
           </div>
-          <div id="dashUdemyMount"></div>
+          <div style="display:none">
+            <div class="dash-csv-loader" id="csvZone4">
+              <label class="dash-csv-lbl" id="dropLbl4" for="csvInput4">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                <span>Cargar progreso de Udemy (.csv) — arrastra o <strong>selecciona</strong></span>
+              </label>
+              <input type="file" id="csvInput4" accept=".csv">
+              <div class="dash-csv-loaded" id="csvLoaded4">
+                <div class="csv-chip">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                  <span id="csvName4">archivo.csv</span>
+                  <button class="csv-clear" onclick="clearCSV4()">✕</button>
+                </div>
+                <div class="csv-pills" id="csvPills4"></div>
+              </div>
+            </div>
+            <div id="dashUdemyMount"></div>
+          </div>
         </div>
 
         <!-- Sub-vista: Reporteo (contenido movido de v-reporteo) -->
@@ -8706,9 +8713,8 @@ function dashSubtab(tab){
     if(el) el.style.display = (t===tab) ? '' : 'none';
   });
 
-  // Para calidad/udemy: mover (reparent) el contenido real la primera vez
+  // Para calidad: mover (reparent) el contenido real la primera vez
   if(tab==='calidad') dashMountReal('calidad','v-calidad');
-  if(tab==='udemy')   dashMountReal('udemy','v-udemy');
   if(tab==='reporteo2') renderDashReporteo2();
   if(tab==='resumen') renderDashResumen();
   if(tab==='productividad') renderDashProductividad();
@@ -8716,7 +8722,7 @@ function dashSubtab(tab){
 
 // Mueve (una sola vez) el contenido interno de la vista original dentro del subtab de Dashboards
 const _dashMounted = {};
-const _dashMountTargets = {calidad:'dashCalidadMount', udemy:'dashUdemyMount'};
+const _dashMountTargets = {calidad:'dashCalidadMount'};
 function dashMountReal(tab, originalViewId){
   const target = document.getElementById(_dashMountTargets[tab] || ('dashSub-'+tab));
   const original = document.getElementById(originalViewId);
