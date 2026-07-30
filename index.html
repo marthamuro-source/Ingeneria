@@ -305,8 +305,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .ho-btn-save:hover{box-shadow:0 0 22px rgba(0,180,255,.5);}
 .ho-edit-btn{font-size:10px;background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.25);color:rgba(0,229,255,.8);border-radius:6px;padding:3px 9px;cursor:pointer;transition:all .15s;white-space:nowrap;}
 .ho-edit-btn:hover{background:rgba(0,229,255,.2);color:#fff;}
-.ho-week-current{font-size:10.5px;color:var(--muted);margin-bottom:8px;}
+.ho-week-current{font-size:10.5px;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 .ho-week-now{color:#3dd68c;font-size:8px;}
+.ho-week-fix-btn{font-size:9.5px;background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:2px 8px;cursor:pointer;transition:all .15s;}
+.ho-week-fix-btn:hover{border-color:rgba(0,229,255,.4);color:var(--accent);}
+.ho-fix-week-box{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:10px;flex-wrap:wrap;}
+.ho-fix-week-box label{font-size:10px;color:var(--muted);}
+.ho-fix-week-box select{font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);}
+.ho-week-fix-save{font-size:10.5px;background:rgba(0,229,255,.12);border:1px solid rgba(0,229,255,.35);color:var(--accent);border-radius:6px;padding:4px 12px;cursor:pointer;font-weight:600;}
+.ho-week-fix-save:hover{background:rgba(0,229,255,.22);}
 .ho-week-tab{font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:5px;}
 .ho-week-tab.on{background:rgba(0,229,255,.12);border-color:rgba(0,229,255,.35);color:var(--accent);}
 .ho-week-del{font-size:11px;color:var(--muted);opacity:.6;line-height:1;}
@@ -332,6 +339,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .vac-cal-head{font-size:9px;color:var(--muted);text-align:center;padding:2px 0;font-weight:600;}
 .vac-cal-day{font-size:10px;text-align:center;padding:3px 2px;border-radius:3px;color:var(--muted);line-height:1.4;}
 .vac-cal-day.empty{color:transparent;pointer-events:none;}
+.vac-cal-day{position:relative;}
+.vac-cal-day.has-badge{overflow:visible;}
+.vac-cal-badge{position:absolute;top:-4px;right:-2px;font-size:8px;line-height:1;pointer-events:none;filter:drop-shadow(0 0 1px rgba(0,0,0,.6));}
 .vac-cal-day.weekend{color:var(--dim);}
 .vac-cal-day.festivo{background:rgba(245,166,35,.15);color:#d4890a;font-weight:600;}
 .vac-cal-day.hoy{outline:1.5px solid var(--accent);outline-offset:-1px;color:var(--accent);font-weight:700;}
@@ -1328,7 +1338,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   <div id="v-herramientas" style="display:none">
     <div class="topbar">
       <div><h1>Herramientas de trabajo</h1><div class="tmeta">Accesos directos a machotes, normas y material de apoyo en Drive</div></div>
-      <button class="herr-manage-btn" onclick="herrOpenManager()" title="Agregar o quitar accesos">⚙️ Editar accesos</button>
+      <button class="herr-manage-btn" id="herrManageBtn" onclick="herrOpenManager()" title="Agregar o quitar accesos">⚙️ Editar accesos</button>
     </div>
     <div class="content">
       <div class="herr-grid" id="herrGridMount"></div>
@@ -5828,12 +5838,23 @@ function cronoCatalogoModal(){
   document.body.appendChild(bg);
 }
 
-function cronoCatDelete(id){
+async function cronoCatDelete(id){
   if(!confirm('¿Eliminar del catálogo?')) return;
   CRONO_CATALOGO = CRONO_CATALOGO.filter(c=>c.id!==id);
   cronoSaveCatalogo();
-  // Eliminar de Supabase también
-  if(_supa) _supa.from('crono_catalogo').delete().eq('id',id).catch(e=>console.warn(e));
+  // Eliminar de Supabase también (verificando que sí se haya borrado)
+  if(_supa){
+    try{
+      const {error} = await _supa.from('crono_catalogo').delete().eq('id', id);
+      if(error){
+        console.error('❌ cronoCatDelete Supabase:', error);
+        alert('Se eliminó localmente, pero no se pudo borrar en la base de datos compartida (Supabase), así que podría reaparecer al recargar.\n\nMotivo: '+(error.message||error.code||'desconocido')+'\n\nEsto normalmente pasa cuando la tabla "crono_catalogo" no tiene permiso de DELETE habilitado en Supabase. Pídele a Claude que te ayude a revisar la política (RLS) de esa tabla.');
+      }
+    }catch(e){
+      console.error('❌ cronoCatDelete excepción:', e);
+      alert('Se eliminó localmente, pero ocurrió un error de conexión al intentar borrar en Supabase. Podría reaparecer al recargar.');
+    }
+  }
   document.getElementById('cronoCatModalBg')?.remove();
   cronoCatalogoModal(); // reabrir actualizado
 }
@@ -6839,6 +6860,8 @@ function planExportPDF() {
   setTimeout(function(){URL.revokeObjectURL(url);},60000);
 }
 
+let calProyMes = new Date().getMonth();
+let calProyAnio = new Date().getFullYear();
 function renderCronoCalProyectista(){
   const el = document.getElementById('cronoCalProyWrap');
   if(!el) return;
@@ -11737,13 +11760,38 @@ const HO_PATTERN = {
   ]
 };
 
-function ausGetCycleWeek(date){
+function hoMondayOf(date){
   const d = new Date(date); d.setHours(0,0,0,0);
-  const diffDays = Math.floor((d - HO_ANCHOR) / 86400000);
-  const diffWeeks = Math.floor(diffDays / 7);
+  const day = d.getDay(); // 0=domingo
+  const diff = day===0 ? -6 : 1-day;
+  d.setDate(d.getDate()+diff);
+  return d;
+}
+const HO_WEEK_ANCHOR_KEY = 'ho_week_anchor_v1';
+function hoGetWeekAnchor(){
+  try{
+    const raw = localStorage.getItem(HO_WEEK_ANCHOR_KEY);
+    if(raw){
+      const p = JSON.parse(raw);
+      if(p && p.date && Number.isInteger(p.weekIdx)) return p;
+    }
+  }catch(e){}
+  return { date: '2026-06-15', weekIdx: 0 }; // ancla por defecto: lunes 15 jun 2026 = Semana 1
+}
+function hoSetWeekAnchor(weekIdx){
+  const mon = hoMondayOf(new Date());
+  const anchor = { date: mon.toISOString().slice(0,10), weekIdx: weekIdx };
+  try{ localStorage.setItem(HO_WEEK_ANCHOR_KEY, JSON.stringify(anchor)); }catch(e){ console.warn('hoSetWeekAnchor error', e); }
+}
+function ausGetCycleWeek(date){
   const totalSem = (Array.isArray(HO_PATTERN.viernes) && HO_PATTERN.viernes.length) ? HO_PATTERN.viernes.length : 4;
-  let idx = diffWeeks % totalSem;
-  if(idx < 0) idx += totalSem;
+  const anchor = hoGetWeekAnchor();
+  const anchorMonday = hoMondayOf(anchor.date+'T00:00:00');
+  const thisMonday = hoMondayOf(date);
+  const diffDays = Math.round((thisMonday - anchorMonday) / 86400000);
+  const diffWeeks = Math.round(diffDays / 7);
+  let idx = (anchor.weekIdx + diffWeeks) % totalSem;
+  idx = ((idx % totalSem) + totalSem) % totalSem;
   return idx; // 0-based, dentro del ciclo actual (largo variable)
 }
 
@@ -12515,6 +12563,10 @@ function applyProyectistaReadOnly(){
     document.querySelectorAll('button[onclick*="'+fn+'"]').forEach(function(b){ b.style.display='none'; });
   });
 
+  // Herramientas: ocultar Editar accesos
+  var herrManageBtn = document.getElementById('herrManageBtn');
+  if(herrManageBtn) herrManageBtn.style.display='none';
+
   // Ausencias: preseleccionar y deshabilitar selector de persona
   var vacSel = document.getElementById('vacPerson');
   if(vacSel && _miNombre){
@@ -13187,21 +13239,32 @@ function vacRenderCal(){
       const isFest = FESTIVOS.includes(dStr);
       const vacPersons = dayMap[dStr] || [];
       const isToday = dStr === todayStr;
+      const mmdd = `${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const cumpleNames = (ORG_DATA||[]).filter(m=>m.cumple===mmdd).map(m=>m.nombre).filter(Boolean);
+      const aniversarioNames = (ORG_DATA||[]).filter(m=>{
+        if(!m.ingreso) return false;
+        const ing = new Date(m.ingreso+'T00:00:00');
+        const ingMMDD = `${String(ing.getMonth()+1).padStart(2,'0')}-${String(ing.getDate()).padStart(2,'0')}`;
+        return ingMMDD===mmdd && ing.getFullYear() < year;
+      }).map(m=>m.nombre).filter(Boolean);
 
       let cls = 'vac-cal-day';
       if(isWeekend) cls += ' weekend';
       if(isFest) cls += ' festivo';
       if(vacPersons.length > 0) cls += ' ' + VAC_COLORS[vacPersons[0] % VAC_COLORS.length];
       if(isToday) cls += ' hoy';
+      if(cumpleNames.length || aniversarioNames.length) cls += ' has-badge';
 
       cell.className = cls;
-      cell.textContent = d;
+      cell.innerHTML = String(d) + (cumpleNames.length||aniversarioNames.length ? `<span class="vac-cal-badge">${cumpleNames.length?'🎂':''}${aniversarioNames.length?'🎉':''}</span>` : '');
 
       // Tooltip
-      if(vacPersons.length > 0 || isFest){
+      if(vacPersons.length > 0 || isFest || cumpleNames.length || aniversarioNames.length){
         const names = vacPersons.map(pi=>PA_MEMBERS[pi]?.split(' ')[0]||'').filter(Boolean);
         let tip = names.join(', ');
         if(isFest) tip = (tip ? tip + ' · ' : '') + (FEST_LABELS[dStr]||'Día festivo');
+        if(cumpleNames.length) tip = (tip ? tip + ' · ' : '') + '🎂 Cumpleaños: ' + cumpleNames.join(', ');
+        if(aniversarioNames.length) tip = (tip ? tip + ' · ' : '') + '🎉 Aniversario laboral: ' + aniversarioNames.join(', ');
         cell.title = tip;
       }
 
@@ -13278,6 +13341,8 @@ function vacRenderLegend(){
     return `<div class="vac-leg-item"><div class="vac-leg-dot" style="background:${hex}66"></div>${p.split(' ').slice(0,2).join(' ')}</div>`;
   }).join('');
   html += `<div class="vac-leg-item"><div class="vac-leg-dot" style="background:rgba(245,166,35,.4)"></div>Día festivo</div>`;
+  html += `<div class="vac-leg-item">🎂 Cumpleaños</div>`;
+  html += `<div class="vac-leg-item">🎉 Aniversario laboral</div>`;
   leg.innerHTML = html;
 }
 
@@ -14261,7 +14326,12 @@ function hoRenderModal(){
     if(isV){
       if(!Array.isArray(HO_PATTERN.viernes) || !HO_PATTERN.viernes.length) HO_PATTERN.viernes=[[],[],[],[]];
       const hoyWeekIdx = ausGetCycleWeek(new Date());
-      html += `<div class="ho-week-current">Semana en curso hoy: <b>Sem ${hoyWeekIdx+1}</b> · Estás editando: <b style="color:var(--accent)">Sem ${hoActiveViernesSem+1}</b></div>`;
+      html += `<div class="ho-week-current">Semana en curso hoy: <b>Sem ${hoyWeekIdx+1}</b> · Estás editando: <b style="color:var(--accent)">Sem ${hoActiveViernesSem+1}</b> <button class="ho-week-fix-btn" onclick="hoToggleFixWeek()">Corregir semana actual</button></div>
+      <div id="hoFixWeekBox" class="ho-fix-week-box" style="display:none">
+        <label>La semana que en realidad está corriendo hoy es:</label>
+        <select id="hoFixWeekSel">${HO_PATTERN.viernes.map((_,i)=>`<option value="${i}" ${i===hoyWeekIdx?'selected':''}>Sem ${i+1}</option>`).join('')}</select>
+        <button class="ho-week-fix-save" onclick="hoConfirmFixWeek()">Guardar</button>
+      </div>`;
       html += `<div class="ho-week-tabs">`
         + HO_PATTERN.viernes.map((_,i)=>`<button class="ho-week-tab${hoActiveViernesSem===i?' on':''}" onclick="hoSetViernesSem(${i})">Sem ${i+1}${i===hoyWeekIdx?' <span class="ho-week-now" title="Esta es la semana que está corriendo hoy">●</span>':''}${HO_PATTERN.viernes.length>1?`<span class="ho-week-del" title="Quitar esta semana" onclick="event.stopPropagation();hoRemoveViernesSem(${i})">×</span>`:''}</button>`).join('')
         + `<button class="ho-week-add" title="Agregar semana" onclick="hoAddViernesSem()">+ Semana</button>`
@@ -14284,6 +14354,21 @@ function hoRenderModal(){
 }
 function hoToggleSection(key){ const el=document.getElementById('hoSec-'+key); if(el) el.style.display=el.style.display==='none'?'':'none'; }
 function hoSetViernesSem(idx){ hoActiveViernesSem=idx; hoRenderModal(); }
+function hoToggleFixWeek(){
+  const box = document.getElementById('hoFixWeekBox');
+  if(box) box.style.display = box.style.display==='none' ? '' : 'none';
+}
+function hoConfirmFixWeek(){
+  const sel = document.getElementById('hoFixWeekSel');
+  const idx = parseInt(sel.value, 10);
+  hoSetWeekAnchor(idx);
+  hoActiveViernesSem = idx;
+  hoRenderModal();
+  hoShowToast(`Semana actual fijada como Semana ${idx+1}.`);
+  if(typeof ausRenderWeekGrid==='function') ausRenderWeekGrid();
+  if(curView==='panel' && typeof renderPanel==='function') renderPanel();
+  if(curView==='ausencias' && typeof renderAusencias==='function') renderAusencias();
+}
 function hoAddViernesSem(){
   if(!Array.isArray(HO_PATTERN.viernes)) HO_PATTERN.viernes=[[],[],[],[]];
   HO_PATTERN.viernes.push([]);
