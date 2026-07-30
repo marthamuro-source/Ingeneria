@@ -8122,12 +8122,11 @@ function buildPersonEval(p){
       (item.reportes||[]).forEach(r=>{ if(r.fecha) reportadas.add(r.fecha); });
     });
     const paName = PA_MEMBERS.find(m=>samePersonMatch(m,p));
-    const diasValidos = diasHabiles.filter(d=>!(paName && typeof justGet==='function' && justGet(d,paName)));
-    if(diasValidos.length){
-      const reported=diasValidos.filter(d=>reportadas.has(d)).length;
-      const missed=diasValidos.length-reported;
-      repScore=Math.round(reported/diasValidos.length*100);
-      repData={pct:repScore,reported,oblig:diasValidos.length,missed};
+    if(diasHabiles.length){
+      const reported=diasHabiles.filter(d=>reportadas.has(d) || (paName && typeof justGet==='function' && justGet(d,paName))).length;
+      const missed=diasHabiles.length-reported;
+      repScore=Math.round(reported/diasHabiles.length*100);
+      repData={pct:repScore,reported,oblig:diasHabiles.length,missed};
     }
   }
 
@@ -9677,24 +9676,22 @@ function renderDashReporteo2(){
   }
   const nombresMesesQ = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'].slice(qStartMonth, qStartMonth+3).join(', ');
 
-  const reportaronHoy = PA_MEMBERS.filter(m=>reportesPorPersona[m].has(hoyStr));
+  const reportaronHoy = PA_MEMBERS.filter(m=>reportesPorPersona[m].has(hoyStr) || justGet(hoyStr,m));
   const justificadosHoy = PA_MEMBERS.filter(m=>!reportesPorPersona[m].has(hoyStr) && justGet(hoyStr,m));
   const noReportaronHoy = PA_MEMBERS.filter(m=>!reportesPorPersona[m].has(hoyStr) && !justGet(hoyStr,m));
 
   function calcCumplimiento(dias){
     return PA_MEMBERS.map(m=>{
-      const diasValidos = dias.filter(d=>!justGet(d,m)); // los días justificados no cuentan ni a favor ni en contra
-      const total = diasValidos.length;
-      const cumplidos = diasValidos.filter(d=>reportesPorPersona[m].has(d)).length;
+      const total = dias.length;
+      const cumplidos = dias.filter(d=>reportesPorPersona[m].has(d) || justGet(d,m)).length; // justificado cuenta como cumplido
       const pct = total>0 ? Math.round(cumplidos/total*100) : 0;
       return {nombre:m, cumplidos, total, pct};
     }).sort((a,b)=>b.pct-a.pct);
   }
-  // Cumplimiento del Q: cumplidos = días ya transcurridos que sí reportó; total = TODO el trimestre (acumulado, no solo lo transcurrido), excluyendo justificados
+  // Cumplimiento del Q: cumplidos = días ya transcurridos que sí reportó o que están justificados; total = TODO el trimestre (acumulado, no solo lo transcurrido)
   const cumplimientoQ = PA_MEMBERS.map(m=>{
-    const diasElapsedValidos = diasHabilesQ.filter(d=>!justGet(d,m));
-    const cumplidos = diasElapsedValidos.filter(d=>reportesPorPersona[m].has(d)).length;
-    const total = diasHabilesQTotal.filter(d=>!justGet(d,m)).length;
+    const cumplidos = diasHabilesQ.filter(d=>reportesPorPersona[m].has(d) || justGet(d,m)).length;
+    const total = diasHabilesQTotal.length;
     const pct = total>0 ? Math.round(cumplidos/total*100) : 0;
     return {nombre:m, cumplidos, total, pct};
   }).sort((a,b)=>b.pct-a.pct);
@@ -9717,8 +9714,7 @@ function renderDashReporteo2(){
   function calcRacha(m){
     let racha=0;
     for(const d of ventanaRacha){
-      if(reportesPorPersona[m].has(d)) break;
-      if(justGet(d,m)) continue; // día justificado: no cuenta como falta, pero tampoco rompe la racha
+      if(reportesPorPersona[m].has(d) || justGet(d,m)) break;
       racha++;
     }
     return racha;
@@ -10309,9 +10305,8 @@ function dashRep2GenerarPDF(){
   }
 
   const cumplimiento = PA_MEMBERS.map(m=>{
-    const diasValidos = diasHabiles.filter(d=>!justGet(d,m));
-    const total = diasValidos.length;
-    const cumplidos = diasValidos.filter(d=>reportesPorPersona[m].has(d)).length;
+    const total = diasHabiles.length;
+    const cumplidos = diasHabiles.filter(d=>reportesPorPersona[m].has(d) || justGet(d,m)).length;
     const pct = total>0 ? Math.round(cumplidos/total*100) : 0;
     return {nombre:m, cumplidos, total, pct};
   }).sort((a,b)=>b.pct-a.pct);
@@ -13844,6 +13839,7 @@ function enterDashboard(){
 
   // Ir a vista correcta ANTES del splash
   var startView = (_userRole === 'proyectista') ? 'seguimiento' : 'panel';
+  if(_userRole === 'proyectista' && typeof segActiveTab !== 'undefined') segActiveTab = 'avance';
   if(typeof _origGoView === 'function') _origGoView(startView);
   else if(typeof goView === 'function') goView(startView);
 
