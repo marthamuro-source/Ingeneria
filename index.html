@@ -2066,7 +2066,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   <div id="v-evaluaciones" style="display:none">
     <div class="topbar">
       <div><h1>Evaluaciones del equipo</h1><div class="tmeta" id="evalMeta">Carga los CSV para ver las evaluaciones</div></div>
-      <button onclick="togglePesos()" class="btn-ghost" style="font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;font-family:var(--font)">⚖ Configurar pesos</button>
+      <button id="evalPesosBtn" onclick="togglePesos()" class="btn-ghost" style="font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;font-family:var(--font)">⚖ Configurar pesos</button>
     </div>
     <div class="content">
 
@@ -7831,6 +7831,60 @@ function renderUdPersonCards(courses){
 // ─── EVALUACIONES ─────────────────────────────────────────────────────────────
 let evalExpanded = {};
 
+// Pesos de evaluación — fuente de verdad: Supabase (tabla eval_pesos), así aplica igual para todos.
+const EVAL_PESOS_KEY = 'eval_pesos_v1';
+let EVAL_PESOS = {actividades:25, reporteo:25, calidad:25, udemy:25};
+
+function evalApplyPesosToSliders(){
+  const ids = {actividades:'pesoActividades', reporteo:'pesoReporteo', calidad:'pesoCalidad', udemy:'pesoUdemy'};
+  const valIds = {actividades:'pesoActVal', reporteo:'pesoRepVal', calidad:'pesoCalVal', udemy:'pesoUdVal'};
+  Object.keys(ids).forEach(k=>{
+    const el = document.getElementById(ids[k]);
+    const valEl = document.getElementById(valIds[k]);
+    if(el) el.value = EVAL_PESOS[k];
+    if(valEl) valEl.textContent = EVAL_PESOS[k]+'%';
+  });
+  const sum = Object.values(EVAL_PESOS).reduce((a,b)=>a+b,0);
+  const sumEl = document.getElementById('pesosSuma');
+  if(sumEl){ sumEl.textContent = sum+'%'; sumEl.style.color = sum===100?'var(--green)':'var(--red)'; }
+}
+
+async function evalLoadPesos(){
+  try{
+    const raw = localStorage.getItem(EVAL_PESOS_KEY);
+    if(raw) EVAL_PESOS = {...EVAL_PESOS, ...JSON.parse(raw)};
+  }catch(e){}
+
+  if(_supa){
+    try{
+      const { data, error } = await _supa.from('eval_pesos').select('*').eq('id','main').single();
+      if(!error && data){
+        EVAL_PESOS = {
+          actividades: data.actividades ?? EVAL_PESOS.actividades,
+          reporteo:    data.reporteo    ?? EVAL_PESOS.reporteo,
+          calidad:     data.calidad     ?? EVAL_PESOS.calidad,
+          udemy:       data.udemy       ?? EVAL_PESOS.udemy,
+        };
+        try{ localStorage.setItem(EVAL_PESOS_KEY, JSON.stringify(EVAL_PESOS)); }catch(e){}
+      }
+    }catch(e){ console.warn('evalLoadPesos error:', e); }
+  }
+  evalApplyPesosToSliders();
+}
+
+async function evalSavePesos(){
+  try{ localStorage.setItem(EVAL_PESOS_KEY, JSON.stringify(EVAL_PESOS)); }catch(e){}
+  if(_supa){
+    try{
+      const { error } = await _supa.from('eval_pesos').upsert({ id:'main', ...EVAL_PESOS, updated_at: new Date().toISOString() }, {onConflict:'id'});
+      if(error){
+        console.error('❌ evalSavePesos Supabase:', error);
+        alert('Se guardó localmente, pero no se pudo guardar en Supabase, así que no se aplicará para el resto del equipo.\n\nMotivo: '+(error.message||error.code||'desconocido')+'\n\nEsto normalmente pasa si la tabla "eval_pesos" no existe todavía en tu Supabase. Pídele a Claude que te ayude a crearla.');
+      }
+    }catch(e){ console.error('❌ evalSavePesos excepción:', e); }
+  }
+}
+
 function togglePesos(){
   const p=document.getElementById('evalPesosPanel');
   p.style.display=p.style.display==='none'?'block':'none';
@@ -7849,16 +7903,13 @@ function updatePesos(){
   const sumEl=document.getElementById('pesosSuma');
   sumEl.textContent=sum+'%';
   sumEl.style.color=sum===100?'var(--green)':'var(--red)';
+  EVAL_PESOS = {actividades:a, reporteo:r, calidad:c, udemy:u};
+  evalSavePesos();
   renderEvaluaciones();
 }
 
 function getPesos(){
-  return {
-    actividades:+(document.getElementById('pesoActividades')?.value||25),
-    reporteo:   +(document.getElementById('pesoReporteo')?.value||25),
-    calidad:    +(document.getElementById('pesoCalidad')?.value||25),
-    udemy:      +(document.getElementById('pesoUdemy')?.value||25),
-  };
+  return EVAL_PESOS;
 }
 
 // ─── PERSON IDENTITY MAP ──────────────────────────────────────────────────────
@@ -13581,6 +13632,12 @@ function applyProyectistaReadOnly(){
   var herrManageBtn = document.getElementById('herrManageBtn');
   if(herrManageBtn) herrManageBtn.style.display='none';
 
+  // Evaluaciones: ocultar Configurar pesos (el peso lo define el administrador para todos)
+  var evalPesosBtn = document.getElementById('evalPesosBtn');
+  if(evalPesosBtn) evalPesosBtn.style.display='none';
+  var evalPesosPanel = document.getElementById('evalPesosPanel');
+  if(evalPesosPanel) evalPesosPanel.style.display='none';
+
   // Ausencias: preseleccionar y deshabilitar selector de persona
   var vacSel = document.getElementById('vacPerson');
   if(vacSel && _miNombre){
@@ -13629,6 +13686,7 @@ function enterDashboard(){
     hoLoadSchedule(),
     loadProyNotifs(),
     typeof dashLoadVisibility==='function' ? dashLoadVisibility() : Promise.resolve(),
+    typeof evalLoadPesos==='function' ? evalLoadPesos() : Promise.resolve(),
     typeof supaLoadAll==='function' ? supaLoadAll() : Promise.resolve(),
     (async()=>{
       if(!_supa) return;
@@ -13652,6 +13710,7 @@ function enterDashboard(){
     if(curView==='ausencias' || curView==='equipo') goView(curView);
     if(curView==='udemy' || curView==='seguimiento') renderUdemy && renderUdemy();
     if(typeof dashApplyVisibility==='function') dashApplyVisibility();
+    if(curView==='evaluaciones' && typeof renderEvaluaciones==='function') renderEvaluaciones();
   }).catch(e=>console.warn('enterDashboard supabase load error',e));
 
   if(_userRole === 'proyectista'){
