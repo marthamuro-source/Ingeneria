@@ -2065,7 +2065,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 
   <div id="v-evaluaciones" style="display:none">
     <div class="topbar">
-      <div><h1>Evaluaciones del equipo</h1><div class="tmeta" id="evalMeta">Carga los CSV para ver las evaluaciones</div></div>
+      <div><h1 id="evalTitle">Evaluaciones del equipo</h1><div class="tmeta" id="evalMeta">Carga los CSV para ver las evaluaciones</div></div>
       <button id="evalPesosBtn" onclick="togglePesos()" class="btn-ghost" style="font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;font-family:var(--font)">⚖ Configurar pesos</button>
     </div>
     <div class="content">
@@ -8067,9 +8067,11 @@ function samePersonMatch(a, b){
 const DASH_EXCLUDED = ['Cesar Augusto Orozpe Casique'];
 
 function getEvalData(){
-  return IDENTITY_MAP
-    .filter(e=>!DASH_EXCLUDED.includes(e.canonical))
-    .map(e=>buildPersonEval(e.canonical));
+  let entries = IDENTITY_MAP.filter(e=>!DASH_EXCLUDED.includes(e.canonical));
+  if(_userRole === 'proyectista' && _miNombre){
+    entries = entries.filter(e=>samePersonMatch(e.canonical, _miNombre));
+  }
+  return entries.map(e=>buildPersonEval(e.canonical));
 }
 
 function buildPersonEval(p){
@@ -8194,8 +8196,11 @@ function renderEvaluaciones(){
   data.forEach(d=>{ EVAL_STORE[d.p.replace(/[\s']/g,'_')]=d; });
   const sorted=[...data].sort((a,b)=>(b.globalScore??0)-(a.globalScore??0));
   const loaded=[PA_ITEMS.length?'Avance':'',CRONO_ITEMS.length?'Reporteo':'',CAL_ROWS.length?'Calidad':'',UD_TEAM.length?'Udemy':''].filter(Boolean);
+  const metaLabel = _userRole==='proyectista' ? 'Tu evaluación' : `${sorted.length} proyectistas`;
   document.getElementById('evalMeta').textContent=
-    loaded.length ? `${sorted.length} proyectistas · ${loaded.join(' · ')}` : 'Sin datos disponibles todavía';
+    loaded.length ? `${metaLabel} · ${loaded.join(' · ')}` : 'Sin datos disponibles todavía';
+  const evalTitleEl = document.getElementById('evalTitle');
+  if(evalTitleEl) evalTitleEl.textContent = _userRole==='proyectista' ? 'Mi evaluación' : 'Evaluaciones del equipo';
   document.getElementById('evalGrid').innerHTML=
     loaded.length ? sorted.map(d=>buildEvalCard(d)).join('') :
     `<div class="empty" style="grid-column:1/-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" style="width:38px;height:38px;margin:0 auto 12px;display:block;opacity:.25"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg><p>Sin datos disponibles</p><small>Avance y Reporteo se toman de Panel de Seguimiento, Udemy de Panel de Seguimiento &gt; Udemy, y Calidad del CSV que cargues.</small></div>`;
