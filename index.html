@@ -1620,6 +1620,20 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
     </div>
   </div>
 
+  <!-- MODAL: Detalle de día — Calendario de Vacaciones -->
+  <div class="pa-modal-bg" id="vacDayModalBg">
+    <div class="pa-modal" style="max-width:420px">
+      <div class="pa-modal-hd">
+        <div class="pa-modal-title" id="vacDayModalTitle">Detalle del día</div>
+        <button class="pa-modal-close" onclick="vacCloseDayModal()">&times;</button>
+      </div>
+      <div class="pa-modal-body" id="vacDayModalBody"></div>
+      <div class="pa-modal-ft">
+        <button class="pa-modal-close" style="font-size:13px;padding:8px 16px;border:1px solid var(--border);border-radius:8px" onclick="vacCloseDayModal()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- OVERVIEW -->
   <div id="v-overview" style="display: none;">
     <div class="topbar">
@@ -5211,6 +5225,28 @@ let cronoExpandedId = null;
 let cronoSubTab = 'cronograma'; // 'csv' | 'cronograma'
 let cronoFiltroProyectista = ''; // '' = todos, o nombre del proyectista
 
+// ── Auto-actualización del calendario general de reportes (admin/jefe) ──
+// Refresca desde Supabase cada 20s mientras la administradora esté viendo esta pestaña,
+// para que los reportes que un proyectista acaba de guardar aparezcan sin recargar la página.
+let _cronoAutoRefreshInterval = null;
+function cronoIniciarAutoRefresh(){
+  if(_cronoAutoRefreshInterval) return; // ya está corriendo
+  _cronoAutoRefreshInterval = setInterval(async ()=>{
+    const sigueActivo = curView==='seguimiento' && cronoSubTab==='csv' && _userRole!=='proyectista' && document.getElementById('cronoCalendarioWrap');
+    if(!sigueActivo){ cronoDetenerAutoRefresh(); return; }
+    if(!_supa || !SUPA_ONLINE) return;
+    try{
+      await cronoRecargarDeSupabase();
+      if(curView==='seguimiento' && cronoSubTab==='csv' && document.getElementById('cronoCalendarioWrap')){
+        renderCronoCalendario();
+      }
+    }catch(e){ console.warn('cronoIniciarAutoRefresh error:', e); }
+  }, 20000);
+}
+function cronoDetenerAutoRefresh(){
+  if(_cronoAutoRefreshInterval){ clearInterval(_cronoAutoRefreshInterval); _cronoAutoRefreshInterval = null; }
+}
+
 function renderReporteoView(){
   renderFestivos();
   const mount = document.getElementById('segReporteoMount');
@@ -5248,9 +5284,11 @@ function renderReporteoView(){
         else renderReporteo();
       }
       renderCronoCalendario();
+      cronoIniciarAutoRefresh();
     }
     return;
   }
+  cronoDetenerAutoRefresh();
 
   // ── Vista Cronograma ──
 
@@ -5490,7 +5528,7 @@ async function cronoRecargarDeSupabase(){
 async function cronoSetSubTab(tab){
   cronoSubTab = tab;
   // Siempre recargar de Supabase al cambiar de tab para tener datos frescos
-  if(tab==='cronograma' && _supa && SUPA_ONLINE){
+  if((tab==='cronograma' || tab==='csv') && _supa && SUPA_ONLINE){
     await cronoRecargarDeSupabase();
   }
   renderReporteoView();
@@ -14345,6 +14383,87 @@ function vacSetQ(q){
   vacRenderCal();
 }
 
+function vacOpenDayModal(dStr){
+  const d = new Date(dStr+'T00:00:00');
+  const dow = d.getDay();
+  let fmtFecha = d.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  fmtFecha = fmtFecha.charAt(0).toUpperCase()+fmtFecha.slice(1);
+  const isWeekend = dow===0 || dow===6;
+  const isFest = typeof FESTIVOS!=='undefined' && FESTIVOS.includes(dStr);
+  const festName = isFest ? (FEST_LABELS[dStr]||'Día festivo') : null;
+
+  const vacPersons = PA_MEMBERS.filter(p=>VACACIONES[p] && VACACIONES[p].includes(dStr));
+
+  const mmdd = dStr.slice(5,10);
+  const cumpleNames = (ORG_DATA||[]).filter(m=>m.cumple===mmdd).map(m=>m.nombre).filter(Boolean);
+  const aniversarios = (ORG_DATA||[]).filter(m=>{
+    if(!m.ingreso) return false;
+    const ing = new Date(m.ingreso+'T00:00:00');
+    const ingMMDD = `${String(ing.getMonth()+1).padStart(2,'0')}-${String(ing.getDate()).padStart(2,'0')}`;
+    return ingMMDD===mmdd && ing.getFullYear() < d.getFullYear();
+  }).map(m=>{
+    const ing = new Date(m.ingreso+'T00:00:00');
+    return {nombre:m.nombre, years: d.getFullYear()-ing.getFullYear()};
+  });
+
+  let homeOfficeHoy = [];
+  if(!isWeekend && typeof ausHomeOfficeFor==='function'){
+    try{ homeOfficeHoy = ausHomeOfficeFor(d) || []; }catch(e){ homeOfficeHoy=[]; }
+  }
+
+  const titleEl = document.getElementById('vacDayModalTitle');
+  if(titleEl) titleEl.textContent = fmtFecha;
+
+  let html = '';
+  if(isFest){
+    html += `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;margin-bottom:12px;background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);border-radius:8px">
+      <span style="font-size:16px">🎉</span><div><b style="color:#f5a623;font-size:13px">Día festivo</b><div style="font-size:12px;color:var(--muted)">${festName}</div></div>
+    </div>`;
+  }
+  if(isWeekend){
+    html += `<div style="font-size:11px;color:var(--dim);margin-bottom:12px">Fin de semana — no requiere reporte ni home office</div>`;
+  }
+
+  html += `<div style="margin-bottom:14px">
+    <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">🏖️ Vacaciones (${vacPersons.length})</div>
+    ${vacPersons.length ? vacPersons.map(p=>`<div style="font-size:13px;color:var(--text);padding:4px 0">${p}</div>`).join('') : `<div style="font-size:12px;color:var(--dim)">Nadie de vacaciones este día</div>`}
+  </div>`;
+
+  if(!isWeekend){
+    html += `<div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">🏠 Home Office (${homeOfficeHoy.length})</div>
+      ${homeOfficeHoy.length ? homeOfficeHoy.map(p=>`<div style="font-size:13px;color:var(--text);padding:4px 0">${p}</div>`).join('') : `<div style="font-size:12px;color:var(--dim)">Nadie en Home Office este día</div>`}
+    </div>`;
+  }
+
+  if(cumpleNames.length){
+    html += `<div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">🎂 Cumpleaños</div>
+      ${cumpleNames.map(n=>`<div style="font-size:13px;color:var(--text);padding:4px 0">${n}</div>`).join('')}
+    </div>`;
+  }
+
+  if(aniversarios.length){
+    html += `<div>
+      <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">🎉 Aniversario laboral</div>
+      ${aniversarios.map(a=>`<div style="font-size:13px;color:var(--text);padding:4px 0">${a.nombre} — ${a.years} año${a.years!==1?'s':''}</div>`).join('')}
+    </div>`;
+  }
+
+  if(!vacPersons.length && !homeOfficeHoy.length && !cumpleNames.length && !aniversarios.length && !isFest && !isWeekend){
+    html += `<div style="text-align:center;color:var(--dim);font-size:12px;padding:10px 0">Sin novedades registradas este día.</div>`;
+  }
+
+  const bodyEl = document.getElementById('vacDayModalBody');
+  if(bodyEl) bodyEl.innerHTML = html;
+  const bg = document.getElementById('vacDayModalBg');
+  if(bg) bg.classList.add('open');
+}
+function vacCloseDayModal(){
+  const bg = document.getElementById('vacDayModalBg');
+  if(bg) bg.classList.remove('open');
+}
+
 function vacRenderCal(){
   const year = new Date().getFullYear();
   const startMonth = vacCalQ * 3; // 0,3,6,9
@@ -14439,6 +14558,8 @@ function vacRenderCal(){
       if(cumpleNames.length || aniversarioNames.length) cls += ' has-badge';
 
       cell.className = cls;
+      cell.style.cursor = 'pointer';
+      cell.onclick = ()=>vacOpenDayModal(dStr);
       cell.innerHTML = String(d) + (cumpleNames.length||aniversarioNames.length ? `<span class="vac-cal-badge">${cumpleNames.length?'🎂':''}${aniversarioNames.length?'🎉':''}</span>` : '');
 
       // Tooltip
