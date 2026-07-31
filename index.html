@@ -7440,6 +7440,20 @@ let calMes = new Date().getMonth();
 let calAnio = new Date().getFullYear();
 let calDiaSeleccionado = null;
 
+function calJustToggleAll(checked){
+  document.querySelectorAll('.justChkPersona').forEach(chk=>{ chk.checked = checked; });
+}
+async function calJustAgregarMasivo(fecha){
+  const seleccionados = [...document.querySelectorAll('.justChkPersona:checked')].map(chk=>chk.value);
+  if(!seleccionados.length){ alert('Selecciona al menos una persona (usa las casillas a la izquierda).'); return; }
+  const motivo = (document.getElementById('justMotivoMasivo')?.value||'').trim();
+  if(!motivo){ alert('Escribe un motivo para justificar a los seleccionados.'); return; }
+  for(const persona of seleccionados){
+    await justSave(fecha, persona, motivo);
+  }
+  renderCronoCalendario();
+}
+
 async function calJustAgregar(fecha, persona, inputId){
   const input = document.getElementById('justMotivo-'+inputId);
   const motivo = (input?.value||'').trim();
@@ -7599,8 +7613,19 @@ function renderCronoCalendario(){
     }
 
     if(requiereReporte && sinReportar.length){
+      const sinJustificar = sinReportar.filter(m=>!justGet(calDiaSeleccionado,m));
       html += `<div style="margin-top:12px;padding-top:12px;border-top:0.5px solid rgba(255,255,255,.08)">
-        <div style="font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Sin reportar (${sinReportar.length})</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.04em">Sin reportar (${sinReportar.length})</div>
+          ${puedeJustificar && sinJustificar.length>1?`<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--dim);cursor:pointer">
+            <input type="checkbox" id="justChkAll" onchange="calJustToggleAll(this.checked)"> Seleccionar todos
+          </label>`:''}
+        </div>
+        ${puedeJustificar && sinJustificar.length>1?`
+        <div style="display:flex;align-items:center;gap:6px;padding:8px;margin-bottom:10px;background:rgba(192,132,252,.06);border:0.5px dashed rgba(192,132,252,.3);border-radius:8px">
+          <input id="justMotivoMasivo" type="text" placeholder="Motivo para los seleccionados (ej. junta general de todo el equipo)" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:11px">
+          <button onclick="calJustAgregarMasivo('${calDiaSeleccionado}')" style="background:rgba(192,132,252,.15);border:1px solid rgba(192,132,252,.4);color:#c084fc;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:11px;white-space:nowrap;flex-shrink:0">🔖 Justificar seleccionados</button>
+        </div>`:''}
         ${sinReportar.map(m=>{
           const j = justGet(calDiaSeleccionado, m);
           const mid = m.replace(/[^a-zA-Z0-9]/g,'');
@@ -7611,6 +7636,7 @@ function renderCronoCalendario(){
             </div>`;
           } else if(puedeJustificar){
             return `<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;margin-bottom:5px;background:rgba(255,92,92,.05);border:0.5px solid rgba(255,92,92,.18);border-radius:8px">
+              <input type="checkbox" class="justChkPersona" value="${m.replace(/"/g,'&quot;')}" style="flex-shrink:0">
               <span style="font-size:11.5px;color:var(--text);width:130px;flex-shrink:0">${m.split(' ').slice(0,2).join(' ')}</span>
               <input id="justMotivo-${mid}" type="text" placeholder="Motivo (ej. permiso médico)" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:11px">
               <button onclick="calJustAgregar('${calDiaSeleccionado}','${m.replace(/'/g,"\\'")}','${mid}')" style="background:rgba(192,132,252,.15);border:1px solid rgba(192,132,252,.4);color:#c084fc;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:11px;white-space:nowrap;flex-shrink:0">🔖 Justificar</button>
