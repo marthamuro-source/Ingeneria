@@ -14392,7 +14392,7 @@ function vacOpenDayModal(dStr){
   const isFest = typeof FESTIVOS!=='undefined' && FESTIVOS.includes(dStr);
   const festName = isFest ? (FEST_LABELS[dStr]||'Día festivo') : null;
 
-  const vacPersons = PA_MEMBERS.filter(p=>VACACIONES[p] && VACACIONES[p].includes(dStr));
+  const vacPersons = PA_MEMBERS.filter(p=>VACACIONES[p] && VACACIONES[p].has(dStr));
 
   const mmdd = dStr.slice(5,10);
   const cumpleNames = (ORG_DATA||[]).filter(m=>m.cumple===mmdd).map(m=>m.nombre).filter(Boolean);
