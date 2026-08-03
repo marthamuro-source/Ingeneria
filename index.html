@@ -5575,12 +5575,87 @@ function cronoToggle(actId){
 
 // ── Modal agregar subtarea ──
 let cronoModalActId = null;
+// ── Subtarea simplificada para actividades de Trabajo Operativo ──
+// Solo pide descripción + tiempo de entrega en días; el avance se reporta como % acumulado, no unidades.
+function cronoAddSubtareaOperativaModal(actId){
+  cronoModalActId = actId;
+  const old = document.getElementById('cronoSubtareaModalBg');
+  if(old) old.remove();
+
+  const bg = document.createElement('div');
+  bg.id = 'cronoSubtareaModalBg';
+  bg.className = 'pa-modal-bg open';
+  bg.innerHTML = `<div class="pa-modal" style="max-width:440px" onclick="event.stopPropagation()">
+    <div class="pa-modal-title">Agregar tarea operativa</div>
+    <div style="background:rgba(74,143,212,.08);border:0.5px solid rgba(74,143,212,.2);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:11px;color:var(--dim);line-height:1.6">
+      Esta actividad es <b style="color:var(--accent)">Trabajo Operativo</b> — se sigue por % de avance reportado, no por unidades.
+    </div>
+
+    <div style="margin-bottom:12px">
+      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Descripción de la tarea</label>
+      <input id="cronoOpNombre" type="text" placeholder="Ej. Actualizar base de datos FARO"
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Tiempo de entrega (días hábiles)</label>
+      <input id="cronoOpDias" type="number" min="0.5" step="0.5" placeholder="0"
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="pa-btn pa-btn-ghost" onclick="cronoCloseSubModal()">Cancelar</button>
+      <button class="pa-btn pa-btn-primary" onclick="cronoGuardarOperativa()">Agregar</button>
+    </div>
+  </div>`;
+  bg.onclick = (e)=>{ if(e.target===bg) bg.classList.remove('open'); };
+  document.body.appendChild(bg);
+}
+
+async function cronoGuardarOperativa(){
+  const nombre = document.getElementById('cronoOpNombre')?.value.trim();
+  const dias = parseFloat(document.getElementById('cronoOpDias')?.value)||0;
+  if(!nombre){ alert('Falta la descripción de la tarea'); return; }
+  if(!dias||dias<=0){ alert('Falta el tiempo de entrega en días'); return; }
+  if(!cronoModalActId){ alert('Error: no se identificó la actividad. Cierra y vuelve a abrir.'); return; }
+  cronoCloseSubModal();
+
+  await cronoRecargarDeSupabase();
+
+  let item = CRONO_ITEMS.find(x=>x.actividadId===cronoModalActId);
+  if(!item){
+    const pa = PA_ITEMS.find(x=>x.id===cronoModalActId);
+    if(!pa) return;
+    item = cronoGetOrCreate(pa);
+  }
+  if(!item.subtareas) item.subtareas=[];
+
+  item.subtareas.push({
+    id:'st_'+Date.now(),
+    nombre, unidad:'%', cantidad:100, rendimiento: Math.round((100/dias)*100)/100, tipo:'unidades_por_dia',
+    esOperativo:true,
+    esDeCatalogo:false, catId:null,
+    pendienteValidacion:false,
+    propuestaPor: _userRole==='proyectista' ? _miNombre : null,
+    estatus:'pendiente',
+    avanceAcum:0
+  });
+  cronoSaveItem(cronoModalActId);
+
+  cronoSubTab = 'cronograma';
+  cronoExpandedId = cronoModalActId;
+  renderReporteoView();
+}
+
 function cronoAddSubtareaModal(actId){
   cronoModalActId = actId;
   cronoLoadCatalogo();
   // Siempre eliminar y recrear para actualizar catálogo y actId
   const old = document.getElementById('cronoSubtareaModalBg');
   if(old) old.remove();
+
+  const paAct = PA_ITEMS.find(x=>x.id===actId);
+  const esOperativa = paAct && paAct.tipo==='Trabajo Operativo';
+  if(esOperativa){ return cronoAddSubtareaOperativaModal(actId); }
 
   const esProyectista = _userRole === 'proyectista';
   const bg = document.createElement('div');
@@ -5852,17 +5927,29 @@ function cronoDiasUpdate(){
   const rend = parseFloat(document.getElementById('cronoStRend')?.value)||0;
   const tipo = document.getElementById('cronoStTipo')?.value||'unidades_por_dia';
   const el = document.getElementById('cronoDiasEstimados');
+  const HORAS_JORNADA = 8.4; // Promedio real: Lun-Jue 9h (9am-7pm menos 1h comida) + Vie 6h (9am-3pm) = 42h/5 días
   if(el && cant>0 && rend>0){
     let dias;
     if(tipo==='dias_por_unidad'){
-      dias = Math.ceil(cant * rend);
-      el.textContent = `→ ${cant} ${document.getElementById('cronoStUnidad')?.value||'unidades'} × ${rend} días/unidad = ${dias} día${dias!==1?'s hábiles':''}`;
+      dias = cant * rend;
+      if(dias < 1){
+        const horas = Math.round(dias * HORAS_JORNADA * 10)/10;
+        el.textContent = `→ ${cant} ${document.getElementById('cronoStUnidad')?.value||'unidades'} × ${rend} días/unidad = ${dias.toFixed(2)} días (≈ ${horas} hora${horas!==1?'s':''})`;
+      } else {
+        const diasCeil = Math.ceil(dias);
+        el.textContent = `→ ${cant} ${document.getElementById('cronoStUnidad')?.value||'unidades'} × ${rend} días/unidad = ${diasCeil} día${diasCeil!==1?'s hábiles':''}`;
+      }
     } else {
       dias = cant/rend;
-      const diasCeil = Math.ceil(dias);
-      el.textContent = dias%1===0
-        ? `→ ${cant} ÷ ${rend} = ${diasCeil} día${diasCeil!==1?'s hábiles':'hábil'}`
-        : `→ ${cant} ÷ ${rend} = ${dias.toFixed(2)} días (≈ ${diasCeil} día${diasCeil!==1?'s hábiles':'hábil'})`;
+      if(dias < 1){
+        const horas = Math.round(dias * HORAS_JORNADA * 10)/10;
+        el.textContent = `→ ${cant} ÷ ${rend} = ${dias.toFixed(2)} días (≈ ${horas} hora${horas!==1?'s':''})`;
+      } else {
+        const diasCeil = Math.ceil(dias);
+        el.textContent = dias%1===0
+          ? `→ ${cant} ÷ ${rend} = ${diasCeil} día${diasCeil!==1?'s hábiles':'hábil'}`
+          : `→ ${cant} ÷ ${rend} = ${dias.toFixed(2)} días (≈ ${diasCeil} día${diasCeil!==1?'s hábiles':'hábil'})`;
+      }
     }
     el.style.color = 'var(--accent)';
   } else if(el){ el.textContent=''; }
@@ -7613,7 +7700,7 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
     <div id="calProyStInfo" style="font-size:11px;color:var(--accent);margin-bottom:8px;min-height:16px"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div>
-        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Cantidad avanzada hoy</label>
+        <label id="calProyCantLabel" style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Cantidad avanzada hoy</label>
         <div style="display:flex;gap:6px;align-items:center">
           <input id="calProyCant" type="number" min="0" step="0.1" placeholder="0"
             style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
@@ -7686,10 +7773,18 @@ function calProyStChangeHoy(){
   const idx = parseInt(sel?.value);
   const unidEl = document.getElementById('calProyUnidad');
   const infoEl = document.getElementById('calProyStInfo');
+  const labelEl = document.getElementById('calProyCantLabel');
   if(isNaN(idx)||idx<0||!subtareas[idx]){ if(unidEl) unidEl.textContent='—'; return; }
   const x = subtareas[idx];
+  const esPct = x.st.unidad==='%' || x.st.esOperativo;
   if(unidEl) unidEl.textContent = x.st.unidad;
-  if(infoEl) infoEl.textContent = `Acumulado: ${x.st.avanceAcum||0}/${x.st.cantidad} ${x.st.unidad}`;
+  if(esPct){
+    if(labelEl) labelEl.textContent = '% que llevas (acumulado, no lo que avanzaste hoy)';
+    if(infoEl) infoEl.textContent = `Llevas reportado: ${x.st.avanceAcum||0}%`;
+  } else {
+    if(labelEl) labelEl.textContent = 'Cantidad avanzada hoy';
+    if(infoEl) infoEl.textContent = `Acumulado: ${x.st.avanceAcum||0}/${x.st.cantidad} ${x.st.unidad}`;
+  }
 }
 
 // Mantener también la versión original por compatibilidad
@@ -7716,7 +7811,12 @@ async function calProyGuardarReporteHoy(){
     const st = item?.subtareas?.find(s=>s.id===entry.stData.st.id);
     if(!st||!item) continue;
 
-    st.avanceAcum = (st.avanceAcum||0) + entry.cantidad;
+    const esPct = st.unidad==='%' || st.esOperativo;
+    if(esPct){
+      st.avanceAcum = Math.max(0, Math.min(100, entry.cantidad)); // valor absoluto reportado, tope 0-100
+    } else {
+      st.avanceAcum = (st.avanceAcum||0) + entry.cantidad;
+    }
     st.estatus = entry.estatus;
     if(!item.reportes) item.reportes=[];
     item.reportes.push({
