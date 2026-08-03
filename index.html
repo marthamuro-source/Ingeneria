@@ -5973,22 +5973,105 @@ function cronoValidarSubtarea(actId, stId){
   const st = item?.subtareas?.find(s=>s.id===stId);
   if(!st) return;
 
-  const nuevoRend = prompt(
-    `Validar subtarea: "${st.nombre}"\n` +
-    `Tipo: ${st.tipo==='dias_por_unidad'?'Días/unidad':'Unidades/día'}\n` +
-    `Rendimiento propuesto: ${st.rendimiento} ${st.tipo==='dias_por_unidad'?'días/'+st.unidad:st.unidad+'/día'}\n\n` +
-    `Confirma o ajusta el rendimiento:`,
-    st.rendimiento
-  );
-  if(nuevoRend===null) return; // Canceló
-  const rend = parseFloat(nuevoRend);
+  const old = document.getElementById('cronoValidarModalBg');
+  if(old) old.remove();
+
+  const bg = document.createElement('div');
+  bg.id = 'cronoValidarModalBg';
+  bg.className = 'pa-modal-bg open';
+  bg.innerHTML = `<div class="pa-modal" style="max-width:460px" onclick="event.stopPropagation()">
+    <div class="pa-modal-title">Validar subtarea propuesta</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:14px">Propuesta por <b style="color:var(--text)">${(st.propuestaPor||'—').split(' ').slice(0,2).join(' ')}</b>. Revisa y corrige lo que haga falta antes de aprobar.</div>
+
+    <div style="margin-bottom:12px">
+      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Nombre de la subtarea</label>
+      <input id="cronoValNombre" type="text" value="${st.nombre.replace(/"/g,'&quot;')}"
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Unidad</label>
+        <input id="cronoValUnidad" type="text" value="${st.unidad.replace(/"/g,'&quot;')}"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Cantidad total</label>
+        <input id="cronoValCantidad" type="number" min="0.1" step="0.1" value="${st.cantidad}"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+      </div>
+    </div>
+
+    <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:6px">Tipo de rendimiento</label>
+    <div style="display:flex;gap:0;border:0.5px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:12px" id="cronoValTipoWrap">
+      <button id="cronoValBtnUnidDia" onclick="cronoValSetTipo('unidades_por_dia')"
+        style="flex:1;padding:6px 10px;font-size:11px;border:none;cursor:pointer;background:${st.tipo!=='dias_por_unidad'?'rgba(74,143,212,.2)':'var(--surface2)'};color:${st.tipo!=='dias_por_unidad'?'var(--accent)':'var(--dim)'};font-weight:${st.tipo!=='dias_por_unidad'?'600':'400'}">
+        📊 Unidades/día
+      </button>
+      <button id="cronoValBtnDiaUnid" onclick="cronoValSetTipo('dias_por_unidad')"
+        style="flex:1;padding:6px 10px;font-size:11px;border:none;cursor:pointer;background:${st.tipo==='dias_por_unidad'?'rgba(74,143,212,.2)':'var(--surface2)'};color:${st.tipo==='dias_por_unidad'?'var(--accent)':'var(--dim)'};font-weight:${st.tipo==='dias_por_unidad'?'600':'400'}">
+        📅 Días/unidad
+      </button>
+    </div>
+    <input type="hidden" id="cronoValTipo" value="${st.tipo||'unidades_por_dia'}">
+
+    <div style="margin-bottom:16px">
+      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px" id="cronoValRendLabel">Rendimiento (${st.tipo==='dias_por_unidad'?'días/unidad':'unidades/día'})</label>
+      <input id="cronoValRend" type="number" min="0.1" step="0.1" value="${st.rendimiento}"
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="pa-btn pa-btn-ghost" onclick="document.getElementById('cronoValidarModalBg').remove()">Cancelar</button>
+      <button class="pa-btn pa-btn-primary" onclick="cronoConfirmarValidacion('${actId}','${stId}')">✓ Validar</button>
+    </div>
+  </div>`;
+  bg.onclick = (e)=>{ if(e.target===bg) bg.remove(); };
+  document.body.appendChild(bg);
+}
+
+function cronoValSetTipo(tipo){
+  document.getElementById('cronoValTipo').value = tipo;
+  const btnU = document.getElementById('cronoValBtnUnidDia');
+  const btnD = document.getElementById('cronoValBtnDiaUnid');
+  const lbl = document.getElementById('cronoValRendLabel');
+  if(tipo==='unidades_por_dia'){
+    btnU.style.background='rgba(74,143,212,.2)'; btnU.style.color='var(--accent)'; btnU.style.fontWeight='600';
+    btnD.style.background='var(--surface2)'; btnD.style.color='var(--dim)'; btnD.style.fontWeight='400';
+    if(lbl) lbl.textContent='Rendimiento (unidades/día)';
+  } else {
+    btnD.style.background='rgba(74,143,212,.2)'; btnD.style.color='var(--accent)'; btnD.style.fontWeight='600';
+    btnU.style.background='var(--surface2)'; btnU.style.color='var(--dim)'; btnU.style.fontWeight='400';
+    if(lbl) lbl.textContent='Rendimiento (días/unidad)';
+  }
+}
+
+function cronoConfirmarValidacion(actId, stId){
+  cronoLoad();
+  const item = CRONO_ITEMS.find(x=>x.actividadId===actId);
+  const st = item?.subtareas?.find(s=>s.id===stId);
+  if(!st) return;
+
+  const nombre = document.getElementById('cronoValNombre')?.value.trim();
+  const unidad = document.getElementById('cronoValUnidad')?.value.trim();
+  const cantidad = parseFloat(document.getElementById('cronoValCantidad')?.value)||0;
+  const rend = parseFloat(document.getElementById('cronoValRend')?.value)||0;
+  const tipo = document.getElementById('cronoValTipo')?.value||'unidades_por_dia';
+  if(!nombre){ alert('Falta el nombre'); return; }
+  if(!unidad){ alert('Falta la unidad'); return; }
+  if(!cantidad){ alert('Falta la cantidad total'); return; }
   if(!rend||rend<=0){ alert('Rendimiento inválido'); return; }
 
+  st.nombre = nombre;
+  st.unidad = unidad;
+  st.cantidad = cantidad;
   st.rendimiento = rend;
+  st.tipo = tipo;
   st.pendienteValidacion = false;
   st.validadoPor = _miNombre||'Admin';
   st.validadoAt = repDateKey(new Date());
   cronoSaveItem(actId);
+
+  document.getElementById('cronoValidarModalBg')?.remove();
 
   // Ofrecer agregar al catálogo general
   if(confirm(`¿Agregar "${st.nombre}" al catálogo general para uso futuro?`)){
