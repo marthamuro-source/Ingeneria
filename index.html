@@ -35,6 +35,28 @@
   --font:'DM Sans',sans-serif;
   --mono:'DM Mono',monospace;
 }
+[data-theme="light"]{
+  --bg:#eef1f6;
+  --surface:#ffffff;
+  --surface2:#f4f6fa;
+
+  --border:rgba(30,60,120,0.10);
+  --border2:rgba(30,80,180,0.16);
+
+  --text:#1a2233;
+  --muted:#5a6478;
+  --dim:#8a93a3;
+
+  --accent:#1a56d0;
+
+  --green:#16a34a;
+  --amber:#d97706;
+  --red:#dc2626;
+  --teal:#0d9488;
+}
+[data-theme="light"] body{ background:var(--bg); }
+[data-theme="light"] .sidebar{ background:#ffffff; border-right:1px solid #e6e9ef; }
+[data-theme="light"] ::-webkit-scrollbar-thumb{ background:#d7dde6; }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;min-height:100vh;}
 ::-webkit-scrollbar{width:4px;height:4px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px;}
@@ -922,6 +944,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 
 </style>
 </head>
+<script>
+(function(){
+  try{
+    var t = localStorage.getItem("c3ntro_theme_v1") || "dark";
+    document.documentElement.setAttribute("data-theme", t);
+  }catch(e){}
+})();
+</script>
 <body>
 <style>
   /* Ocultar app hasta que auth resuelva */
@@ -1025,6 +1055,24 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   #userTopbar .ut-dd-logout { color: #ff8888; }
   #userTopbar .ut-dd-logout:hover { background: rgba(255,70,70,.12); }
 
+  [data-theme="light"] #userTopbar { background: linear-gradient(90deg, #ffffff 0%, #f7f9fc 60%, #ffffff 100%); border-bottom: 1px solid #e6e9ef; box-shadow: 0 2px 10px rgba(20,30,60,.05); }
+  [data-theme="light"] #userTopbar .ut-navbtn { color: #3a5aa8; background: rgba(26,86,208,.06); border-color: rgba(26,86,208,.16); }
+  [data-theme="light"] #userTopbar .ut-navbtn:hover { background: rgba(26,86,208,.14); color: #1a56d0; }
+  [data-theme="light"] #userTopbar .ut-navbtn--green { color: #157a45; background: rgba(22,163,74,.08); border-color: rgba(22,163,74,.2); }
+  [data-theme="light"] #userTopbar .ut-navbtn--green:hover { background: rgba(22,163,74,.16); color: #16a34a; }
+  [data-theme="light"] #userTopbar .ut-sep { background: rgba(26,86,208,.15); }
+  [data-theme="light"] #userTopbar .ut-notif-btn:hover { background: rgba(26,86,208,.08); }
+  [data-theme="light"] #userTopbar .ut-user-menu:hover { background: rgba(26,86,208,.06); border-color: rgba(26,86,208,.14); }
+  [data-theme="light"] #userTopbar .ut-user-menu.open { background: rgba(26,86,208,.1); border-color: rgba(26,86,208,.22); }
+  [data-theme="light"] #userTopbar .ut-chevron { color: rgba(58,90,168,.6); }
+  [data-theme="light"] #userTopbar .ut-dropdown { background: #ffffff; border-color: #e6e9ef; box-shadow: 0 8px 28px rgba(20,30,60,.14); }
+  [data-theme="light"] #userTopbar .ut-dd-name { color: #1a2233; }
+  [data-theme="light"] #userTopbar .ut-dd-role { color: #8a93a3; }
+  [data-theme="light"] #userTopbar .ut-dd-divider { background: #eef1f5; }
+  [data-theme="light"] #userTopbar .ut-dd-item { color: #3a4356; }
+  [data-theme="light"] #userTopbar .ut-dd-item:hover { background: #f4f6fa; }
+  [data-theme="light"] #themeToggleBtn .ut-notif-icon { filter: none; }
+
   /* Botones de nav en topbar */
   #userTopbar .ut-navbtn {
     display: flex; align-items: center; gap: 5px;
@@ -1066,6 +1114,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   </div>
   <!-- zona derecha: notificaciones + usuario -->
   <div class="ut-right">
+    <!-- Cambiar tema claro/oscuro -->
+    <button class="ut-notif-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Cambiar a tema claro">
+      <span class="ut-notif-icon" id="themeToggleIcon">🌙</span>
+    </button>
     <!-- Campana de notificaciones -->
     <button class="ut-notif-btn" id="notifBellBtn" onclick="notifTogglePanel()" title="Notificaciones">
       <span class="ut-notif-icon">🔔</span>
@@ -5023,6 +5075,27 @@ const CRONO_CATALOGO_DEFAULT = [
 
 const CRONO_KEY = 'c3ntro_cronograma_v1';
 const CRONO_CAT_KEY = 'c3ntro_crono_catalogo_v1';
+// ── Tema claro/oscuro ──
+const THEME_KEY = 'c3ntro_theme_v1';
+function applyTheme(theme){
+  document.documentElement.setAttribute('data-theme', theme);
+  const icon = document.getElementById('themeToggleIcon');
+  const btn = document.getElementById('themeToggleBtn');
+  if(icon) icon.textContent = theme==='light' ? '☀️' : '🌙';
+  if(btn) btn.title = theme==='light' ? 'Cambiar a tema oscuro' : 'Cambiar a tema claro';
+}
+function toggleTheme(){
+  const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = cur==='light' ? 'dark' : 'light';
+  applyTheme(next);
+  try{ localStorage.setItem(THEME_KEY, next); }catch(e){}
+}
+(function initTheme(){
+  let saved = 'dark';
+  try{ saved = localStorage.getItem(THEME_KEY) || 'dark'; }catch(e){}
+  document.documentElement.setAttribute('data-theme', saved);
+})();
+
 let CRONO_ITEMS = []; // actividades con cronograma
 
 // ── Justificaciones de días no reportados (solo admin/jefe puede crear, visible para todos) ──
