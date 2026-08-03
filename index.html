@@ -5065,7 +5065,41 @@ async function justRemove(fecha, persona){
 }
 let CRONO_CATALOGO = [];
 
+// ── Paquetes de tareas (tipos de entregable que agrupan varias sueltas con un rendimiento compartido) ──
+const CRONO_PAQ_KEY = 'c3ntro_crono_paquetes_v1';
+let CRONO_PAQUETES = [];
+function cronoLoadPaquetes(){
+  try{
+    const raw = localStorage.getItem(CRONO_PAQ_KEY);
+    CRONO_PAQUETES = raw ? JSON.parse(raw) : [];
+  }catch(e){ CRONO_PAQUETES = []; }
+}
+function cronoSavePaquetes(){
+  localStorage.setItem(CRONO_PAQ_KEY, JSON.stringify(CRONO_PAQUETES));
+  if(!_supa) return;
+  _supa.from('crono_paquetes').upsert(CRONO_PAQUETES.map(p=>({...p, entregables: JSON.stringify(p.entregables)})), {onConflict:'id'})
+    .then(({error})=>{ if(error) console.error('❌ cronoSavePaquetes:', error); })
+    .catch(e=>console.error('❌ cronoSavePaquetes exception:', e));
+}
+async function cronoDeletePaquete(id){
+  if(!confirm('¿Eliminar este paquete de tareas?')) return;
+  CRONO_PAQUETES = CRONO_PAQUETES.filter(p=>p.id!==id);
+  cronoSavePaquetes();
+  if(_supa){
+    try{
+      const {error} = await _supa.from('crono_paquetes').delete().eq('id', id);
+      if(error){
+        console.error('❌ cronoDeletePaquete Supabase:', error);
+        alert('Se eliminó localmente, pero no se pudo borrar en Supabase, así que podría reaparecer al recargar.\n\nMotivo: '+(error.message||error.code||'desconocido'));
+      }
+    }catch(e){ console.error('❌ cronoDeletePaquete excepción:', e); }
+  }
+  document.getElementById('cronoCatModalBg')?.remove();
+  cronoCatalogoModal();
+}
+
 function cronoLoadCatalogo(){
+  cronoLoadPaquetes();
   try{
     const raw = localStorage.getItem(CRONO_CAT_KEY);
     if(raw){
@@ -5544,7 +5578,6 @@ let cronoModalActId = null;
 function cronoAddSubtareaModal(actId){
   cronoModalActId = actId;
   cronoLoadCatalogo();
-  const catOpts = CRONO_CATALOGO.map(c=>`<option value="${c.id}">${c.nombre} (${c.rendimiento} ${c.unidad}/día)</option>`).join('');
   // Siempre eliminar y recrear para actualizar catálogo y actId
   const old = document.getElementById('cronoSubtareaModalBg');
   if(old) old.remove();
@@ -5563,12 +5596,34 @@ function cronoAddSubtareaModal(actId){
     </div>
 
     <div style="margin-bottom:14px">
-      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Desde catálogo (opcional)</label>
-      <select id="cronoStCat" onchange="cronoCatChange()" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px">
-        <option value="">— Personalizada —</option>
-        ${catOpts}
-      </select>
+      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:6px">Desde catálogo (opcional)</label>
+      <div style="display:flex;gap:14px;margin-bottom:10px;border-bottom:1px solid var(--border)">
+        <div id="cronoTabPaq" onclick="cronoSetCatTab('paq')" style="padding:6px 2px;font-size:11.5px;color:var(--accent);border-bottom:2px solid var(--accent);cursor:pointer;font-weight:600">📦 Paquetes</div>
+        <div id="cronoTabSuel" onclick="cronoSetCatTab('suel')" style="padding:6px 2px;font-size:11.5px;color:var(--dim);border-bottom:2px solid transparent;cursor:pointer">Sueltas</div>
+        <div id="cronoTabPers" onclick="cronoSetCatTab('pers')" style="padding:6px 2px;font-size:11.5px;color:var(--dim);border-bottom:2px solid transparent;cursor:pointer">Personalizada</div>
+      </div>
+      <div id="cronoListPaq" style="max-height:160px;overflow-y:auto"></div>
+      <div id="cronoListSuel" style="display:none;max-height:160px;overflow-y:auto"></div>
+      <div id="cronoListPers" style="display:none;font-size:11px;color:var(--dim);padding:6px 0">Vas a capturar una subtarea nueva desde cero, abajo.</div>
+      <input type="hidden" id="cronoStCat" value="">
+      <input type="hidden" id="cronoStPaq" value="">
     </div>
+
+    <div id="cronoPaqPanel" style="display:none">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:11.5px;color:var(--dim)">Rendimiento del tipo (fijo, definido en el catálogo)</span>
+        <span id="cronoPaqRendLabel" style="font-size:12.5px;font-weight:600;color:var(--accent)">—</span>
+      </div>
+      <div style="margin-bottom:12px">
+        <label id="cronoPaqCantLabel" style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Cantidad total para esta actividad</label>
+        <input id="cronoPaqCantidad" type="number" min="0.1" step="0.1" placeholder="0" oninput="cronoPaqUpdateLista()"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+      </div>
+      <div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Se van a crear estas subtareas</div>
+      <div id="cronoPaqLista" style="margin-bottom:12px"></div>
+    </div>
+
+    <div id="cronoFormNormal">
     <div style="margin-bottom:12px">
       <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Nombre de la subtarea</label>
       <input id="cronoStNombre" type="text" placeholder="Ej. Levantamiento digital" ${esProyectista?'':''}
@@ -5612,6 +5667,7 @@ function cronoAddSubtareaModal(actId){
     </div>
 
     <div id="cronoDiasEstimados" style="font-size:12px;color:var(--accent);margin-bottom:14px;min-height:18px"></div>
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="pa-btn pa-btn-ghost" onclick="cronoCloseSubModal()">Cancelar</button>
       <button class="pa-btn pa-btn-primary" id="crono-guardar-btn" onclick="cronoGuardarSubtarea()">Agregar</button>
@@ -5624,6 +5680,83 @@ function cronoAddSubtareaModal(actId){
   ['cronoStCantidad','cronoStRend'].forEach(id=>{
     document.getElementById(id)?.addEventListener('input', cronoDiasUpdate);
   });
+
+  cronoRenderCatTabs();
+  cronoSetCatTab('paq');
+}
+
+function cronoRenderCatTabs(){
+  const listPaq = document.getElementById('cronoListPaq');
+  const listSuel = document.getElementById('cronoListSuel');
+  if(listPaq){
+    listPaq.innerHTML = CRONO_PAQUETES.length ? CRONO_PAQUETES.map(p=>`
+      <div onclick="cronoPickPaquete('${p.id}')" style="padding:8px 10px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;background:var(--surface2);border:1px solid var(--border)"
+        onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+        <span style="font-size:12px;color:var(--text)">${p.nombre}</span>
+        <span style="font-size:10.5px;color:var(--accent)">${p.rendimiento} ${p.unidad}/día · ${p.entregables.length} entregables</span>
+      </div>`).join('') : `<div style="font-size:11px;color:var(--dim);padding:8px 0">Sin paquetes en el catálogo todavía.</div>`;
+  }
+  if(listSuel){
+    listSuel.innerHTML = CRONO_CATALOGO.map(c=>`
+      <div onclick="cronoPickSuelta('${c.id}')" style="padding:8px 10px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;background:var(--surface2);border:1px solid var(--border)"
+        onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+        <span style="font-size:12px;color:var(--text)">${c.nombre}</span>
+        <span style="font-size:10.5px;color:var(--dim)">${c.unidad} · ${c.rendimiento}/día</span>
+      </div>`).join('');
+  }
+}
+
+function cronoSetCatTab(tab){
+  const tabs = {paq:'cronoTabPaq', suel:'cronoTabSuel', pers:'cronoTabPers'};
+  Object.keys(tabs).forEach(k=>{
+    const el = document.getElementById(tabs[k]);
+    if(!el) return;
+    if(k===tab){ el.style.color='var(--accent)'; el.style.borderBottomColor='var(--accent)'; el.style.fontWeight='600'; }
+    else { el.style.color='var(--dim)'; el.style.borderBottomColor='transparent'; el.style.fontWeight='400'; }
+  });
+  document.getElementById('cronoListPaq').style.display = tab==='paq' ? 'block' : 'none';
+  document.getElementById('cronoListSuel').style.display = tab==='suel' ? 'block' : 'none';
+  document.getElementById('cronoListPers').style.display = tab==='pers' ? 'block' : 'none';
+  if(tab==='pers'){
+    document.getElementById('cronoStCat').value = '';
+    document.getElementById('cronoStPaq').value = '';
+    cronoCatChange();
+  }
+}
+
+function cronoPickSuelta(catId){
+  document.getElementById('cronoStPaq').value = '';
+  document.getElementById('cronoStCat').value = catId;
+  document.getElementById('cronoPaqPanel').style.display = 'none';
+  document.getElementById('cronoFormNormal').style.display = 'block';
+  cronoCatChange();
+}
+
+function cronoPickPaquete(paqId){
+  document.getElementById('cronoStCat').value = '';
+  document.getElementById('cronoStPaq').value = paqId;
+  const paq = CRONO_PAQUETES.find(p=>p.id===paqId);
+  if(!paq) return;
+  document.getElementById('cronoPaqPanel').style.display = 'block';
+  document.getElementById('cronoFormNormal').style.display = 'none';
+  document.getElementById('cronoPaqRendLabel').textContent = `${paq.rendimiento} ${paq.unidad}/día`;
+  document.getElementById('cronoPaqCantLabel').textContent = `Cantidad total para esta actividad (${paq.unidad})`;
+  const guardarBtn = document.getElementById('crono-guardar-btn');
+  if(guardarBtn) guardarBtn.textContent = `Agregar ${paq.entregables.length} subtareas`;
+  cronoPaqUpdateLista();
+}
+
+function cronoPaqUpdateLista(){
+  const paqId = document.getElementById('cronoStPaq')?.value;
+  const paq = CRONO_PAQUETES.find(p=>p.id===paqId);
+  const el = document.getElementById('cronoPaqLista');
+  if(!paq || !el) return;
+  const cant = parseFloat(document.getElementById('cronoPaqCantidad')?.value)||0;
+  el.innerHTML = paq.entregables.map(e=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;margin-bottom:5px">
+      <span style="font-size:11.5px;color:var(--text)">${paq.nombre} — ${e}</span>
+      <span style="font-size:10px;color:var(--dim)">${cant} ${paq.unidad} · ${paq.rendimiento} ${paq.unidad}/día</span>
+    </div>`).join('');
 }
 
 function cronoSetTipo(tipo){
@@ -5741,6 +5874,9 @@ function cronoCloseSubModal(){
 }
 
 async function cronoGuardarSubtarea(){
+  const paqId = document.getElementById('cronoStPaq')?.value;
+  if(paqId){ return cronoGuardarPaquete(paqId); }
+
   const nombre = document.getElementById('cronoStNombre')?.value.trim();
   const unidad = document.getElementById('cronoStUnidad')?.value.trim();
   const cantidad = parseFloat(document.getElementById('cronoStCantidad')?.value)||0;
@@ -5787,6 +5923,44 @@ async function cronoGuardarSubtarea(){
     notifAdd('🔔', `${(_miNombre||'').split(' ')[0]} propuso subtarea`,
       `"${nombre}" — ${cantidad} ${unidad} · Requiere validación`, 'avance', false);
   }
+
+  cronoSubTab = 'cronograma';
+  cronoExpandedId = cronoModalActId;
+  renderReporteoView();
+}
+
+async function cronoGuardarPaquete(paqId){
+  const paq = CRONO_PAQUETES.find(p=>p.id===paqId);
+  if(!paq){ alert('No se encontró el paquete seleccionado.'); return; }
+  const cantidad = parseFloat(document.getElementById('cronoPaqCantidad')?.value)||0;
+  if(!cantidad){ alert('Falta la cantidad total.'); return; }
+  if(!cronoModalActId){ alert('Error: no se identificó la actividad. Cierra y vuelve a abrir.'); return; }
+  cronoCloseSubModal();
+
+  await cronoRecargarDeSupabase();
+
+  let item = CRONO_ITEMS.find(x=>x.actividadId===cronoModalActId);
+  if(!item){
+    const pa = PA_ITEMS.find(x=>x.id===cronoModalActId);
+    if(!pa) return;
+    item = cronoGetOrCreate(pa);
+  }
+  if(!item.subtareas) item.subtareas=[];
+
+  const esProyectista = _userRole==='proyectista';
+  paq.entregables.forEach((entregable,i)=>{
+    item.subtareas.push({
+      id:'st_'+Date.now()+'_'+i,
+      nombre: `${paq.nombre} — ${entregable}`,
+      unidad: paq.unidad, cantidad, rendimiento: paq.rendimiento, tipo:'unidades_por_dia',
+      esDeCatalogo:true, catId:null, paqueteId:paq.id,
+      pendienteValidacion:false,
+      propuestaPor: esProyectista ? _miNombre : null,
+      estatus:'pendiente',
+      avanceAcum:0
+    });
+  });
+  cronoSaveItem(cronoModalActId);
 
   cronoSubTab = 'cronograma';
   cronoExpandedId = cronoModalActId;
@@ -5953,58 +6127,153 @@ function cronoCatalogoModal(){
   const old = document.getElementById('cronoCatModalBg');
   if(old) old.remove();
 
-  const rows = CRONO_CATALOGO.map(c=>`
-    <tr style="border-bottom:0.5px solid rgba(255,255,255,.06)">
-      <td style="padding:8px;font-size:12px;color:var(--text)">${c.nombre}</td>
-      <td style="padding:8px;font-size:12px;color:var(--dim);text-align:center">${c.unidad}</td>
-      <td style="padding:8px;font-size:12px;color:var(--dim);text-align:center">${c.rendimiento}/día</td>
-      <td style="padding:8px;text-align:right">
-        <button class="et-act-btn del" onclick="cronoCatDelete('${c.id}')" title="Eliminar">✕</button>
-      </td>
-    </tr>`).join('');
-
   const bg = document.createElement('div');
   bg.id='cronoCatModalBg';
   bg.className='pa-modal-bg open';
-  bg.innerHTML=`<div class="pa-modal" style="max-width:600px;max-height:80vh;overflow-y:auto" onclick="event.stopPropagation()">
-    <div class="pa-modal-title">Catálogo de subtareas</div>
-    <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px">
-      <thead><tr style="border-bottom:0.5px solid rgba(255,255,255,.1)">
-        <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500">Subtarea</th>
-        <th style="padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:center">Unidad</th>
-        <th style="padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-align:center">Rendimiento</th>
-        <th style="width:40px"></th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div style="border-top:0.5px solid rgba(255,255,255,.08);padding-top:14px">
-      <div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:10px">Agregar al catálogo</div>
-      <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;align-items:end">
-        <div>
-          <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:3px">Nombre</label>
-          <input id="catNewNombre" type="text" placeholder="Nombre de la subtarea" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-family:var(--font);font-size:11px">
-        </div>
-        <div>
-          <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:3px">Unidad</label>
-          <input id="catNewUnidad" type="text" placeholder="km, cortes..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-family:var(--font);font-size:11px">
-        </div>
-        <div>
-          <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:3px">Rend./día</label>
-          <input id="catNewRend" type="number" min="0.1" step="0.1" placeholder="0" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-family:var(--font);font-size:11px">
-        </div>
-        <button class="pa-btn pa-btn-primary" onclick="cronoCatAdd()" style="font-size:11px;padding:5px 12px">+ Agregar</button>
-      </div>
+  bg.innerHTML=`<div class="pa-modal" style="max-width:780px;max-height:82vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div class="pa-modal-title" style="margin:0">Catálogo de subtareas</div>
+      <button onclick="document.getElementById('cronoCatModalBg').remove()" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer">&times;</button>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
-      <div style="display:flex;gap:8px">
-        <button class="pa-btn pa-btn-ghost" onclick="cronoCatExportCSV()" style="font-size:11px">⬇ CSV</button>
-        <button class="pa-btn pa-btn-ghost" onclick="cronoCatExportPDF()" style="font-size:11px">⬇ PDF</button>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;height:26px">
+          <div style="font-size:12px;font-weight:600;color:var(--text)">📦 Paquetes de tareas</div>
+          <button onclick="cronoPkgToggleForm()" style="background:rgba(74,143,212,.12);border:1px solid rgba(74,143,212,.35);color:var(--accent);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">+ Nuevo paquete</button>
+        </div>
+
+        <div id="cronoPkgForm" style="display:none;background:var(--surface2);border:1px dashed var(--border);border-radius:8px;padding:10px;margin-bottom:10px">
+          <input id="cronoPkgNombre" placeholder="Nombre del paquete (ej. AP Municipal)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 9px;color:var(--text);font-size:11.5px;margin-bottom:8px">
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <input id="cronoPkgUnidad" placeholder="Unidad (km)" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 9px;color:var(--text);font-size:11.5px">
+            <input id="cronoPkgRend" placeholder="Rendimiento/día" type="number" min="0.1" step="0.1" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 9px;color:var(--text);font-size:11.5px">
+          </div>
+          <div style="font-size:10px;color:var(--dim);margin-bottom:6px">Entregables incluidos</div>
+          <div id="cronoPkgItems"></div>
+          <button onclick="cronoPkgAddItemField()" style="background:none;border:1px dashed var(--border);color:var(--dim);border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;margin-bottom:8px;width:100%">+ Agregar entregable</button>
+          <div style="display:flex;justify-content:flex-end;gap:6px">
+            <button onclick="cronoPkgToggleForm()" style="background:none;border:1px solid var(--border);color:var(--dim);border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer">Cancelar</button>
+            <button onclick="cronoPkgGuardar()" style="background:var(--accent);border:none;color:#fff;border-radius:6px;padding:5px 14px;font-size:11px;font-weight:600;cursor:pointer">Guardar paquete</button>
+          </div>
+        </div>
+
+        <div id="cronoPkgList"></div>
       </div>
-      <button class="pa-btn pa-btn-ghost" onclick="document.getElementById('cronoCatModalBg').remove()">Cerrar</button>
+
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;height:26px">
+          <div style="font-size:12px;font-weight:600;color:var(--text)">Sueltas</div>
+          <button onclick="cronoLooseToggleForm()" style="background:rgba(74,143,212,.12);border:1px solid rgba(74,143,212,.35);color:var(--accent);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">+ Agregar subtarea</button>
+        </div>
+
+        <div id="cronoLooseForm" style="display:none;background:var(--surface2);border:1px dashed var(--border);border-radius:8px;padding:10px;margin-bottom:10px">
+          <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px;margin-bottom:8px">
+            <input id="catNewNombre" type="text" placeholder="Nombre de la subtarea" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:11px">
+            <input id="catNewUnidad" type="text" placeholder="km, cortes..." style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:11px">
+            <input id="catNewRend" type="number" min="0.1" step="0.1" placeholder="Rend./día" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:11px">
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:6px">
+            <button onclick="cronoLooseToggleForm()" style="background:none;border:1px solid var(--border);color:var(--dim);border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer">Cancelar</button>
+            <button onclick="cronoCatAdd()" style="background:var(--accent);border:none;color:#fff;border-radius:6px;padding:5px 14px;font-size:11px;font-weight:600;cursor:pointer">+ Agregar</button>
+          </div>
+        </div>
+
+        <table style="width:100%;border-collapse:collapse;font-size:11.5px">
+          <thead><tr style="border-bottom:0.5px solid rgba(255,255,255,.1)">
+            <th style="text-align:left;padding:5px 6px;font-size:10px;color:var(--dim);font-weight:500">Subtarea</th>
+            <th style="padding:5px 4px;font-size:10px;color:var(--dim);font-weight:500;text-align:center">Unidad</th>
+            <th style="padding:5px 4px;font-size:10px;color:var(--dim);font-weight:500;text-align:center">Rend.</th>
+            <th style="width:20px"></th>
+          </tr></thead>
+          <tbody id="cronoLooseTbody"></tbody>
+        </table>
+
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="pa-btn pa-btn-ghost" onclick="cronoCatExportCSV()" style="font-size:11px">⬇ CSV</button>
+          <button class="pa-btn pa-btn-ghost" onclick="cronoCatExportPDF()" style="font-size:11px">⬇ PDF</button>
+        </div>
+      </div>
+
     </div>
   </div>`;
   bg.onclick=(e)=>{ if(e.target===bg) bg.classList.remove('open'); };
   document.body.appendChild(bg);
+
+  cronoPkgDraftItems = ['',''];
+  cronoRenderPkgList();
+  cronoRenderLooseTable();
+}
+
+let cronoPkgDraftItems = ['',''];
+
+function cronoRenderPkgList(){
+  const el = document.getElementById('cronoPkgList');
+  if(!el) return;
+  el.innerHTML = CRONO_PAQUETES.length ? CRONO_PAQUETES.map(p=>`
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="cronoPkgToggleExpand('${p.id}')">
+        <span style="font-size:12px;color:var(--text);font-weight:500">${p.nombre}</span>
+        <span style="font-size:10.5px;color:var(--accent)">${p.rendimiento} ${p.unidad}/día</span>
+      </div>
+      <div id="cronoPkgItemsView-${p.id}" style="display:none;margin-top:8px;padding-top:8px;border-top:0.5px solid rgba(255,255,255,.08)">
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
+          ${p.entregables.map(e=>`<span style="font-size:10px;background:var(--surface);border:1px solid var(--border);color:var(--dim);padding:3px 8px;border-radius:10px">${e}</span>`).join('')}
+        </div>
+        <button onclick="cronoDeletePaquete('${p.id}')" style="background:none;border:none;color:var(--dim);font-size:10.5px;cursor:pointer;padding:0">✕ Eliminar paquete</button>
+      </div>
+    </div>`).join('') : `<div style="font-size:11px;color:var(--dim);padding:8px 0">Sin paquetes en el catálogo todavía.</div>`;
+}
+function cronoPkgToggleExpand(id){
+  const el = document.getElementById('cronoPkgItemsView-'+id);
+  if(el) el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
+function cronoPkgToggleForm(){
+  const f = document.getElementById('cronoPkgForm');
+  f.style.display = f.style.display==='none' ? 'block' : 'none';
+  cronoPkgDraftItems = ['',''];
+  cronoRenderPkgDraftItems();
+}
+function cronoRenderPkgDraftItems(){
+  const el = document.getElementById('cronoPkgItems');
+  if(!el) return;
+  el.innerHTML = cronoPkgDraftItems.map((v,i)=>`<input value="${v.replace(/"/g,'&quot;')}" oninput="cronoPkgDraftItems[${i}]=this.value" placeholder="Ej. Planos" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:11px;margin-bottom:6px">`).join('');
+}
+function cronoPkgAddItemField(){ cronoPkgDraftItems.push(''); cronoRenderPkgDraftItems(); }
+
+function cronoPkgGuardar(){
+  const nombre = document.getElementById('cronoPkgNombre')?.value.trim();
+  const unidad = document.getElementById('cronoPkgUnidad')?.value.trim();
+  const rendimiento = parseFloat(document.getElementById('cronoPkgRend')?.value)||0;
+  const entregables = cronoPkgDraftItems.map(v=>v.trim()).filter(Boolean);
+  if(!nombre||!unidad||!rendimiento||!entregables.length){
+    alert('Completa nombre, unidad, rendimiento, y al menos un entregable.');
+    return;
+  }
+  CRONO_PAQUETES.push({ id:'paq_'+Date.now(), nombre, unidad, rendimiento, entregables });
+  cronoSavePaquetes();
+  cronoPkgToggleForm();
+  cronoRenderPkgList();
+}
+
+function cronoLooseToggleForm(){
+  const f = document.getElementById('cronoLooseForm');
+  f.style.display = f.style.display==='none' ? 'block' : 'none';
+}
+
+function cronoRenderLooseTable(){
+  const tbody = document.getElementById('cronoLooseTbody');
+  if(!tbody) return;
+  tbody.innerHTML = CRONO_CATALOGO.map(c=>`
+    <tr style="border-bottom:0.5px solid rgba(255,255,255,.06)">
+      <td style="padding:6px;font-size:11.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">${c.nombre}</td>
+      <td style="padding:6px;font-size:11px;color:var(--dim);text-align:center">${c.unidad}</td>
+      <td style="padding:6px;font-size:11px;color:var(--dim);text-align:center">${c.rendimiento}/día</td>
+      <td style="padding:6px;text-align:right">
+        <button class="et-act-btn del" onclick="cronoCatDelete('${c.id}')" title="Eliminar">✕</button>
+      </td>
+    </tr>`).join('');
 }
 
 async function cronoCatDelete(id){
@@ -6024,8 +6293,7 @@ async function cronoCatDelete(id){
       alert('Se eliminó localmente, pero ocurrió un error de conexión al intentar borrar en Supabase. Podría reaparecer al recargar.');
     }
   }
-  document.getElementById('cronoCatModalBg')?.remove();
-  cronoCatalogoModal(); // reabrir actualizado
+  cronoRenderLooseTable();
 }
 
 function cronoCatAdd(){
@@ -6035,10 +6303,11 @@ function cronoCatAdd(){
   if(!nombre||!unidad||!rendimiento){ alert('Completa todos los campos'); return; }
   CRONO_CATALOGO.push({ id:'cat_'+Date.now(), nombre, unidad, rendimiento, tipo:'unidades_por_dia' });
   cronoSaveCatalogo();
-  // Cerrar modal y refrescar inmediatamente con datos locales
-  document.getElementById('cronoCatModalBg')?.remove();
-  localStorage.setItem(CRONO_CAT_KEY, JSON.stringify(CRONO_CATALOGO));
-  renderReporteoView();
+  document.getElementById('catNewNombre').value='';
+  document.getElementById('catNewUnidad').value='';
+  document.getElementById('catNewRend').value='';
+  cronoLooseToggleForm();
+  cronoRenderLooseTable();
 }
 
 
@@ -7467,6 +7736,87 @@ async function calJustQuitar(fecha, persona){
   renderCronoCalendario();
 }
 
+function calDiaGenerarPDF(fecha){
+  cronoLoad();
+  const d = new Date(fecha+'T00:00:00');
+  let fmtFecha = d.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  fmtFecha = fmtFecha.charAt(0).toUpperCase()+fmtFecha.slice(1);
+
+  // Reunir todos los reportes de ese día desde CRONO_ITEMS
+  const reps = [];
+  CRONO_ITEMS.forEach(item=>{
+    (item.reportes||[]).forEach(r=>{
+      if(r.fecha===fecha) reps.push({...r, proyecto:item.proyecto||'', tipo:item.tipo||''});
+    });
+  });
+  reps.sort((a,b)=>(a.quien||'').localeCompare(b.quien||''));
+
+  const reportaron = new Set(reps.map(r=>r.quien));
+  const sinReportar = PA_MEMBERS.filter(m=>!reportaron.has(m));
+  const genStr = new Date().toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Reporte diario — ${fmtFecha}</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:12px;color:#1a1a2e;background:#fff;padding:24px}
+    .hdr{display:flex;justify-content:space-between;border-bottom:3px solid #0f2744;padding-bottom:10px;margin-bottom:16px}
+    .logo{font-size:18px;font-weight:900;color:#0f2744}
+    .rtitle{text-align:right}.rtitle h1{font-size:15px;font-weight:700}
+    .rtitle p{font-size:10px;color:#6b7280;margin-top:2px}
+    .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+    .kpi{background:#f8fafc;border:1px solid #e2eaf3;border-radius:8px;padding:12px 14px;text-align:center}
+    .kpi .v{font-size:22px;font-weight:800;color:#0f2744}
+    .kpi .l{font-size:9.5px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+    .sec{font-size:11px;font-weight:700;text-transform:uppercase;color:#0f2744;border-bottom:2px solid #0f2744;padding:6px 0;margin:16px 0 10px}
+    .rep-card{border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;margin-bottom:8px;page-break-inside:avoid}
+    .rep-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px}
+    .rep-name{font-weight:700;font-size:12px;color:#0f2744}
+    .rep-tag{font-size:9px;padding:2px 7px;border-radius:10px;background:#eef2f7;color:#4a5568}
+    .rep-folio{font-size:9px;color:#6b7280;font-family:monospace}
+    .rep-nota{font-size:11px;color:#1a1a2e;margin-bottom:3px}
+    .rep-cant{font-size:10.5px;color:#1a4fa0;font-weight:600}
+    .flag{padding:6px 10px;margin-bottom:5px;background:#fff5f5;border:1px solid #ffd6d6;border-radius:6px;font-size:10.5px;color:#7a1f1f}
+    .just{padding:6px 10px;margin-bottom:5px;background:#f6f0ff;border:1px solid #ddd0f7;border-radius:6px;font-size:10.5px;color:#5b2d91}
+    .pbt{text-align:center;margin:20px 0}
+    .pbt button{padding:9px 24px;background:#0f2744;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
+    @media print{.pbt{display:none}@page{margin:.6cm}}
+  </style></head><body>
+  <div class="hdr">
+    <div><div class="logo">C3NTRO Telecom</div><div style="font-size:11px;color:#6b7280;margin-top:2px">Coordinación de Ingeniería</div></div>
+    <div class="rtitle"><h1>Reporte Diario del Equipo</h1><p>${fmtFecha}<br>Generado el ${genStr}</p></div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="v">${reps.length}</div><div class="l">Reportes registrados</div></div>
+    <div class="kpi"><div class="v">${reportaron.size}/${PA_MEMBERS.length}</div><div class="l">Proyectistas que reportaron</div></div>
+    <div class="kpi"><div class="v">${sinReportar.length}</div><div class="l">Sin reportar ese día</div></div>
+  </div>
+  <div class="sec">Reportes del día</div>
+  ${reps.length ? reps.map(r=>`
+    <div class="rep-card">
+      <div class="rep-head">
+        <span class="rep-name">${(r.quien||'').split(' ').slice(0,2).join(' ')}</span>
+        ${r.subtareaNombre?`<span class="rep-tag">${r.subtareaNombre}</span>`:''}
+        ${r.folio?`<span class="rep-folio">${r.folio}</span>`:''}
+      </div>
+      ${r.nota?`<div class="rep-nota">${r.nota}</div>`:''}
+      ${r.cantidad?`<div class="rep-cant">+${r.cantidad} ${r.unidad||''}</div>`:''}
+    </div>`).join('') : `<div style="font-size:11px;color:#6b7280">Sin reportes registrados este día.</div>`}
+  <div class="sec">Sin reportar / justificaciones</div>
+  ${sinReportar.length ? sinReportar.map(m=>{
+    const j = justGet(fecha, m);
+    if(j) return `<div class="just">🔖 <b>${m.split(' ').slice(0,2).join(' ')}</b> — Justificado: ${j.motivo} (por ${(j.justificadoPor||'').split(' ')[0]})</div>`;
+    return `<div class="flag">🚩 <b>${m.split(' ').slice(0,2).join(' ')}</b> — sin reportar, sin justificar</div>`;
+  }).join('') : `<div style="font-size:11px;color:#1a7f4b">✅ Todo el equipo reportó ese día.</div>`}
+  <div class="pbt"><button onclick="window.print()">Exportar PDF / Imprimir</button></div>
+  <scr`+`ipt>window.onload=()=>window.print();</scr`+`ipt>
+  </body></html>`;
+
+  const blob = new Blob([html], {type:'text/html;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if(!win) alert('Permite ventanas emergentes para generar el PDF.');
+  setTimeout(()=>URL.revokeObjectURL(url), 60000);
+}
+
 function renderCronoCalendario(){
   const el = document.getElementById('cronoCalendarioWrap');
   if(!el) return;
@@ -7589,7 +7939,10 @@ function renderCronoCalendario(){
     <div style="background:rgba(74,143,212,.05);border:0.5px solid rgba(74,143,212,.2);border-radius:10px;padding:14px 16px;margin-top:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div style="font-size:13px;font-weight:600;color:var(--text);text-transform:capitalize">${fmtDia}</div>
-        <div style="font-size:11px;color:var(--dim)">${reps.length} reporte${reps.length!==1?'s':''}</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          ${_userRole!=='proyectista' && reps.length ? `<button onclick="calDiaGenerarPDF('${calDiaSeleccionado}')" style="background:rgba(74,143,212,.15);border:1px solid rgba(74,143,212,.4);color:var(--accent);border-radius:6px;padding:5px 12px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap">📄 Generar reporte</button>` : ''}
+          <div style="font-size:11px;color:var(--dim)">${reps.length} reporte${reps.length!==1?'s':''}</div>
+        </div>
       </div>`;
 
     if(reps.length){
@@ -13873,6 +14226,14 @@ function enterDashboard(){
           CRONO_CATALOGO = [...cat.map(c=>({...c, tipo:c.tipo||'unidades_por_dia'})), ...faltantes];
           localStorage.setItem(CRONO_CAT_KEY, JSON.stringify(CRONO_CATALOGO));
         }
+        // Cargar paquetes de tareas desde Supabase
+        try{
+          const {data:paq, error:paqErr} = await _supa.from('crono_paquetes').select('*');
+          if(!paqErr && paq){
+            CRONO_PAQUETES = paq.map(p=>({...p, entregables: typeof p.entregables==='string' ? JSON.parse(p.entregables) : (p.entregables||[])}));
+            localStorage.setItem(CRONO_PAQ_KEY, JSON.stringify(CRONO_PAQUETES));
+          }
+        }catch(e){ console.warn('crono_paquetes load error:', e); }
       }catch(e){ console.warn('crono load error',e); }
     })()
   ]).then(()=>{
