@@ -5410,7 +5410,7 @@ function renderReporteoView(){
   }
 
   let html = `
-  <div style="display:flex;gap:0;border-bottom:0.5px solid rgba(255,255,255,.08);margin-bottom:20px">
+  <div style="display:flex;gap:0;border-bottom:0.5px solid var(--border);margin-bottom:20px">
     <button class="seg-subtab${cronoSubTab==='csv'?' on':''}" onclick="cronoSetSubTab('csv')">📅 Reporte diario</button>
     <button class="seg-subtab${cronoSubTab==='cronograma'?' on':''}" onclick="cronoSetSubTab('cronograma')">📋 Subtareas</button>
   </div>`;
@@ -5578,7 +5578,7 @@ function renderReporteoView(){
       // Tabla de subtareas
       if(subtareas.length){
         html += `<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px">
-          <thead><tr style="border-bottom:0.5px solid rgba(255,255,255,.08)">
+          <thead><tr style="border-bottom:0.5px solid var(--border)">
             <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Subtarea</th>
             <th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Cantidad</th>
             <th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Días est.</th>
@@ -5616,7 +5616,7 @@ function renderReporteoView(){
           const stBg = st.pendienteValidacion?'rgba(245,166,35,.1)':st.estatus==='completada'?'rgba(61,214,140,.1)':st.estatus==='en_progreso'?'rgba(74,143,212,.1)':'rgba(255,255,255,.04)';
           const avanceSt = st.avanceAcum||0;
           const pctSt = st.cantidad ? Math.min(100,Math.round((avanceSt/st.cantidad)*100)) : 0;
-          html += `<tr id="subrow-${st.id}" style="border-bottom:0.5px solid rgba(255,255,255,.05)">
+          html += `<tr id="subrow-${st.id}" style="border-bottom:0.5px solid var(--border)">
             <td style="padding:8px 8px"><div style="font-weight:500;color:var(--text)">${st.nombre}</div><div style="font-size:10px;color:var(--dim)">${st.unidad}${st.paqueteId?' · en paralelo':''}</div></td>
             <td style="padding:8px;text-align:center;color:var(--text)">${st.cantidad}</td>
             <td style="padding:8px;text-align:center;color:var(--dim)" title="${(st.cantidad||1)/(st.rendimiento||1) < 1 ? 'Menos de una jornada' : ''}">${dias}d</td>
@@ -5661,7 +5661,7 @@ function renderReporteoView(){
         html += `<div style="font-size:11px;font-weight:500;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Reportes del equipo</div>
         <div style="max-height:200px;overflow-y:auto">`;
         [...reportes].reverse().slice(0,10).forEach(r=>{
-          html += `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:0.5px solid rgba(255,255,255,.05)">
+          html += `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)">
             <span style="font-size:11px;color:var(--dim);white-space:nowrap;min-width:50px">${r.fecha||'—'}</span>
             <span style="font-size:11px;font-weight:500;color:var(--accent);min-width:65px">${(r.quien||'').split(' ')[0]}</span>
             <span style="font-size:12px;color:var(--text);flex:1">${r.subtareaNombre||''} — ${r.nota||''}</span>
@@ -7237,7 +7237,7 @@ function pumRender() {
 
       // Tabla de permisos
       h += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
-      h += '<thead><tr style="border-bottom:0.5px solid rgba(255,255,255,.1)">';
+      h += '<thead><tr style="border-bottom:0.5px solid var(--border)">';
       ['Folio de permiso','Tipo','Cant. ingreso','Método','Km','Responsable','Fecha est.','Estatus','Topo','Geo','Resp. Permisos','Autoridad'].forEach(function(col){
         h += '<th style="padding:5px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;text-align:left;white-space:nowrap">'+col+'</th>';
       });
@@ -7247,7 +7247,7 @@ function pumRender() {
         var ec = PUM_EST_COL[p.estatus]||'#555';
         var rc = PUM_RESP_COL[p.resp]||'var(--dim)';
         var foliosStr = p.folioP ? p.folioP.replace(/\n/g,'<br>') : '<span style="color:#555;font-style:italic">Sin gestionar</span>';
-        h += '<tr style="border-bottom:0.5px solid rgba(255,255,255,.04)">';
+        h += '<tr style="border-bottom:0.5px solid var(--border)">';
         h += '<td style="padding:7px 8px;font-size:10px;color:var(--accent);font-family:var(--mono);line-height:1.6">'+foliosStr+'</td>';
         h += '<td style="padding:7px 8px;white-space:nowrap">'+pumTipoTag(p.tipo)+'</td>';
         h += '<td style="padding:7px 8px;color:var(--dim);white-space:nowrap">'+(p.cantIngreso||'—')+'</td>';
@@ -7974,7 +7974,7 @@ function calProyVerDia(fecha){
   <div style="background:rgba(61,214,140,.05);border:0.5px solid rgba(61,214,140,.2);border-radius:10px;padding:14px 16px">
     <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:10px;text-transform:capitalize">✓ Reportes del ${fmtDia}</div>
     ${reps.map(r=>`
-      <div style="padding:8px 0;border-bottom:0.5px solid rgba(255,255,255,.06)">
+      <div style="padding:8px 0;border-bottom:0.5px solid var(--border)">
         <div style="font-size:11px;font-weight:500;color:var(--accent);margin-bottom:2px">${r.subtareaNombre||'—'} · ${r.folio||r.proyecto||''}</div>
         ${r.nota?`<div style="font-size:12px;color:var(--text)">${r.nota}</div>`:''}
         ${r.cantidad?`<div style="font-size:11px;color:var(--dim);margin-top:2px">+${r.cantidad} ${r.unidad||''}</div>`:''}
@@ -8016,7 +8016,7 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
     html+=`<div style="margin-bottom:14px">
       <div style="font-size:11px;color:var(--green);font-weight:500;margin-bottom:6px">✓ Ya reportaste ${repsExistentes.length} subtarea${repsExistentes.length!==1?'s':''} hoy</div>
       ${repsExistentes.map((r,ri)=>`
-        <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim);padding:5px 0;border-bottom:0.5px solid rgba(255,255,255,.05)">
+        <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim);padding:5px 0;border-bottom:0.5px solid var(--border)">
           <div style="flex:1">
             <span style="color:var(--accent)">${r.subtareaNombre||'—'}</span> · +${r.cantidad||0} ${r.unidad||''} · ${r.nota||''}
           </div>
@@ -8522,7 +8522,7 @@ function renderCronoCalendario(){
 
     if(reps.length){
       html += reps.map(r=>`
-        <div onclick="cronoIrASubtarea('${r.actividadId}','${r.subtareaId}')" style="display:flex;gap:10px;padding:10px 8px;border-bottom:0.5px solid rgba(255,255,255,.06);cursor:pointer;border-radius:6px;transition:background .15s" onmouseover="this.style.background='rgba(74,143,212,.06)'" onmouseout="this.style.background='none'" title="Ir a esta subtarea">
+        <div onclick="cronoIrASubtarea('${r.actividadId}','${r.subtareaId}')" style="display:flex;gap:10px;padding:10px 8px;border-bottom:0.5px solid var(--border);cursor:pointer;border-radius:6px;transition:background .15s" onmouseover="this.style.background='rgba(74,143,212,.06)'" onmouseout="this.style.background='none'" title="Ir a esta subtarea">
           <div style="width:28px;height:28px;border-radius:50%;background:${quienColor(r.quien)};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">
             ${r.quien.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase()}
           </div>
