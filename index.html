@@ -5449,7 +5449,13 @@ function renderReporteoView(){
     const pron = cronoCalcPronostico(crono.subtareas, a.fechaAsig||crono.fechaInicio);
     const hoy = repDateKey(new Date());
     const termino = a.fechaTermino;
-    if(pron && termino){ if(pron<=termino) enTiempo++; else conRetraso++; }
+    const avanceKpi = cronoAvance(crono.subtareas);
+    if(pron && termino){
+      const yaVencioLimite = hoy > termino && avanceKpi<100;
+      const yaVencioPronostico = hoy > pron && avanceKpi<100;
+      const enTiempoOk = pron<=termino && !yaVencioLimite && !yaVencioPronostico;
+      if(enTiempoOk) enTiempo++; else conRetraso++;
+    }
   });
 
   html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:20px">
@@ -5505,7 +5511,11 @@ function renderReporteoView(){
     const diasRest = pron ? cronoDiasRestantes(pron) : null;
     const hoy = repDateKey(new Date());
     let semaforo = 'neutral';
-    if(pron && a.fechaTermino){ semaforo = pron<=a.fechaTermino ? 'ok' : 'warn'; }
+    if(pron && a.fechaTermino){
+      const yaVencioLimite = hoy > a.fechaTermino && avance<100;
+      const yaVencioPronostico = hoy > pron && avance<100;
+      semaforo = (pron<=a.fechaTermino && !yaVencioLimite && !yaVencioPronostico) ? 'ok' : 'warn';
+    }
     const isOpen = cronoExpandedId === a.id;
     const avancePct = avance;
     const barColor = semaforo==='warn' ? 'var(--amber)' : semaforo==='ok' ? 'var(--green)' : 'var(--accent)';
