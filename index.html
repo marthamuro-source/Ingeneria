@@ -6400,8 +6400,12 @@ function cronoGuardarReporte(){
   const st = item?.subtareas?.find(s=>s.id===cronoReportStId);
   if(!st||!item) return;
 
-  // Actualizar acumulado y estatus
-  st.avanceAcum = (st.avanceAcum||0) + cantidad;
+  // Actualizar acumulado y estatus (topado al total de la subtarea, no tiene sentido pasarse)
+  const nuevoAcum = (st.avanceAcum||0) + cantidad;
+  if(st.cantidad && nuevoAcum > st.cantidad){
+    alert(`El acumulado no puede superar la cantidad total de la subtarea (${st.cantidad} ${st.unidad}). Se ajustó al máximo.`);
+  }
+  st.avanceAcum = st.cantidad ? Math.min(nuevoAcum, st.cantidad) : nuevoAcum;
   st.estatus = estatus;
 
   // Guardar reporte en historial
@@ -6436,13 +6440,13 @@ function cronoCatalogoModal(){
   const bg = document.createElement('div');
   bg.id='cronoCatModalBg';
   bg.className='pa-modal-bg open';
-  bg.innerHTML=`<div class="pa-modal" style="max-width:780px;max-height:82vh;overflow-y:auto" onclick="event.stopPropagation()">
+  bg.innerHTML=`<div class="pa-modal" style="max-width:1040px;width:92vw;max-height:82vh;overflow-y:auto" onclick="event.stopPropagation()">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div class="pa-modal-title" style="margin:0">Catálogo de subtareas</div>
       <button onclick="document.getElementById('cronoCatModalBg').remove()" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer">&times;</button>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div style="display:grid;grid-template-columns:0.8fr 1.4fr;gap:20px">
 
       <div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;height:26px">
@@ -6527,6 +6531,7 @@ function cronoRenderPkgList(){
         <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
           ${p.entregables.map(e=>`<span style="font-size:10px;background:var(--surface);border:1px solid var(--border);color:var(--dim);padding:3px 8px;border-radius:10px">${e}</span>`).join('')}
         </div>
+        <button onclick="event.stopPropagation();cronoEditPaquete('${p.id}')" style="background:none;border:none;color:var(--accent);font-size:10.5px;cursor:pointer;padding:0;margin-right:14px;display:${_userRole!=='proyectista'?'inline':'none'}">✎ Editar paquete</button>
         <button onclick="cronoDeletePaquete('${p.id}')" style="background:none;border:none;color:var(--dim);font-size:10.5px;cursor:pointer;padding:0">✕ Eliminar paquete</button>
       </div>
     </div>`).join('') : `<div style="font-size:11px;color:var(--dim);padding:8px 0">Sin paquetes en el catálogo todavía.</div>`;
@@ -6534,6 +6539,101 @@ function cronoRenderPkgList(){
 function cronoPkgToggleExpand(id){
   const el = document.getElementById('cronoPkgItemsView-'+id);
   if(el) el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
+
+let cronoEditPkgDraftItems = [];
+function cronoEditPaquete(id){
+  const p = CRONO_PAQUETES.find(x=>x.id===id);
+  if(!p) return;
+  const old = document.getElementById('cronoEditPkgModalBg');
+  if(old) old.remove();
+  cronoEditPkgDraftItems = [...p.entregables];
+
+  const bg = document.createElement('div');
+  bg.id = 'cronoEditPkgModalBg';
+  bg.className = 'pa-modal-bg open';
+  bg.innerHTML = `<div class="pa-modal" style="max-width:440px" onclick="event.stopPropagation()">
+    <div class="pa-modal-title">Editar paquete</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:14px">El nombre, unidad y rendimiento se actualizan en automático en las subtareas ya asignadas de este paquete (sin tocar cantidad ni avance). Si renombras un entregable existente, también se renombra donde ya se usó. Si agregas o quitas entregables, solo aplica a los paquetes que agregues de aquí en adelante.</div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Nombre del paquete</label>
+      <input id="cronoEditPkgNombre" type="text" value="${p.nombre.replace(/"/g,'&quot;')}"
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Unidad</label>
+        <input id="cronoEditPkgUnidad" type="text" value="${p.unidad.replace(/"/g,'&quot;')}"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Rendimiento/día</label>
+        <input id="cronoEditPkgRend" type="number" min="0.1" step="0.1" value="${p.rendimiento}"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+      </div>
+    </div>
+    <div style="font-size:10px;color:var(--dim);margin-bottom:6px">Entregables incluidos</div>
+    <div id="cronoEditPkgItems"></div>
+    <button onclick="cronoEditPkgAddItemField()" style="background:none;border:1px dashed var(--border);color:var(--dim);border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;margin-bottom:14px;width:100%">+ Agregar entregable</button>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="pa-btn pa-btn-ghost" onclick="document.getElementById('cronoEditPkgModalBg').remove()">Cancelar</button>
+      <button class="pa-btn pa-btn-primary" onclick="cronoGuardarEditPaquete('${id}')">Guardar cambios</button>
+    </div>
+  </div>`;
+  bg.onclick = (e)=>{ if(e.target===bg) bg.remove(); };
+  document.body.appendChild(bg);
+  cronoRenderEditPkgItems();
+}
+function cronoRenderEditPkgItems(){
+  const el = document.getElementById('cronoEditPkgItems');
+  if(!el) return;
+  el.innerHTML = cronoEditPkgDraftItems.map((v,i)=>`<input value="${v.replace(/"/g,'&quot;')}" oninput="cronoEditPkgDraftItems[${i}]=this.value" placeholder="Ej. Planos" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:11px;margin-bottom:6px">`).join('');
+}
+function cronoEditPkgAddItemField(){ cronoEditPkgDraftItems.push(''); cronoRenderEditPkgItems(); }
+
+async function cronoGuardarEditPaquete(id){
+  const p = CRONO_PAQUETES.find(x=>x.id===id);
+  if(!p) return;
+  const nombreNuevo = document.getElementById('cronoEditPkgNombre')?.value.trim();
+  const unidadNuevo = document.getElementById('cronoEditPkgUnidad')?.value.trim();
+  const rendNuevo = parseFloat(document.getElementById('cronoEditPkgRend')?.value)||0;
+  const entregablesNuevos = cronoEditPkgDraftItems.map(v=>v.trim()).filter(Boolean);
+  if(!nombreNuevo||!unidadNuevo||!rendNuevo||!entregablesNuevos.length){
+    alert('Completa nombre, unidad, rendimiento, y al menos un entregable.');
+    return;
+  }
+
+  const nombreViejo = p.nombre;
+  const entregablesViejos = [...p.entregables];
+
+  p.nombre = nombreNuevo; p.unidad = unidadNuevo; p.rendimiento = rendNuevo; p.entregables = entregablesNuevos;
+  cronoSavePaquetes();
+
+  // Propagar a las subtareas ya asignadas de este paquete
+  await cronoRecargarDeSupabase();
+  let actualizadas = 0;
+  CRONO_ITEMS.forEach(item=>{
+    (item.subtareas||[]).forEach(st=>{
+      if(st.paqueteId===id){
+        // Extraer el entregable original a partir del nombre viejo ("Paquete — Entregable")
+        const prefijo = nombreViejo + ' — ';
+        const entregable = st.nombre.startsWith(prefijo) ? st.nombre.slice(prefijo.length) : null;
+        st.nombre = entregable ? `${nombreNuevo} — ${entregable}` : st.nombre;
+        st.unidad = unidadNuevo;
+        st.rendimiento = rendNuevo;
+        actualizadas++;
+      }
+    });
+  });
+  if(actualizadas>0){
+    CRONO_ITEMS.forEach(item=>{
+      if((item.subtareas||[]).some(st=>st.paqueteId===id)) cronoSaveItem(item.actividadId);
+    });
+  }
+
+  document.getElementById('cronoEditPkgModalBg')?.remove();
+  cronoRenderPkgList();
+  alert(`✓ Paquete actualizado. Se aplicó a ${actualizadas} subtarea${actualizadas!==1?'s':''} ya asignada${actualizadas!==1?'s':''}.`);
 }
 function cronoPkgToggleForm(){
   const f = document.getElementById('cronoPkgForm');
@@ -6573,13 +6673,85 @@ function cronoRenderLooseTable(){
   if(!tbody) return;
   tbody.innerHTML = CRONO_CATALOGO.map(c=>`
     <tr style="border-bottom:0.5px solid rgba(255,255,255,.06)">
-      <td style="padding:6px;font-size:11.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">${c.nombre}</td>
+      <td style="padding:6px;font-size:11.5px;color:var(--text);white-space:normal;line-height:1.4">${c.nombre}</td>
       <td style="padding:6px;font-size:11px;color:var(--dim);text-align:center">${c.unidad}</td>
       <td style="padding:6px;font-size:11px;color:var(--dim);text-align:center">${c.rendimiento}/día</td>
-      <td style="padding:6px;text-align:right">
+      <td style="padding:6px;text-align:right;white-space:nowrap">
+        ${_userRole!=='proyectista'?`<button class="et-act-btn" onclick="cronoEditCatItem('${c.id}')" title="Editar">✎</button>`:''}
         <button class="et-act-btn del" onclick="cronoCatDelete('${c.id}')" title="Eliminar">✕</button>
       </td>
     </tr>`).join('');
+}
+
+function cronoEditCatItem(id){
+  const c = CRONO_CATALOGO.find(x=>x.id===id);
+  if(!c) return;
+  const old = document.getElementById('cronoEditModalBg');
+  if(old) old.remove();
+
+  const bg = document.createElement('div');
+  bg.id = 'cronoEditModalBg';
+  bg.className = 'pa-modal-bg open';
+  bg.innerHTML = `<div class="pa-modal" style="max-width:420px" onclick="event.stopPropagation()">
+    <div class="pa-modal-title">Editar subtarea del catálogo</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:14px">Si cambias algo aquí, se actualiza en automático en todas las asignaciones activas (de cualquier proyectista) que ya estén usando esta subtarea del catálogo — sin tocar su cantidad ni su avance ya reportado.</div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Nombre</label>
+      <input id="cronoEditNombre" type="text" value="${c.nombre.replace(/"/g,'&quot;')}"
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Unidad</label>
+        <input id="cronoEditUnidad" type="text" value="${c.unidad.replace(/"/g,'&quot;')}"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Rendimiento/día</label>
+        <input id="cronoEditRend" type="number" min="0.1" step="0.1" value="${c.rendimiento}"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="pa-btn pa-btn-ghost" onclick="document.getElementById('cronoEditModalBg').remove()">Cancelar</button>
+      <button class="pa-btn pa-btn-primary" onclick="cronoGuardarEditCatItem('${id}')">Guardar cambios</button>
+    </div>
+  </div>`;
+  bg.onclick = (e)=>{ if(e.target===bg) bg.remove(); };
+  document.body.appendChild(bg);
+}
+
+async function cronoGuardarEditCatItem(id){
+  const c = CRONO_CATALOGO.find(x=>x.id===id);
+  if(!c) return;
+  const nombre = document.getElementById('cronoEditNombre')?.value.trim();
+  const unidad = document.getElementById('cronoEditUnidad')?.value.trim();
+  const rendimiento = parseFloat(document.getElementById('cronoEditRend')?.value)||0;
+  if(!nombre||!unidad||!rendimiento){ alert('Completa todos los campos'); return; }
+
+  c.nombre = nombre; c.unidad = unidad; c.rendimiento = rendimiento;
+  cronoSaveCatalogo();
+
+  // Propagar a todas las asignaciones activas que usan esta subtarea del catálogo
+  await cronoRecargarDeSupabase();
+  let actualizadas = 0;
+  CRONO_ITEMS.forEach(item=>{
+    (item.subtareas||[]).forEach(st=>{
+      if(st.catId===id){
+        st.nombre = nombre; st.unidad = unidad; st.rendimiento = rendimiento;
+        actualizadas++;
+      }
+    });
+  });
+  if(actualizadas>0){
+    CRONO_ITEMS.forEach(item=>{
+      if((item.subtareas||[]).some(st=>st.catId===id)) cronoSaveItem(item.actividadId);
+    });
+  }
+
+  document.getElementById('cronoEditModalBg')?.remove();
+  cronoRenderLooseTable();
+  alert(`✓ Catálogo actualizado. Se aplicó a ${actualizadas} subtarea${actualizadas!==1?'s':''} ya asignada${actualizadas!==1?'s':''}.`);
 }
 
 async function cronoCatDelete(id){
@@ -7892,6 +8064,15 @@ function calProyLimpiarFormActual(){
 function calProyAgregarPendiente(){
   const entry = calProyLeerFormActual();
   if(!entry){ alert('Selecciona una subtarea y agrega al menos una cantidad o nota antes de agregarla a la lista.'); return; }
+  const st = entry.stData.st;
+  const esPct = st.unidad==='%' || st.esOperativo;
+  if(!esPct && st.cantidad){
+    const yaAcumulado = (st.avanceAcum||0) + (window._calProyPendientes||[]).filter(p=>p.stData.st.id===st.id).reduce((s,p)=>s+p.cantidad,0);
+    const restante = st.cantidad - yaAcumulado;
+    if(entry.cantidad > restante){
+      if(!confirm(`"${st.nombre}" tiene ${st.cantidad} ${st.unidad} en total y ya llevas ${yaAcumulado} ${st.unidad}. Solo quedan ${Math.max(restante,0)} ${st.unidad} disponibles, pero estás reportando ${entry.cantidad}.\n\n¿Seguro que quieres continuar? Se ajustará al máximo disponible al guardar.`)) return;
+    }
+  }
   if(!Array.isArray(window._calProyPendientes)) window._calProyPendientes=[];
   window._calProyPendientes.push(entry);
   calProyLimpiarFormActual();
@@ -7951,7 +8132,8 @@ async function calProyGuardarReporteHoy(){
     if(esPct){
       st.avanceAcum = Math.max(0, Math.min(100, entry.cantidad)); // valor absoluto reportado, tope 0-100
     } else {
-      st.avanceAcum = (st.avanceAcum||0) + entry.cantidad;
+      const nuevoAcum = (st.avanceAcum||0) + entry.cantidad;
+      st.avanceAcum = st.cantidad ? Math.min(nuevoAcum, st.cantidad) : nuevoAcum;
     }
     st.estatus = entry.estatus;
     if(!item.reportes) item.reportes=[];
