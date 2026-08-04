@@ -5185,16 +5185,27 @@ function cronoLoadCatalogo(){
         const ids = parsed.map(c=>c.id);
         const faltantes = CRONO_CATALOGO_DEFAULT.filter(c=>!ids.includes(c.id));
         CRONO_CATALOGO = [...parsed, ...faltantes];
+        cronoEnsureOrden();
         cronoSaveCatalogo();
       } else {
         // Asegurar que todas tienen el campo tipo
         CRONO_CATALOGO = parsed.map(c=>({...c, tipo: c.tipo||'unidades_por_dia'}));
+        cronoEnsureOrden();
       }
     } else {
       CRONO_CATALOGO = [...CRONO_CATALOGO_DEFAULT];
+      cronoEnsureOrden();
       cronoSaveCatalogo();
     }
-  }catch(e){ CRONO_CATALOGO = [...CRONO_CATALOGO_DEFAULT]; }
+  }catch(e){ CRONO_CATALOGO = [...CRONO_CATALOGO_DEFAULT]; cronoEnsureOrden(); }
+}
+function cronoEnsureOrden(){
+  // Asigna un "orden" a las entradas que no lo tengan (al final), y ordena el arreglo por ese campo
+  let maxOrden = CRONO_CATALOGO.reduce((m,c)=>Number.isInteger(c.orden)?Math.max(m,c.orden):m, -1);
+  CRONO_CATALOGO.forEach(c=>{
+    if(!Number.isInteger(c.orden)){ maxOrden++; c.orden = maxOrden; }
+  });
+  CRONO_CATALOGO.sort((a,b)=>a.orden-b.orden);
 }
 function cronoSaveCatalogo(){
   localStorage.setItem(CRONO_CAT_KEY, JSON.stringify(CRONO_CATALOGO));
@@ -5202,6 +5213,18 @@ function cronoSaveCatalogo(){
   _supa.from('crono_catalogo').upsert(CRONO_CATALOGO, {onConflict:'id'})
     .then(({error})=>{ if(error) console.error('❌ cronoSaveCatalogo:', error); else console.log('✅ catálogo guardado en Supabase'); })
     .catch(e=>console.error('❌ cronoSaveCatalogo exception:', e));
+}
+function cronoCatMover(id, direccion){
+  cronoEnsureOrden();
+  const idx = CRONO_CATALOGO.findIndex(c=>c.id===id);
+  const otroIdx = idx + direccion;
+  if(idx<0 || otroIdx<0 || otroIdx>=CRONO_CATALOGO.length) return;
+  const ordenTmp = CRONO_CATALOGO[idx].orden;
+  CRONO_CATALOGO[idx].orden = CRONO_CATALOGO[otroIdx].orden;
+  CRONO_CATALOGO[otroIdx].orden = ordenTmp;
+  CRONO_CATALOGO.sort((a,b)=>a.orden-b.orden);
+  cronoSaveCatalogo();
+  cronoRenderLooseTable();
 }
 function cronoLoad(){
   try{ CRONO_ITEMS = JSON.parse(localStorage.getItem(CRONO_KEY)||'[]'); }catch(e){ CRONO_ITEMS=[]; }
@@ -6671,13 +6694,16 @@ function cronoLooseToggleForm(){
 function cronoRenderLooseTable(){
   const tbody = document.getElementById('cronoLooseTbody');
   if(!tbody) return;
-  tbody.innerHTML = CRONO_CATALOGO.map(c=>`
+  const esAdmin = _userRole!=='proyectista';
+  tbody.innerHTML = CRONO_CATALOGO.map((c,i)=>`
     <tr style="border-bottom:0.5px solid rgba(255,255,255,.06)">
       <td style="padding:6px;font-size:11.5px;color:var(--text);white-space:normal;line-height:1.4">${c.nombre}</td>
       <td style="padding:6px;font-size:11px;color:var(--dim);text-align:center">${c.unidad}</td>
       <td style="padding:6px;font-size:11px;color:var(--dim);text-align:center">${c.rendimiento}/día</td>
       <td style="padding:6px;text-align:right;white-space:nowrap">
-        ${_userRole!=='proyectista'?`<button class="et-act-btn" onclick="cronoEditCatItem('${c.id}')" title="Editar">✎</button>`:''}
+        ${esAdmin?`<button class="et-act-btn" onclick="cronoCatMover('${c.id}',-1)" title="Subir" ${i===0?'disabled style="opacity:.25;cursor:default"':''}>↑</button>
+        <button class="et-act-btn" onclick="cronoCatMover('${c.id}',1)" title="Bajar" ${i===CRONO_CATALOGO.length-1?'disabled style="opacity:.25;cursor:default"':''}>↓</button>
+        <button class="et-act-btn" onclick="cronoEditCatItem('${c.id}')" title="Editar">✎</button>`:''}
         <button class="et-act-btn del" onclick="cronoCatDelete('${c.id}')" title="Eliminar">✕</button>
       </td>
     </tr>`).join('');
@@ -14727,6 +14753,7 @@ function enterDashboard(){
           const ids = cat.map(c=>c.id);
           const faltantes = CRONO_CATALOGO_DEFAULT.filter(c=>!ids.includes(c.id));
           CRONO_CATALOGO = [...cat.map(c=>({...c, tipo:c.tipo||'unidades_por_dia'})), ...faltantes];
+          if(typeof cronoEnsureOrden==='function') cronoEnsureOrden();
           localStorage.setItem(CRONO_CAT_KEY, JSON.stringify(CRONO_CATALOGO));
         }
         // Cargar paquetes de tareas desde Supabase
