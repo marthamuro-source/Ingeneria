@@ -285,6 +285,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 /* ── Panel de control ── */
 .avail-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:10px;margin-bottom:22px;}
 .avail-card{background:#060e1a;border-radius:10px;padding:14px 16px;position:relative;overflow:hidden;border:1px solid rgba(90,159,240,.15);}
+[data-theme="light"] .avail-card{ background:#ffffff; border-color:#e6e9ef; }
+[data-theme="light"] .avail-name{ color:#1a2233; }
+[data-theme="light"] .avail-detail{ color:#8a93a3; }
 .avail-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,rgba(90,159,240,.4),transparent);}
 
 /* ── Neon card borders por estado ── */
@@ -5276,9 +5279,22 @@ function cronoCalcPronostico(subtareas, fechaInicio){
   if(!subtareas||!subtareas.length||!fechaInicio) return null;
   let cursor = fechaInicio;
   // Solo incluir subtareas validadas (pendienteValidacion=true las excluye)
-  subtareas.filter(st=>!st.pendienteValidacion).forEach(st=>{
-    const dias = cronoDiasParaSubtarea(st);
-    cursor = cronoAddWorkdays(cursor, dias);
+  const validas = subtareas.filter(st=>!st.pendienteValidacion);
+  // Las subtareas que vienen de un mismo "paquete" corren en PARALELO: todas empiezan
+  // al mismo tiempo y el bloque completo dura lo que tarde la más larga (no se suman).
+  const procesados = new Set();
+  validas.forEach(st=>{
+    if(procesados.has(st.id)) return;
+    if(st.paqueteId){
+      const delGrupo = validas.filter(s=>s.paqueteId===st.paqueteId);
+      const diasMax = Math.max(...delGrupo.map(s=>cronoDiasParaSubtarea(s)));
+      delGrupo.forEach(s=>procesados.add(s.id));
+      cursor = cronoAddWorkdays(cursor, diasMax);
+    } else {
+      const dias = cronoDiasParaSubtarea(st);
+      cursor = cronoAddWorkdays(cursor, dias);
+      procesados.add(st.id);
+    }
   });
   return cursor;
 }
@@ -5430,7 +5446,7 @@ function renderReporteoView(){
   let enTiempo=0, conRetraso=0;
   actConCrono.forEach(({a,crono})=>{
     if(!crono||!crono.subtareas||!crono.subtareas.length) return;
-    const pron = cronoCalcPronostico(crono.subtareas, crono.fechaInicio);
+    const pron = cronoCalcPronostico(crono.subtareas, a.fechaAsig||crono.fechaInicio);
     const hoy = repDateKey(new Date());
     const termino = a.fechaTermino;
     if(pron && termino){ if(pron<=termino) enTiempo++; else conRetraso++; }
@@ -5485,7 +5501,7 @@ function renderReporteoView(){
     const subtareas = crono?.subtareas||[];
     const reportes = crono?.reportes||[];
     const avance = cronoAvance(subtareas);
-    const pron = crono ? cronoCalcPronostico(subtareas, crono.fechaInicio) : null;
+    const pron = crono ? cronoCalcPronostico(subtareas, a.fechaAsig||crono.fechaInicio) : null;
     const diasRest = pron ? cronoDiasRestantes(pron) : null;
     const hoy = repDateKey(new Date());
     let semaforo = 'neutral';
@@ -5499,6 +5515,7 @@ function renderReporteoView(){
       ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(245,166,35,.1);color:var(--amber);font-weight:500">⚠ Retraso</span>`
       : '';
 
+    const esConectSub = a.tipo==='Planos de Conectividad'||a.tipo==='Conectividad (Bobinas)';
     html += `<div class="panel" style="margin-bottom:12px;padding:0;overflow:hidden">
       <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;border-bottom:${isOpen?'0.5px solid rgba(255,255,255,.06)':'none'}"
         onclick="cronoToggle('${a.id}')">
@@ -5507,9 +5524,10 @@ function renderReporteoView(){
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <span style="font-size:13px;font-weight:600;color:var(--text)">${a.folio||a.actividad||'Sin folio'}</span>
             <span style="font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(74,143,212,.12);color:var(--accent)">${a.tipo}</span>
+            ${esConectSub && a.numBobina ? `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(245,166,35,.12);color:var(--amber);font-weight:600">Bna #${a.numBobina}</span>` : ''}
             ${semaforoLabel}
           </div>
-          <div style="font-size:11px;color:var(--dim);margin-top:2px">${a.proyecto||''} · ${a.responsable?.split(' ').slice(0,2).join(' ')||'—'} · Inicio: ${cronoFmtShort(crono?.fechaInicio||a.fechaAsig)} ${pron?'· Pronóstico: '+cronoFmtShort(pron):''}</div>
+          <div style="font-size:11px;color:var(--dim);margin-top:2px">${a.proyecto||''} · ${a.responsable?.split(' ').slice(0,2).join(' ')||'—'} · Inicio: ${cronoFmtShort(a.fechaAsig||crono?.fechaInicio)} ${pron?'· Pronóstico: '+cronoFmtShort(pron):''}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
           <span style="font-size:11px;color:var(--dim)">${avancePct}%</span>
@@ -5535,21 +5553,39 @@ function renderReporteoView(){
             <th style="width:80px"></th>
           </tr></thead><tbody>`;
 
-        let cursor = crono.fechaInicio;
+        let cursor = a.fechaAsig||crono.fechaInicio;
+        const _paqCache = {}; // paqueteId -> {inicio, fin} ya calculado (para que corran en paralelo)
         subtareas.forEach((st,si)=>{
           const dias = cronoDiasParaSubtarea(st);
           const diasRaw = dias;
-          const fechaFin = cronoAddWorkdays(cursor, dias);
+          let stInicio, stFin;
+          if(st.paqueteId){
+            if(!_paqCache[st.paqueteId]){
+              const delGrupo = subtareas.filter(s=>s.paqueteId===st.paqueteId);
+              const diasMax = Math.max(...delGrupo.map(s=>cronoDiasParaSubtarea(s)));
+              const inicioGrupo = cursor;
+              const finGrupo = cronoAddWorkdays(cursor, diasMax);
+              _paqCache[st.paqueteId] = {inicio:inicioGrupo, fin:finGrupo};
+              cursor = finGrupo; // el cursor global avanza UNA sola vez por todo el grupo (paralelo)
+            }
+            stInicio = _paqCache[st.paqueteId].inicio;
+            stFin = _paqCache[st.paqueteId].fin;
+          } else {
+            stInicio = cursor;
+            stFin = cronoAddWorkdays(cursor, dias);
+            cursor = stFin;
+          }
+          const fechaFin = stFin;
           const stColor = st.pendienteValidacion?'var(--amber)':st.estatus==='completada'?'var(--green)':st.estatus==='en_progreso'?'var(--accent)':'var(--dim)';
           const stLabel = st.pendienteValidacion?'⏳ Pend. validación':st.estatus==='completada'?'✓ Completada':st.estatus==='en_progreso'?'↗ En progreso':'○ Pendiente';
           const stBg = st.pendienteValidacion?'rgba(245,166,35,.1)':st.estatus==='completada'?'rgba(61,214,140,.1)':st.estatus==='en_progreso'?'rgba(74,143,212,.1)':'rgba(255,255,255,.04)';
           const avanceSt = st.avanceAcum||0;
           const pctSt = st.cantidad ? Math.min(100,Math.round((avanceSt/st.cantidad)*100)) : 0;
           html += `<tr style="border-bottom:0.5px solid rgba(255,255,255,.05)">
-            <td style="padding:8px 8px"><div style="font-weight:500;color:var(--text)">${st.nombre}</div><div style="font-size:10px;color:var(--dim)">${st.unidad}</div></td>
+            <td style="padding:8px 8px"><div style="font-weight:500;color:var(--text)">${st.nombre}</div><div style="font-size:10px;color:var(--dim)">${st.unidad}${st.paqueteId?' · en paralelo':''}</div></td>
             <td style="padding:8px;text-align:center;color:var(--text)">${st.cantidad}</td>
             <td style="padding:8px;text-align:center;color:var(--dim)" title="${(st.cantidad||1)/(st.rendimiento||1) < 1 ? 'Menos de una jornada' : ''}">${dias}d</td>
-            <td style="padding:8px;font-size:11px;color:var(--dim)">${cronoFmtShort(cursor)}→${cronoFmtShort(fechaFin)}</td>
+            <td style="padding:8px;font-size:11px;color:var(--dim)">${cronoFmtShort(stInicio)}→${cronoFmtShort(fechaFin)}</td>
             <td style="padding:8px;text-align:center">
               <div style="font-size:11px;font-weight:500;color:${stColor}">${avanceSt}/${st.cantidad}</div>
               <div style="width:50px;height:3px;background:rgba(255,255,255,.08);border-radius:2px;margin:3px auto 0">
@@ -5564,7 +5600,6 @@ function renderReporteoView(){
               <button class="et-act-btn del" onclick="cronoDeleteSubtarea('${a.id}','${st.id}')" title="Eliminar">✕</button>
             </td>
           </tr>`;
-          cursor = fechaFin;
         });
         html += `</tbody></table>`;
 
@@ -10030,7 +10065,7 @@ function paRenderTipo(tipo){
     // Calcular pronóstico de subtareas (disponible para todos los tipos)
     const _cronoItem = CRONO_ITEMS.find(x=>x.actividadId===a.id);
     const _pronSub = _cronoItem && _cronoItem.subtareas && _cronoItem.subtareas.filter(s=>!s.pendienteValidacion).length
-      ? cronoCalcPronostico(_cronoItem.subtareas, _cronoItem.fechaInicio)
+      ? cronoCalcPronostico(_cronoItem.subtareas, a.fechaAsig||_cronoItem.fechaInicio)
       : null;
     const _pronSubFmt = _pronSub ? (()=>{ const d=new Date(_pronSub+'T00:00:00'); return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`; })() : '—';
     const _pronColor = _pronSub && a.fechaTermino
