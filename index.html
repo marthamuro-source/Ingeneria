@@ -40,7 +40,7 @@
   --surface:#ffffff;
   --surface2:#f4f6fa;
 
-  --border:rgba(30,60,120,0.10);
+  --border:rgba(30,60,120,0.16);
   --border2:rgba(30,80,180,0.16);
 
   --text:#1a2233;
@@ -594,6 +594,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .et-select:focus{outline:none;border-color:rgba(74,143,212,.38);}
 .et-select:hover{border-color:var(--border2);}
 .et-act-btn{background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:4px;color:var(--muted);transition:all .15s;font-size:13px;}
+.crono-tipo-btn{background:var(--surface2);color:var(--dim);font-weight:400;}
+.crono-tipo-btn.crono-tipo-on{background:var(--accent);color:#fff;font-weight:600;}
 .et-act-btn:hover{background:rgba(255,255,255,.06);color:var(--text);}
 .et-act-btn.del:hover{color:var(--red);background:rgba(255,92,92,.08);}
 .pa-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:2000;display:none;align-items:center;justify-content:center;padding:20px;}
@@ -5879,13 +5881,13 @@ function cronoAddSubtareaModal(actId){
     <!-- Toggle tipo de rendimiento -->
     <div style="margin-bottom:12px" id="cronoTipoLabel">
       <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:6px">Tipo de rendimiento</label>
-      <div style="display:flex;gap:0;border:0.5px solid var(--border);border-radius:6px;overflow:hidden" id="cronoTipoWrap">
+      <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden" id="cronoTipoWrap">
         <button id="btnTipoUnidDia" onclick="cronoSetTipo('unidades_por_dia')"
-          style="flex:1;padding:6px 10px;font-size:11px;border:none;cursor:pointer;transition:all .15s;background:rgba(74,143,212,.2);color:var(--accent);font-weight:600">
+          class="crono-tipo-btn crono-tipo-on" style="flex:1;padding:6px 10px;font-size:11px;border:none;cursor:pointer;transition:all .15s">
           📊 Unidades/día
         </button>
         <button id="btnTipoDiaUnid" onclick="cronoSetTipo('dias_por_unidad')"
-          style="flex:1;padding:6px 10px;font-size:11px;border:none;cursor:pointer;transition:all .15s;background:var(--surface2);color:var(--dim)">
+          class="crono-tipo-btn" style="flex:1;padding:6px 10px;font-size:11px;border:none;cursor:pointer;transition:all .15s">
           📅 Días/unidad
         </button>
       </div>
@@ -6000,12 +6002,10 @@ function cronoSetTipo(tipo){
   const lbl  = document.getElementById('cronoRendLabel');
   if(btnU && btnD){
     if(tipo==='unidades_por_dia'){
-      btnU.style.background='rgba(74,143,212,.2)'; btnU.style.color='var(--accent)'; btnU.style.fontWeight='600';
-      btnD.style.background='var(--surface2)'; btnD.style.color='var(--dim)'; btnD.style.fontWeight='400';
+      btnU.classList.add('crono-tipo-on'); btnD.classList.remove('crono-tipo-on');
       if(lbl) lbl.textContent='Rendimiento (unidades/día)';
     } else {
-      btnD.style.background='rgba(74,143,212,.2)'; btnD.style.color='var(--accent)'; btnD.style.fontWeight='600';
-      btnU.style.background='var(--surface2)'; btnU.style.color='var(--dim)'; btnU.style.fontWeight='400';
+      btnD.classList.add('crono-tipo-on'); btnU.classList.remove('crono-tipo-on');
       if(lbl) lbl.textContent='Rendimiento (días/unidad)';
     }
   }
@@ -6198,7 +6198,7 @@ async function cronoGuardarPaquete(paqId){
     item.subtareas.push({
       id:'st_'+Date.now()+'_'+i,
       nombre: `${paq.nombre} — ${entregable}`,
-      unidad: paq.unidad, cantidad, rendimiento: paq.rendimiento, tipo:'unidades_por_dia',
+      unidad: paq.unidad, cantidad, rendimiento: paq.rendimiento, tipo: paq.tipo||'unidades_por_dia',
       esDeCatalogo:true, catId:null, paqueteId:paq.id,
       pendienteValidacion:false,
       propuestaPor: esProyectista ? _miNombre : null,
@@ -6481,8 +6481,20 @@ function cronoCatalogoModal(){
           <input id="cronoPkgNombre" placeholder="Nombre del paquete (ej. AP Municipal)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 9px;color:var(--text);font-size:11.5px;margin-bottom:8px">
           <div style="display:flex;gap:8px;margin-bottom:8px">
             <input id="cronoPkgUnidad" placeholder="Unidad (km)" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 9px;color:var(--text);font-size:11.5px">
-            <input id="cronoPkgRend" placeholder="Rendimiento/día" type="number" min="0.1" step="0.1" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 9px;color:var(--text);font-size:11.5px">
+            <input id="cronoPkgRend" placeholder="Rendimiento" type="number" min="0.1" step="0.1" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 9px;color:var(--text);font-size:11.5px">
           </div>
+          <div style="font-size:10px;color:var(--dim);margin-bottom:6px">Tipo de rendimiento</div>
+          <div class="crono-tipo-toggle" style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:8px" id="cronoPkgTipoWrap">
+            <button type="button" id="cronoPkgBtnUnidDia" onclick="cronoPkgSetTipo('unidades_por_dia')"
+              class="crono-tipo-btn crono-tipo-on" style="flex:1;padding:6px 8px;font-size:10.5px;border:none;cursor:pointer">
+              📊 Unidades/día
+            </button>
+            <button type="button" id="cronoPkgBtnDiaUnid" onclick="cronoPkgSetTipo('dias_por_unidad')"
+              class="crono-tipo-btn" style="flex:1;padding:6px 8px;font-size:10.5px;border:none;cursor:pointer">
+              📅 Días/unidad
+            </button>
+          </div>
+          <input type="hidden" id="cronoPkgTipo" value="unidades_por_dia">
           <div style="font-size:10px;color:var(--dim);margin-bottom:6px">Entregables incluidos</div>
           <div id="cronoPkgItems"></div>
           <button onclick="cronoPkgAddItemField()" style="background:none;border:1px dashed var(--border);color:var(--dim);border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;margin-bottom:8px;width:100%">+ Agregar entregable</button>
@@ -6514,7 +6526,7 @@ function cronoCatalogoModal(){
         </div>
 
         <table style="width:100%;border-collapse:collapse;font-size:11.5px">
-          <thead><tr style="border-bottom:0.5px solid rgba(255,255,255,.1)">
+          <thead><tr style="border-bottom:1px solid var(--border)">
             <th style="text-align:left;padding:5px 6px;font-size:10px;color:var(--dim);font-weight:500">Subtarea</th>
             <th style="padding:5px 4px;font-size:10px;color:var(--dim);font-weight:500;text-align:center">Unidad</th>
             <th style="padding:5px 4px;font-size:10px;color:var(--dim);font-weight:500;text-align:center">Rend.</th>
@@ -6590,11 +6602,23 @@ function cronoEditPaquete(id){
           style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
       </div>
       <div>
-        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Rendimiento/día</label>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Rendimiento</label>
         <input id="cronoEditPkgRend" type="number" min="0.1" step="0.1" value="${p.rendimiento}"
           style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
       </div>
     </div>
+    <div style="font-size:10px;color:var(--dim);margin-bottom:6px">Tipo de rendimiento</div>
+    <div class="crono-tipo-toggle" style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:12px">
+      <button type="button" id="cronoEditPkgBtnUnidDia" onclick="cronoEditPkgSetTipo('unidades_por_dia')"
+        class="crono-tipo-btn${(p.tipo||'unidades_por_dia')==='unidades_por_dia'?' crono-tipo-on':''}" style="flex:1;padding:6px 8px;font-size:10.5px;border:none;cursor:pointer">
+        📊 Unidades/día
+      </button>
+      <button type="button" id="cronoEditPkgBtnDiaUnid" onclick="cronoEditPkgSetTipo('dias_por_unidad')"
+        class="crono-tipo-btn${p.tipo==='dias_por_unidad'?' crono-tipo-on':''}" style="flex:1;padding:6px 8px;font-size:10.5px;border:none;cursor:pointer">
+        📅 Días/unidad
+      </button>
+    </div>
+    <input type="hidden" id="cronoEditPkgTipo" value="${p.tipo||'unidades_por_dia'}">
     <div style="font-size:10px;color:var(--dim);margin-bottom:6px">Entregables incluidos</div>
     <div id="cronoEditPkgItems"></div>
     <button onclick="cronoEditPkgAddItemField()" style="background:none;border:1px dashed var(--border);color:var(--dim);border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;margin-bottom:14px;width:100%">+ Agregar entregable</button>
@@ -6613,6 +6637,15 @@ function cronoRenderEditPkgItems(){
   el.innerHTML = cronoEditPkgDraftItems.map((v,i)=>`<input value="${v.replace(/"/g,'&quot;')}" oninput="cronoEditPkgDraftItems[${i}]=this.value" placeholder="Ej. Planos" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:11px;margin-bottom:6px">`).join('');
 }
 function cronoEditPkgAddItemField(){ cronoEditPkgDraftItems.push(''); cronoRenderEditPkgItems(); }
+function cronoEditPkgSetTipo(tipo){
+  document.getElementById('cronoEditPkgTipo').value = tipo;
+  const btnU = document.getElementById('cronoEditPkgBtnUnidDia');
+  const btnD = document.getElementById('cronoEditPkgBtnDiaUnid');
+  if(btnU && btnD){
+    if(tipo==='unidades_por_dia'){ btnU.classList.add('crono-tipo-on'); btnD.classList.remove('crono-tipo-on'); }
+    else { btnD.classList.add('crono-tipo-on'); btnU.classList.remove('crono-tipo-on'); }
+  }
+}
 
 async function cronoGuardarEditPaquete(id){
   const p = CRONO_PAQUETES.find(x=>x.id===id);
@@ -6620,6 +6653,7 @@ async function cronoGuardarEditPaquete(id){
   const nombreNuevo = document.getElementById('cronoEditPkgNombre')?.value.trim();
   const unidadNuevo = document.getElementById('cronoEditPkgUnidad')?.value.trim();
   const rendNuevo = parseFloat(document.getElementById('cronoEditPkgRend')?.value)||0;
+  const tipoNuevo = document.getElementById('cronoEditPkgTipo')?.value||'unidades_por_dia';
   const entregablesNuevos = cronoEditPkgDraftItems.map(v=>v.trim()).filter(Boolean);
   if(!nombreNuevo||!unidadNuevo||!rendNuevo||!entregablesNuevos.length){
     alert('Completa nombre, unidad, rendimiento, y al menos un entregable.');
@@ -6629,7 +6663,7 @@ async function cronoGuardarEditPaquete(id){
   const nombreViejo = p.nombre;
   const entregablesViejos = [...p.entregables];
 
-  p.nombre = nombreNuevo; p.unidad = unidadNuevo; p.rendimiento = rendNuevo; p.entregables = entregablesNuevos;
+  p.nombre = nombreNuevo; p.unidad = unidadNuevo; p.rendimiento = rendNuevo; p.tipo = tipoNuevo; p.entregables = entregablesNuevos;
   cronoSavePaquetes();
 
   // Propagar a las subtareas ya asignadas de este paquete
@@ -6644,6 +6678,7 @@ async function cronoGuardarEditPaquete(id){
         st.nombre = entregable ? `${nombreNuevo} — ${entregable}` : st.nombre;
         st.unidad = unidadNuevo;
         st.rendimiento = rendNuevo;
+        st.tipo = tipoNuevo;
         actualizadas++;
       }
     });
@@ -6663,6 +6698,7 @@ function cronoPkgToggleForm(){
   f.style.display = f.style.display==='none' ? 'block' : 'none';
   cronoPkgDraftItems = ['',''];
   cronoRenderPkgDraftItems();
+  if(typeof cronoPkgSetTipo==='function') cronoPkgSetTipo('unidades_por_dia');
 }
 function cronoRenderPkgDraftItems(){
   const el = document.getElementById('cronoPkgItems');
@@ -6671,16 +6707,27 @@ function cronoRenderPkgDraftItems(){
 }
 function cronoPkgAddItemField(){ cronoPkgDraftItems.push(''); cronoRenderPkgDraftItems(); }
 
+function cronoPkgSetTipo(tipo){
+  document.getElementById('cronoPkgTipo').value = tipo;
+  const btnU = document.getElementById('cronoPkgBtnUnidDia');
+  const btnD = document.getElementById('cronoPkgBtnDiaUnid');
+  if(btnU && btnD){
+    if(tipo==='unidades_por_dia'){ btnU.classList.add('crono-tipo-on'); btnD.classList.remove('crono-tipo-on'); }
+    else { btnD.classList.add('crono-tipo-on'); btnU.classList.remove('crono-tipo-on'); }
+  }
+}
+
 function cronoPkgGuardar(){
   const nombre = document.getElementById('cronoPkgNombre')?.value.trim();
   const unidad = document.getElementById('cronoPkgUnidad')?.value.trim();
   const rendimiento = parseFloat(document.getElementById('cronoPkgRend')?.value)||0;
+  const tipo = document.getElementById('cronoPkgTipo')?.value||'unidades_por_dia';
   const entregables = cronoPkgDraftItems.map(v=>v.trim()).filter(Boolean);
   if(!nombre||!unidad||!rendimiento||!entregables.length){
     alert('Completa nombre, unidad, rendimiento, y al menos un entregable.');
     return;
   }
-  CRONO_PAQUETES.push({ id:'paq_'+Date.now(), nombre, unidad, rendimiento, entregables });
+  CRONO_PAQUETES.push({ id:'paq_'+Date.now(), nombre, unidad, rendimiento, tipo, entregables });
   cronoSavePaquetes();
   cronoPkgToggleForm();
   cronoRenderPkgList();
@@ -6696,7 +6743,7 @@ function cronoRenderLooseTable(){
   if(!tbody) return;
   const esAdmin = _userRole!=='proyectista';
   tbody.innerHTML = CRONO_CATALOGO.map((c,i)=>`
-    <tr style="border-bottom:0.5px solid rgba(255,255,255,.06)">
+    <tr style="border-bottom:1px solid var(--border)">
       <td style="padding:6px;font-size:11.5px;color:var(--text);white-space:normal;line-height:1.4">${c.nombre}</td>
       <td style="padding:6px;font-size:11px;color:var(--dim);text-align:center">${c.unidad}</td>
       <td style="padding:6px;font-size:11px;color:var(--dim);text-align:center">${c.rendimiento}/día</td>
