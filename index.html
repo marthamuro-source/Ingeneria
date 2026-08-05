@@ -5624,7 +5624,7 @@ function renderReporteoView(){
           const pctSt = st.cantidad ? Math.min(100,Math.round((avanceSt/st.cantidad)*100)) : 0;
           html += `<tr id="subrow-${st.id}" style="border-bottom:0.5px solid var(--border)">
             <td style="padding:8px 8px"><div style="font-weight:500;color:var(--text)">${st.nombre}</div><div style="font-size:10px;color:var(--dim)">${st.unidad}${st.paqueteId?' · en paralelo':''}</div></td>
-            <td style="padding:8px;text-align:center;color:var(--text)">${st.cantidad}</td>
+            <td style="padding:8px;text-align:center;color:var(--text)">${st.cantidad} <span style="color:var(--dim);font-size:10.5px">${st.unidad}</span></td>
             <td style="padding:8px;text-align:center;color:var(--dim)" title="${(st.cantidad||1)/(st.rendimiento||1) < 1 ? 'Menos de una jornada' : ''}">${dias}d</td>
             <td style="padding:8px;font-size:11px;color:var(--dim)">${cronoFmtShort(stInicio)}→${cronoFmtShort(fechaFin)}</td>
             <td style="padding:8px;text-align:center">
