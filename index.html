@@ -837,6 +837,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .postit-color-dot{width:9px;height:9px;border-radius:50%;border:1px solid rgba(0,0,0,.15);cursor:pointer;flex-shrink:0;}
 .pa-sec-usb .pa-section-header{background:linear-gradient(135deg,#400020,#a00060,#d0008a);border-left:4px solid #ff3ca0;}
 
+/* ── Tema claro: mismos colores, tonos menos saturados/agresivos ── */
+[data-theme="light"] .pa-sec-proyecto .pa-section-header{background:linear-gradient(135deg,#25457a,#3c5f96,#5378b2);}
+[data-theme="light"] .pa-header-proyecto{background:linear-gradient(135deg,#25457a,#3c5f96,#5378b2);}
+[data-theme="light"] .pa-sec-conectividad .pa-section-header{background:linear-gradient(135deg,#6b4a2c,#8a6540,#a67f52);}
+[data-theme="light"] .pa-sec-operativo .pa-section-header{background:linear-gradient(135deg,#38542e,#4d6d42,#5f8153);}
+[data-theme="light"] .pa-header-operativo{background:linear-gradient(135deg,#38542e,#4d6d42,#5f8153);}
+[data-theme="light"] .pa-sec-impresiones .pa-section-header{background:linear-gradient(135deg,#563f6e,#6c5384,#7c6494);}
+[data-theme="light"] .pa-header-impresiones{background:linear-gradient(135deg,#563f6e,#6c5384,#7c6494);}
+[data-theme="light"] .pa-sec-notas .pa-section-header{background:linear-gradient(135deg,#655a2e,#847340,#9a8850);}
+[data-theme="light"] .pa-sec-usb .pa-section-header{background:linear-gradient(135deg,#653a52,#84496a,#96547a);}
+
 .usb-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;}
 .usb-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
 .usb-folio{font-size:11px;font-weight:600;color:var(--accent);font-family:var(--mono);}
@@ -8007,7 +8018,7 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
     const crono = CRONO_ITEMS.find(x=>x.actividadId===a.id);
     if(!crono) return;
     (crono.subtareas||[]).filter(st=>!st.pendienteValidacion && st.estatus!=='completada').forEach(st=>{
-      subtareasDisponibles.push({actividadId:a.id, folio:a.folio||a.actividad, proyecto:a.proyecto, st});
+      subtareasDisponibles.push({actividadId:a.id, folio:a.folio||a.actividad, proyecto:a.proyecto, tipo:a.tipo, numBobina:a.numBobina, st});
     });
   });
 
@@ -8055,9 +8066,11 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
   }
   const pendientes = window._calProyPendientes;
 
-  const stOpts = subtareasDisponibles.map((x,i)=>
-    `<option value="${i}">${x.folio||x.proyecto} — ${x.st.nombre} (${x.st.unidad})</option>`
-  ).join('');
+  const stOpts = subtareasDisponibles.map((x,i)=>{
+    const esConect = x.tipo==='Planos de Conectividad'||x.tipo==='Conectividad (Bobinas)';
+    const bobinaTxt = (esConect && x.numBobina) ? ` · Bna #${x.numBobina}` : '';
+    return `<option value="${i}">${x.folio||x.proyecto}${bobinaTxt} — ${x.st.nombre} (${x.st.unidad})</option>`;
+  }).join('');
 
   // Lista de subtareas ya agregadas a este reporte (pendientes de guardar)
   if(pendientes.length){
