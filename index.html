@@ -6672,8 +6672,20 @@ function cronoCatalogoModal(){
           <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px;margin-bottom:8px">
             <input id="catNewNombre" type="text" placeholder="Nombre de la subtarea" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:11px">
             <input id="catNewUnidad" type="text" placeholder="km, cortes..." style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:11px">
-            <input id="catNewRend" type="number" min="0.1" step="0.1" placeholder="Rend./día" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:11px">
+            <input id="catNewRend" type="number" min="0.1" step="0.1" placeholder="Rendimiento" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:11px">
           </div>
+          <div style="font-size:10px;color:var(--dim);margin-bottom:6px">Tipo de rendimiento</div>
+          <div class="crono-tipo-toggle" style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:8px">
+            <button type="button" id="catNewBtnUnidDia" onclick="cronoCatNewSetTipo('unidades_por_dia')"
+              class="crono-tipo-btn crono-tipo-on" style="flex:1;padding:6px 8px;font-size:10.5px;border:none;cursor:pointer">
+              📊 Unidades/día
+            </button>
+            <button type="button" id="catNewBtnDiaUnid" onclick="cronoCatNewSetTipo('dias_por_unidad')"
+              class="crono-tipo-btn" style="flex:1;padding:6px 8px;font-size:10.5px;border:none;cursor:pointer">
+              📅 Días/unidad
+            </button>
+          </div>
+          <input type="hidden" id="catNewTipo" value="unidades_por_dia">
           <div style="display:flex;justify-content:flex-end;gap:6px">
             <button onclick="cronoLooseToggleForm()" style="background:none;border:1px solid var(--border);color:var(--dim);border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer">Cancelar</button>
             <button onclick="cronoCatAdd()" style="background:var(--accent);border:none;color:#fff;border-radius:6px;padding:5px 14px;font-size:11px;font-weight:600;cursor:pointer">+ Agregar</button>
@@ -6913,6 +6925,16 @@ function cronoPkgGuardar(){
 function cronoLooseToggleForm(){
   const f = document.getElementById('cronoLooseForm');
   f.style.display = f.style.display==='none' ? 'block' : 'none';
+  if(typeof cronoCatNewSetTipo==='function') cronoCatNewSetTipo('unidades_por_dia');
+}
+function cronoCatNewSetTipo(tipo){
+  document.getElementById('catNewTipo').value = tipo;
+  const btnU = document.getElementById('catNewBtnUnidDia');
+  const btnD = document.getElementById('catNewBtnDiaUnid');
+  if(btnU && btnD){
+    if(tipo==='unidades_por_dia'){ btnU.classList.add('crono-tipo-on'); btnD.classList.remove('crono-tipo-on'); }
+    else { btnD.classList.add('crono-tipo-on'); btnU.classList.remove('crono-tipo-on'); }
+  }
 }
 
 function cronoRenderLooseTable(){
@@ -6923,7 +6945,7 @@ function cronoRenderLooseTable(){
     <tr style="border-bottom:1px solid var(--border)">
       <td style="padding:6px;font-size:11.5px;color:var(--text);white-space:normal;line-height:1.4">${c.nombre}</td>
       <td style="padding:6px;font-size:11px;color:var(--dim);text-align:center">${c.unidad}</td>
-      <td style="padding:6px;font-size:11px;color:var(--dim);text-align:center">${c.rendimiento}/día</td>
+      <td style="padding:6px;font-size:11px;color:var(--dim);text-align:center">${c.tipo==='dias_por_unidad'?`${c.rendimiento}d/u`:`${c.rendimiento}/día`}</td>
       <td style="padding:6px;text-align:right;white-space:nowrap">
         ${esAdmin?`<button class="et-act-btn" onclick="cronoCatMover('${c.id}',-1)" title="Subir" ${i===0?'disabled style="opacity:.25;cursor:default"':''}>↑</button>
         <button class="et-act-btn" onclick="cronoCatMover('${c.id}',1)" title="Bajar" ${i===CRONO_CATALOGO.length-1?'disabled style="opacity:.25;cursor:default"':''}>↓</button>
@@ -6950,18 +6972,30 @@ function cronoEditCatItem(id){
       <input id="cronoEditNombre" type="text" value="${c.nombre.replace(/"/g,'&quot;')}"
         style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
       <div>
         <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Unidad</label>
         <input id="cronoEditUnidad" type="text" value="${c.unidad.replace(/"/g,'&quot;')}"
           style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
       </div>
       <div>
-        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Rendimiento/día</label>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Rendimiento</label>
         <input id="cronoEditRend" type="number" min="0.1" step="0.1" value="${c.rendimiento}"
           style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
       </div>
     </div>
+    <div style="font-size:10px;color:var(--dim);margin-bottom:6px">Tipo de rendimiento</div>
+    <div class="crono-tipo-toggle" style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:16px">
+      <button type="button" id="cronoEditBtnUnidDia" onclick="cronoEditSetTipo('unidades_por_dia')"
+        class="crono-tipo-btn${(c.tipo||'unidades_por_dia')==='unidades_por_dia'?' crono-tipo-on':''}" style="flex:1;padding:6px 8px;font-size:10.5px;border:none;cursor:pointer">
+        📊 Unidades/día
+      </button>
+      <button type="button" id="cronoEditBtnDiaUnid" onclick="cronoEditSetTipo('dias_por_unidad')"
+        class="crono-tipo-btn${c.tipo==='dias_por_unidad'?' crono-tipo-on':''}" style="flex:1;padding:6px 8px;font-size:10.5px;border:none;cursor:pointer">
+        📅 Días/unidad
+      </button>
+    </div>
+    <input type="hidden" id="cronoEditTipo" value="${c.tipo||'unidades_por_dia'}">
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="pa-btn pa-btn-ghost" onclick="document.getElementById('cronoEditModalBg').remove()">Cancelar</button>
       <button class="pa-btn pa-btn-primary" onclick="cronoGuardarEditCatItem('${id}')">Guardar cambios</button>
@@ -6970,6 +7004,15 @@ function cronoEditCatItem(id){
   bg.onclick = (e)=>{ if(e.target===bg) bg.remove(); };
   document.body.appendChild(bg);
 }
+function cronoEditSetTipo(tipo){
+  document.getElementById('cronoEditTipo').value = tipo;
+  const btnU = document.getElementById('cronoEditBtnUnidDia');
+  const btnD = document.getElementById('cronoEditBtnDiaUnid');
+  if(btnU && btnD){
+    if(tipo==='unidades_por_dia'){ btnU.classList.add('crono-tipo-on'); btnD.classList.remove('crono-tipo-on'); }
+    else { btnD.classList.add('crono-tipo-on'); btnU.classList.remove('crono-tipo-on'); }
+  }
+}
 
 async function cronoGuardarEditCatItem(id){
   const c = CRONO_CATALOGO.find(x=>x.id===id);
@@ -6977,9 +7020,10 @@ async function cronoGuardarEditCatItem(id){
   const nombre = document.getElementById('cronoEditNombre')?.value.trim();
   const unidad = document.getElementById('cronoEditUnidad')?.value.trim();
   const rendimiento = parseFloat(document.getElementById('cronoEditRend')?.value)||0;
+  const tipo = document.getElementById('cronoEditTipo')?.value||'unidades_por_dia';
   if(!nombre||!unidad||!rendimiento){ alert('Completa todos los campos'); return; }
 
-  c.nombre = nombre; c.unidad = unidad; c.rendimiento = rendimiento;
+  c.nombre = nombre; c.unidad = unidad; c.rendimiento = rendimiento; c.tipo = tipo;
   cronoSaveCatalogo();
 
   // Propagar a todas las asignaciones activas que usan esta subtarea del catálogo
@@ -6988,7 +7032,7 @@ async function cronoGuardarEditCatItem(id){
   CRONO_ITEMS.forEach(item=>{
     (item.subtareas||[]).forEach(st=>{
       if(st.catId===id){
-        st.nombre = nombre; st.unidad = unidad; st.rendimiento = rendimiento;
+        st.nombre = nombre; st.unidad = unidad; st.rendimiento = rendimiento; st.tipo = tipo;
         actualizadas++;
       }
     });
@@ -7028,8 +7072,9 @@ function cronoCatAdd(){
   const nombre = document.getElementById('catNewNombre')?.value.trim();
   const unidad = document.getElementById('catNewUnidad')?.value.trim();
   const rendimiento = parseFloat(document.getElementById('catNewRend')?.value)||0;
+  const tipo = document.getElementById('catNewTipo')?.value||'unidades_por_dia';
   if(!nombre||!unidad||!rendimiento){ alert('Completa todos los campos'); return; }
-  CRONO_CATALOGO.push({ id:'cat_'+Date.now(), nombre, unidad, rendimiento, tipo:'unidades_por_dia' });
+  CRONO_CATALOGO.push({ id:'cat_'+Date.now(), nombre, unidad, rendimiento, tipo });
   cronoSaveCatalogo();
   document.getElementById('catNewNombre').value='';
   document.getElementById('catNewUnidad').value='';
@@ -16659,8 +16704,17 @@ async function supaSyncUdCourses(){
     Object.entries(UD_COURSES_LOCAL).forEach(([categoria,cursos],ci)=>{
       cursos.forEach((c,i)=>{ rows.push({categoria, nombre:c.name, duracion:c.duracion||'', orden:i}); });
     });
-    if(rows.length) await _supa.from('ud_courses').upsert(rows,{onConflict:'categoria,nombre'});
-  }catch(e){ console.warn('supaSyncUdCourses:', e); }
+    if(rows.length){
+      const {error} = await _supa.from('ud_courses').upsert(rows,{onConflict:'categoria,nombre'});
+      if(error){
+        console.error('❌ supaSyncUdCourses:', error);
+        alert('Se guardó localmente en este navegador, pero no se pudo guardar en Supabase, así que el equipo no lo va a ver.\n\nMotivo: '+(error.message||error.code||'desconocido')+'\n\nEsto normalmente pasa si falta una restricción única (categoria, nombre) en la tabla "ud_courses" o hay un problema de permisos. Pídele a Claude que te ayude a revisarla.');
+      }
+    }
+  }catch(e){
+    console.error('❌ supaSyncUdCourses exception:', e);
+    alert('Ocurrió un error de conexión al guardar los cursos en Supabase. El equipo podría no verlos.');
+  }
 }
 
 // ── Udemy Mis Cursos Extra (Raquel) ──
@@ -16966,6 +17020,7 @@ function udSetCert(persona, curso, url){
   renderUdemy();
 }
 function udPromptCert(persona, curso){
+  if(_userRole === 'proyectista' && _miNombre && toCanonical(persona) !== toCanonical(_miNombre)) return;
   const cur = udGetCert(persona, curso);
   const url = prompt('Link del certificado de ' + persona.split(' ')[0] + ' — ' + curso.slice(0,40) + ':', cur||'https://');
   if(url === null) return; // cancelado
@@ -17113,8 +17168,8 @@ function renderUdHeatmapLocal(courses){
       const pN=nombre.replace(/'/g,"\\'");
       const cN=course.name.replace(/'/g,"\\'");
       const cert=udGetCert(nombre,course.name);
-      const certBtn=s==='done'?(cert?`<div style="display:flex;gap:4px;align-items:center;justify-content:center"><a class="ud-cert-btn" href="${cert}" target="_blank" onclick="event.stopPropagation()">🏅 Ver cert.</a><span class="ud-cert-add" onclick="event.stopPropagation();udPromptCert(\'${pN}\',\'${cN}\')" title="Editar link">✎</span></div>`:`<div><span class="ud-cert-add" onclick="event.stopPropagation();udPromptCert('${pN}','${cN}')">+ certificado</span></div>`):""; 
       const _udEditable = (_userRole !== 'proyectista') || (toCanonical(pN) === toCanonical(_miNombre||''));
+      const certBtn=s==='done'?(cert?`<div style="display:flex;gap:4px;align-items:center;justify-content:center"><a class="ud-cert-btn" href="${cert}" target="_blank" onclick="event.stopPropagation()">🏅 Ver cert.</a>${_udEditable?`<span class="ud-cert-add" onclick="event.stopPropagation();udPromptCert(\'${pN}\',\'${cN}\')" title="Editar link">✎</span>`:''}</div>`:(_udEditable?`<div><span class="ud-cert-add" onclick="event.stopPropagation();udPromptCert('${pN}','${cN}')">+ certificado</span></div>`:'')):"";
       html+=`<td style="padding:6px 8px;border-bottom:1px solid var(--border);text-align:center;cursor:${_udEditable?'pointer':'default'}" onclick="udCycleStatus('${pN}','${cN}')" title="${nombre} — ${course.name}\n${cfg.label}\n${_udEditable?'(Clic para cambiar estatus)':'(Solo lectura)'}"><div style="display:inline-flex;align-items:center;justify-content:center;background:${cfg.bg};border-radius:7px;padding:4px 8px;min-width:80px;gap:4px;transition:opacity .15s" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'"><span style="font-size:12px;color:${cfg.color}">${cfg.sym}</span><span style="font-size:10px;color:${cfg.color};white-space:nowrap">${cfg.label}</span></div>${certBtn}</td>`;
     });
     html+=`</tr>`;
@@ -17192,7 +17247,8 @@ function udBuildPersonCard(nombre, courses){
     const pN=nombre.replace(/'/g,"\\'");
     const cN=course.name.replace(/'/g,"\\'");
     const cert=udGetCert(nombre,course.name);
-    const certEl=s==='done'?(cert?`<span style="display:inline-flex;gap:4px;align-items:center"><a class="ud-cert-btn" href="${cert}" target="_blank" onclick="event.stopPropagation()">🏅 Ver cert.</a><span class="ud-cert-add" onclick="event.stopPropagation();udPromptCert('${pN}','${cN}')" title="Editar">✎</span></span>`:`<span class="ud-cert-add" onclick="event.stopPropagation();udPromptCert('${pN}','${cN}')">+ certificado</span>`):""; 
+    const _udEditable = (_userRole !== 'proyectista') || (toCanonical(pN) === toCanonical(_miNombre||''));
+    const certEl=s==='done'?(cert?`<span style="display:inline-flex;gap:4px;align-items:center"><a class="ud-cert-btn" href="${cert}" target="_blank" onclick="event.stopPropagation()">🏅 Ver cert.</a>${_udEditable?`<span class="ud-cert-add" onclick="event.stopPropagation();udPromptCert('${pN}','${cN}')" title="Editar">✎</span>`:''}</span>`:(_udEditable?`<span class="ud-cert-add" onclick="event.stopPropagation();udPromptCert('${pN}','${cN}')">+ certificado</span>`:'')):"";
     return `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="udCycleStatus('${pN}','${cN}')" title="Clic para cambiar estatus"><div style="width:24px;height:24px;border-radius:5px;background:${cfg.bg};display:flex;align-items:center;justify-content:center;font-size:12px;color:${cfg.color};flex-shrink:0;margin-top:2px">${cfg.sym}</div><div style="flex:1;min-width:0"><div style="font-size:11px;color:var(--text);line-height:1.3">${course.name.slice(0,34)}</div><div style="font-size:10px;color:${cfg.color}">${cfg.label}</div>${certEl}</div><div style="font-size:10px;color:var(--dim);flex-shrink:0;padding-top:2px">${course.duracion||''}</div></div>`;
   }).join('');
   const udBadge=hasUd?`<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:rgba(61,214,140,.12);color:#5ce8a6">✓ Udemy activo</span>`:`<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:rgba(255,92,92,.1);color:#ff8080">✕ Sin cuenta</span>`;
