@@ -916,6 +916,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 /* ── Ausencias y Permisos ── */
 .aus-day-card{background:#060e1a;border:1px solid rgba(0,229,255,.15);border-radius:8px;padding:10px;min-height:90px;box-shadow:0 0 12px rgba(0,229,255,.04);}
 .aus-day-card.is-today{border-color:rgba(0,229,255,.5);background:rgba(0,229,255,.06);box-shadow:0 0 16px rgba(0,229,255,.12);}
+[data-theme="light"] .aus-day-card{background:#ffffff;border-color:rgba(26,86,208,.2);box-shadow:0 2px 10px rgba(20,30,60,.06);}
+[data-theme="light"] .aus-day-card.is-today{border-color:rgba(26,86,208,.5);background:rgba(26,86,208,.05);}
+[data-theme="light"] .aus-day-label{color:#1a56d0;}
 .aus-day-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(0,200,255,.5);margin-bottom:6px;}
 .aus-day-label .date{font-weight:400;color:var(--dim);}
 .aus-person-chip{display:flex;align-items:center;gap:5px;font-size:10px;padding:3px 0;color:var(--text);}
@@ -940,6 +943,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 /* Directorio */
 .dir-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}
 .dir-card{background:#060e1a;border-radius:10px;overflow:hidden;transition:border-color .2s,box-shadow .2s;}
+[data-theme="light"] .dir-card{background:#ffffff;box-shadow:0 2px 10px rgba(20,30,60,.06);}
+[data-theme="light"] .dir-card-head{border-bottom-color:var(--border);}
 .dir-card-head{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid rgba(0,229,255,.1);}
 .dir-card-body{padding:12px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;}
 .dir-field{display:flex;flex-direction:column;gap:2px;}
