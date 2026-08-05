@@ -464,6 +464,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 /* Toast flotante */
 .notif-toast-wrap{position:fixed;bottom:24px;right:24px;z-index:1500;display:flex;flex-direction:column;gap:8px;pointer-events:none;}
 .notif-toast{pointer-events:all;display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:#0a1628;border:1px solid rgba(74,143,212,.35);border-radius:12px;min-width:280px;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.5),0 0 20px rgba(74,143,212,.1);animation:toast-in .3s ease;position:relative;}
+[data-theme="light"] .notif-toast{background:#ffffff;border-color:rgba(26,86,208,.3);box-shadow:0 8px 28px rgba(20,30,60,.16),0 0 16px rgba(26,86,208,.06);}
 @keyframes toast-in{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:translateX(0);}}
 @keyframes toast-out{to{opacity:0;transform:translateX(20px);}}
 .notif-toast.out{animation:toast-out .25s ease forwards;}
@@ -5882,6 +5883,13 @@ function cronoAddSubtareaModal(actId){
       <div id="cronoPaqLista" style="margin-bottom:12px"></div>
     </div>
 
+    <div id="cronoCorrPanel" style="display:none">
+      <div style="background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.25);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:var(--dim);line-height:1.5">
+        Marca cuáles de las subtareas ya entregadas necesitan corrección. Por cada una marcada se crea una nueva subtarea "Corrección — [nombre]" con la misma cantidad y rendimiento del original, lista para reportar de nuevo.
+      </div>
+      <div id="cronoCorrLista" style="margin-bottom:8px"></div>
+    </div>
+
     <div id="cronoFormNormal">
     <div style="margin-bottom:12px">
       <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Nombre de la subtarea</label>
@@ -5952,7 +5960,7 @@ function cronoRenderCatTabs(){
       <div onclick="cronoPickPaquete('${p.id}')" style="padding:8px 10px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;background:var(--surface2);border:1px solid var(--border)"
         onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
         <span style="font-size:12px;color:var(--text)">${p.nombre}</span>
-        <span style="font-size:10.5px;color:var(--accent)">${p.rendimiento} ${p.unidad}/día · ${p.entregables.length} entregables</span>
+        <span style="font-size:10.5px;color:${p.dinamico?'var(--amber)':'var(--accent)'}">${p.dinamico?'🔧 corrección dinámica':`${p.rendimiento} ${p.unidad}/día · ${p.entregables.length} entregables`}</span>
       </div>`).join('') : `<div style="font-size:11px;color:var(--dim);padding:8px 0">Sin paquetes en el catálogo todavía.</div>`;
   }
   if(listSuel){
@@ -5979,6 +5987,11 @@ function cronoSetCatTab(tab){
   if(tab==='pers'){
     document.getElementById('cronoStCat').value = '';
     document.getElementById('cronoStPaq').value = '';
+    document.getElementById('cronoCorrPanel').style.display = 'none';
+    document.getElementById('cronoPaqPanel').style.display = 'none';
+    document.getElementById('cronoFormNormal').style.display = 'block';
+    const guardarBtn = document.getElementById('crono-guardar-btn');
+    if(guardarBtn) guardarBtn.textContent = 'Agregar';
     cronoCatChange();
   }
 }
@@ -5987,6 +6000,7 @@ function cronoPickSuelta(catId){
   document.getElementById('cronoStPaq').value = '';
   document.getElementById('cronoStCat').value = catId;
   document.getElementById('cronoPaqPanel').style.display = 'none';
+  document.getElementById('cronoCorrPanel').style.display = 'none';
   document.getElementById('cronoFormNormal').style.display = 'block';
   cronoCatChange();
 }
@@ -5996,13 +6010,42 @@ function cronoPickPaquete(paqId){
   document.getElementById('cronoStPaq').value = paqId;
   const paq = CRONO_PAQUETES.find(p=>p.id===paqId);
   if(!paq) return;
-  document.getElementById('cronoPaqPanel').style.display = 'block';
   document.getElementById('cronoFormNormal').style.display = 'none';
+  const guardarBtn = document.getElementById('crono-guardar-btn');
+
+  if(paq.dinamico){
+    document.getElementById('cronoPaqPanel').style.display = 'none';
+    document.getElementById('cronoCorrPanel').style.display = 'block';
+    if(guardarBtn) guardarBtn.textContent = 'Agregar correcciones seleccionadas';
+    cronoRenderCorrLista();
+    return;
+  }
+
+  document.getElementById('cronoCorrPanel').style.display = 'none';
+  document.getElementById('cronoPaqPanel').style.display = 'block';
   document.getElementById('cronoPaqRendLabel').textContent = `${paq.rendimiento} ${paq.unidad}/día`;
   document.getElementById('cronoPaqCantLabel').textContent = `Cantidad total para esta actividad (${paq.unidad})`;
-  const guardarBtn = document.getElementById('crono-guardar-btn');
   if(guardarBtn) guardarBtn.textContent = `Agregar ${paq.entregables.length} subtareas`;
   cronoPaqUpdateLista();
+}
+
+function cronoRenderCorrLista(){
+  const el = document.getElementById('cronoCorrLista');
+  if(!el) return;
+  const item = CRONO_ITEMS.find(x=>x.actividadId===cronoModalActId);
+  const subtareas = (item?.subtareas||[]).filter(st=>!st.esCorreccion); // no listar correcciones previas como base
+  if(!subtareas.length){
+    el.innerHTML = `<div style="font-size:11.5px;color:var(--dim);padding:8px 0">Esta actividad todavía no tiene subtareas entregadas.</div>`;
+    return;
+  }
+  el.innerHTML = subtareas.map(st=>`
+    <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:5px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer">
+      <input type="checkbox" class="cronoCorrChk" value="${st.id}" style="flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11.5px;color:var(--text)">${st.nombre}</div>
+        <div style="font-size:10px;color:var(--dim)">${st.cantidad} ${st.unidad} · ${st.rendimiento} ${st.unidad}/día · ${st.estatus==='completada'?'✓ completada':st.estatus}</div>
+      </div>
+    </label>`).join('');
 }
 
 function cronoPaqUpdateLista(){
@@ -6144,7 +6187,11 @@ function cronoCloseSubModal(){
 
 async function cronoGuardarSubtarea(){
   const paqId = document.getElementById('cronoStPaq')?.value;
-  if(paqId){ return cronoGuardarPaquete(paqId); }
+  if(paqId){
+    const paqSel = CRONO_PAQUETES.find(p=>p.id===paqId);
+    if(paqSel?.dinamico){ return cronoGuardarCorreccion(); }
+    return cronoGuardarPaquete(paqId);
+  }
 
   const nombre = document.getElementById('cronoStNombre')?.value.trim();
   const unidad = document.getElementById('cronoStUnidad')?.value.trim();
@@ -6191,6 +6238,52 @@ async function cronoGuardarSubtarea(){
   if(requiereValidacion && typeof notifAdd==='function'){
     notifAdd('🔔', `${(_miNombre||'').split(' ')[0]} propuso subtarea`,
       `"${nombre}" — ${cantidad} ${unidad} · Requiere validación`, 'avance', false);
+  }
+
+  cronoSubTab = 'cronograma';
+  cronoExpandedId = cronoModalActId;
+  renderReporteoView();
+}
+
+async function cronoGuardarCorreccion(){
+  const checks = [...document.querySelectorAll('.cronoCorrChk:checked')];
+  if(!checks.length){ alert('Marca al menos una subtarea que necesite corrección.'); return; }
+  if(!cronoModalActId){ alert('Error: no se identificó la actividad. Cierra y vuelve a abrir.'); return; }
+  cronoCloseSubModal();
+
+  await cronoRecargarDeSupabase();
+
+  const item = CRONO_ITEMS.find(x=>x.actividadId===cronoModalActId);
+  if(!item || !item.subtareas){ alert('No se encontraron subtareas de esta actividad.'); return; }
+
+  const esProyectista = _userRole==='proyectista';
+  let creadas = 0;
+  checks.forEach((chk,i)=>{
+    const original = item.subtareas.find(s=>s.id===chk.value);
+    if(!original) return;
+    item.subtareas.push({
+      id:'st_'+Date.now()+'_'+i,
+      nombre: `Corrección — ${original.nombre}`,
+      unidad: original.unidad, cantidad: original.cantidad, rendimiento: original.rendimiento, tipo: original.tipo||'unidades_por_dia',
+      esDeCatalogo:true, catId:null, esCorreccion:true, subtareaOriginalId: original.id,
+      pendienteValidacion:false,
+      propuestaPor: esProyectista ? _miNombre : null,
+      estatus:'pendiente',
+      avanceAcum:0
+    });
+    creadas++;
+  });
+  cronoSaveItem(cronoModalActId);
+
+  // Avisar al proyectista responsable que le regresaron correcciones
+  const pa = PA_ITEMS.find(x=>x.id===cronoModalActId);
+  if(pa && pa.responsable && typeof supaSyncNotifProy==='function'){
+    supaSyncNotifProy(pa.responsable, {
+      id:'np_corr_'+Date.now(),
+      icon:'🔧', title:'Te regresaron correcciones',
+      msg:`"${pa.folio||pa.actividad}" tiene ${creadas} corrección${creadas!==1?'es':''} pendiente${creadas!==1?'s':''} por reportar`,
+      time:new Date().toISOString(), tipo:'avance'
+    });
   }
 
   cronoSubTab = 'cronograma';
@@ -6516,6 +6609,13 @@ function cronoCatalogoModal(){
 
         <div id="cronoPkgForm" style="display:none;background:var(--surface2);border:1px dashed var(--border);border-radius:8px;padding:10px;margin-bottom:10px">
           <input id="cronoPkgNombre" placeholder="Nombre del paquete (ej. AP Municipal)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 9px;color:var(--text);font-size:11.5px;margin-bottom:8px">
+
+          <label style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--dim);cursor:pointer;margin-bottom:10px;padding:6px 8px;background:rgba(245,166,35,.06);border:1px solid rgba(245,166,35,.2);border-radius:6px">
+            <input type="checkbox" id="cronoPkgDinamico" onchange="cronoPkgToggleDinamico()">
+            🔧 Paquete dinámico de corrección (en vez de entregables fijos, muestra al usarlo un checklist con las subtareas ya entregadas de esa actividad, para elegir cuáles corregir)
+          </label>
+
+          <div id="cronoPkgCamposNormales">
           <div style="display:flex;gap:8px;margin-bottom:8px">
             <input id="cronoPkgUnidad" placeholder="Unidad (km)" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 9px;color:var(--text);font-size:11.5px">
             <input id="cronoPkgRend" placeholder="Rendimiento" type="number" min="0.1" step="0.1" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 9px;color:var(--text);font-size:11.5px">
@@ -6535,6 +6635,8 @@ function cronoCatalogoModal(){
           <div style="font-size:10px;color:var(--dim);margin-bottom:6px">Entregables incluidos</div>
           <div id="cronoPkgItems"></div>
           <button onclick="cronoPkgAddItemField()" style="background:none;border:1px dashed var(--border);color:var(--dim);border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;margin-bottom:8px;width:100%">+ Agregar entregable</button>
+          </div>
+
           <div style="display:flex;justify-content:flex-end;gap:6px">
             <button onclick="cronoPkgToggleForm()" style="background:none;border:1px solid var(--border);color:var(--dim);border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer">Cancelar</button>
             <button onclick="cronoPkgGuardar()" style="background:var(--accent);border:none;color:#fff;border-radius:6px;padding:5px 14px;font-size:11px;font-weight:600;cursor:pointer">Guardar paquete</button>
@@ -6596,13 +6698,15 @@ function cronoRenderPkgList(){
   el.innerHTML = CRONO_PAQUETES.length ? CRONO_PAQUETES.map(p=>`
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;margin-bottom:8px">
       <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="cronoPkgToggleExpand('${p.id}')">
-        <span style="font-size:12px;color:var(--text);font-weight:500">${p.nombre}</span>
-        <span style="font-size:10.5px;color:var(--accent)">${p.rendimiento} ${p.unidad}/día</span>
+        <span style="font-size:12px;color:var(--text);font-weight:500">${p.nombre}${p.dinamico?' <span style="font-size:9.5px;color:var(--amber);background:rgba(245,166,35,.12);padding:1px 7px;border-radius:10px;margin-left:4px">🔧 dinámico</span>':''}</span>
+        ${p.dinamico?'':`<span style="font-size:10.5px;color:var(--accent)">${p.rendimiento} ${p.unidad}/día</span>`}
       </div>
       <div id="cronoPkgItemsView-${p.id}" style="display:none;margin-top:8px;padding-top:8px;border-top:0.5px solid rgba(255,255,255,.08)">
-        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
-          ${p.entregables.map(e=>`<span style="font-size:10px;background:var(--surface);border:1px solid var(--border);color:var(--dim);padding:3px 8px;border-radius:10px">${e}</span>`).join('')}
-        </div>
+        ${p.dinamico
+          ? `<div style="font-size:10.5px;color:var(--dim);margin-bottom:6px">Al usarse, muestra un checklist con las subtareas ya entregadas de la actividad para elegir cuáles corregir.</div>`
+          : `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
+              ${p.entregables.map(e=>`<span style="font-size:10px;background:var(--surface);border:1px solid var(--border);color:var(--dim);padding:3px 8px;border-radius:10px">${e}</span>`).join('')}
+            </div>`}
         <button onclick="event.stopPropagation();cronoEditPaquete('${p.id}')" style="background:none;border:none;color:var(--accent);font-size:10.5px;cursor:pointer;padding:0;margin-right:14px;display:${_userRole!=='proyectista'?'inline':'none'}">✎ Editar paquete</button>
         <button onclick="cronoDeletePaquete('${p.id}')" style="background:none;border:none;color:var(--dim);font-size:10.5px;cursor:pointer;padding:0">✕ Eliminar paquete</button>
       </div>
@@ -6736,6 +6840,15 @@ function cronoPkgToggleForm(){
   cronoPkgDraftItems = ['',''];
   cronoRenderPkgDraftItems();
   if(typeof cronoPkgSetTipo==='function') cronoPkgSetTipo('unidades_por_dia');
+  const chk = document.getElementById('cronoPkgDinamico');
+  if(chk){ chk.checked = false; }
+  const campos = document.getElementById('cronoPkgCamposNormales');
+  if(campos) campos.style.display = 'block';
+}
+function cronoPkgToggleDinamico(){
+  const chk = document.getElementById('cronoPkgDinamico');
+  const campos = document.getElementById('cronoPkgCamposNormales');
+  if(campos) campos.style.display = chk.checked ? 'none' : 'block';
 }
 function cronoRenderPkgDraftItems(){
   const el = document.getElementById('cronoPkgItems');
@@ -6756,15 +6869,26 @@ function cronoPkgSetTipo(tipo){
 
 function cronoPkgGuardar(){
   const nombre = document.getElementById('cronoPkgNombre')?.value.trim();
+  const dinamico = document.getElementById('cronoPkgDinamico')?.checked || false;
+  if(!nombre){ alert('Escribe un nombre para el paquete.'); return; }
+
+  if(dinamico){
+    CRONO_PAQUETES.push({ id:'paq_'+Date.now(), nombre, unidad:'', rendimiento:0, tipo:'unidades_por_dia', entregables:[], dinamico:true });
+    cronoSavePaquetes();
+    cronoPkgToggleForm();
+    cronoRenderPkgList();
+    return;
+  }
+
   const unidad = document.getElementById('cronoPkgUnidad')?.value.trim();
   const rendimiento = parseFloat(document.getElementById('cronoPkgRend')?.value)||0;
   const tipo = document.getElementById('cronoPkgTipo')?.value||'unidades_por_dia';
   const entregables = cronoPkgDraftItems.map(v=>v.trim()).filter(Boolean);
-  if(!nombre||!unidad||!rendimiento||!entregables.length){
-    alert('Completa nombre, unidad, rendimiento, y al menos un entregable.');
+  if(!unidad||!rendimiento||!entregables.length){
+    alert('Completa unidad, rendimiento, y al menos un entregable.');
     return;
   }
-  CRONO_PAQUETES.push({ id:'paq_'+Date.now(), nombre, unidad, rendimiento, tipo, entregables });
+  CRONO_PAQUETES.push({ id:'paq_'+Date.now(), nombre, unidad, rendimiento, tipo, entregables, dinamico:false });
   cronoSavePaquetes();
   cronoPkgToggleForm();
   cronoRenderPkgList();
@@ -7903,7 +8027,7 @@ function renderCronoCalProyectista(){
     (item.reportes||[]).forEach(r=>{
       if(!r.fecha) return;
       if(!misReportesPorDia[r.fecha]) misReportesPorDia[r.fecha]=[];
-      misReportesPorDia[r.fecha].push({...r, proyecto:item.proyecto, folio:(PA_ITEMS.find(a=>a.id===item.actividadId)?.folio)||''});
+      misReportesPorDia[r.fecha].push({...r, proyecto:item.proyecto, folio:(PA_ITEMS.find(a=>a.id===item.actividadId)?.folio)||'', tipo:(PA_ITEMS.find(a=>a.id===item.actividadId)?.tipo)||'', numBobina:(PA_ITEMS.find(a=>a.id===item.actividadId)?.numBobina)||''});
     });
   });
 
@@ -8052,15 +8176,20 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
   if(repsExistentes.length){
     html+=`<div style="margin-bottom:14px">
       <div style="font-size:11px;color:var(--green);font-weight:500;margin-bottom:6px">✓ Ya reportaste ${repsExistentes.length} subtarea${repsExistentes.length!==1?'s':''} hoy</div>
-      ${repsExistentes.map((r,ri)=>`
+      ${repsExistentes.map((r,ri)=>{
+        const esConect = r.tipo==='Planos de Conectividad'||r.tipo==='Conectividad (Bobinas)';
+        const contexto = [r.folio||r.proyecto, esConect&&r.numBobina?`Bna #${r.numBobina}`:''].filter(Boolean).join(' · ');
+        return `
         <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim);padding:5px 0;border-bottom:0.5px solid var(--border)">
           <div style="flex:1">
+            ${contexto?`<div style="font-size:10px;color:var(--muted);margin-bottom:1px">${contexto}</div>`:''}
             <span style="color:var(--accent)">${r.subtareaNombre||'—'}</span> · +${r.cantidad||0} ${r.unidad||''} · ${r.nota||''}
           </div>
           <button onclick="calProyEliminarReporte('${r.id||''}',this)" title="Eliminar reporte"
             style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:13px;padding:2px 6px;border-radius:4px;flex-shrink:0"
             onmouseover="this.style.color='#ff6b6b'" onmouseout="this.style.color='var(--dim)'">✕</button>
-        </div>`).join('')}
+        </div>`;
+      }).join('')}
     </div>`;
   }
 
