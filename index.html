@@ -5174,8 +5174,16 @@ function cronoSavePaquetes(){
   localStorage.setItem(CRONO_PAQ_KEY, JSON.stringify(CRONO_PAQUETES));
   if(!_supa) return;
   _supa.from('crono_paquetes').upsert(CRONO_PAQUETES.map(p=>({...p, entregables: JSON.stringify(p.entregables)})), {onConflict:'id'})
-    .then(({error})=>{ if(error) console.error('❌ cronoSavePaquetes:', error); })
-    .catch(e=>console.error('❌ cronoSavePaquetes exception:', e));
+    .then(({error})=>{
+      if(error){
+        console.error('❌ cronoSavePaquetes:', error);
+        alert('Se guardó localmente, pero no se pudo guardar en Supabase, así que podría perderse al recargar o no verlo el resto del equipo.\n\nMotivo: '+(error.message||error.code||'desconocido')+'\n\nEsto normalmente pasa si faltan columnas en la tabla "crono_paquetes" (ej. "dinamico") o permisos. Pídele a Claude que te ayude a revisarla.');
+      }
+    })
+    .catch(e=>{
+      console.error('❌ cronoSavePaquetes exception:', e);
+      alert('Ocurrió un error de conexión al guardar el paquete en Supabase. Podría perderse al recargar.');
+    });
 }
 async function cronoDeletePaquete(id){
   if(!confirm('¿Eliminar este paquete de tareas?')) return;
@@ -5231,8 +5239,16 @@ function cronoSaveCatalogo(){
   localStorage.setItem(CRONO_CAT_KEY, JSON.stringify(CRONO_CATALOGO));
   if(!_supa) return;
   _supa.from('crono_catalogo').upsert(CRONO_CATALOGO, {onConflict:'id'})
-    .then(({error})=>{ if(error) console.error('❌ cronoSaveCatalogo:', error); else console.log('✅ catálogo guardado en Supabase'); })
-    .catch(e=>console.error('❌ cronoSaveCatalogo exception:', e));
+    .then(({error})=>{
+      if(error){
+        console.error('❌ cronoSaveCatalogo:', error);
+        alert('Se guardó localmente, pero no se pudo guardar en Supabase, así que podría perderse al recargar o no verlo el resto del equipo.\n\nMotivo: '+(error.message||error.code||'desconocido')+'\n\nEsto normalmente pasa si falta la columna "orden" en la tabla "crono_catalogo" o hay un problema de permisos. Pídele a Claude que te ayude a revisarla.');
+      }
+    })
+    .catch(e=>{
+      console.error('❌ cronoSaveCatalogo exception:', e);
+      alert('Ocurrió un error de conexión al guardar en Supabase. Podría perderse al recargar.');
+    });
 }
 function cronoCatMover(id, direccion){
   cronoEnsureOrden();
@@ -8504,8 +8520,9 @@ function calDiaGenerarPDF(fecha){
   // Reunir todos los reportes de ese día desde CRONO_ITEMS
   const reps = [];
   CRONO_ITEMS.forEach(item=>{
+    const pa = PA_ITEMS.find(a=>a.id===item.actividadId);
     (item.reportes||[]).forEach(r=>{
-      if(r.fecha===fecha) reps.push({...r, proyecto:item.proyecto||'', tipo:item.tipo||''});
+      if(r.fecha===fecha) reps.push({...r, proyecto:item.proyecto||'', folio:pa?.folio||pa?.actividad||'', tipo:pa?.tipo||'', numBobina:pa?.numBobina||''});
     });
   });
   reps.sort((a,b)=>(a.quien||'').localeCompare(b.quien||''));
@@ -8549,16 +8566,21 @@ function calDiaGenerarPDF(fecha){
     <div class="kpi"><div class="v">${sinReportar.length}</div><div class="l">Sin reportar ese día</div></div>
   </div>
   <div class="sec">Reportes del día</div>
-  ${reps.length ? reps.map(r=>`
+  ${reps.length ? reps.map(r=>{
+    const esConect = r.tipo==='Planos de Conectividad'||r.tipo==='Conectividad (Bobinas)';
+    return `
     <div class="rep-card">
       <div class="rep-head">
         <span class="rep-name">${(r.quien||'').split(' ').slice(0,2).join(' ')}</span>
         ${r.subtareaNombre?`<span class="rep-tag">${r.subtareaNombre}</span>`:''}
+        ${r.proyecto?`<span class="rep-folio">${r.proyecto}</span>`:''}
         ${r.folio?`<span class="rep-folio">${r.folio}</span>`:''}
+        ${esConect && r.numBobina?`<span class="rep-tag" style="background:#fdf0da;color:#a05a00">Bna #${r.numBobina}</span>`:''}
       </div>
       ${r.nota?`<div class="rep-nota">${r.nota}</div>`:''}
       ${r.cantidad?`<div class="rep-cant">+${r.cantidad} ${r.unidad||''}</div>`:''}
-    </div>`).join('') : `<div style="font-size:11px;color:#6b7280">Sin reportes registrados este día.</div>`}
+    </div>`;
+  }).join('') : `<div style="font-size:11px;color:#6b7280">Sin reportes registrados este día.</div>`}
   <div class="sec">Sin reportar / justificaciones</div>
   ${sinReportar.length ? sinReportar.map(m=>{
     const j = justGet(fecha, m);
