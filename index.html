@@ -5568,6 +5568,12 @@ function renderReporteoView(){
       : '';
 
     const esConectSub = a.tipo==='Planos de Conectividad'||a.tipo==='Conectividad (Bobinas)';
+    const listaParaRevision = avancePct===100 && a.estatus!=='Terminado';
+    const revisionLabel = listaParaRevision
+      ? (_userRole==='proyectista'
+          ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(74,143,212,.12);color:var(--accent);font-weight:600">⏳ En proceso de revisión</span>`
+          : `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(61,214,140,.15);color:var(--green);font-weight:600">✓ 100% reportada — lista para revisión</span>`)
+      : '';
     html += `<div class="panel" style="margin-bottom:12px;padding:0;overflow:hidden">
       <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;border-bottom:${isOpen?'0.5px solid rgba(255,255,255,.06)':'none'}"
         onclick="cronoToggle('${a.id}')">
@@ -5577,7 +5583,7 @@ function renderReporteoView(){
             <span style="font-size:13px;font-weight:600;color:var(--text)">${a.folio||a.actividad||'Sin folio'}</span>
             <span style="font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(74,143,212,.12);color:var(--accent)">${a.tipo}</span>
             ${esConectSub && a.numBobina ? `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(245,166,35,.12);color:var(--amber);font-weight:600">Bna #${a.numBobina}</span>` : ''}
-            ${semaforoLabel}
+            ${revisionLabel || semaforoLabel}
           </div>
           <div style="font-size:11px;color:var(--dim);margin-top:2px">${a.proyecto||''} · ${a.responsable?.split(' ').slice(0,2).join(' ')||'—'} · Inicio: ${cronoFmtShort(a.fechaAsig||crono?.fechaInicio)} ${pron?'· Pronóstico: '+cronoFmtShort(pron):''}</div>
         </div>
@@ -6465,6 +6471,20 @@ function cronoGuardarReporte(){
   // Notificar a Raquel si es proyectista
   if(_userRole==='proyectista' && _miNombre && typeof notifAdd==='function'){
     notifAdd('📋', `${_miNombre.split(' ')[0]} reportó avance`, `${st.nombre}: +${cantidad} ${st.unidad} — ${nota.slice(0,40)}`, 'avance', false);
+  }
+
+  // Si con este reporte la actividad llegó al 100% de sus subtareas, pasarla a "En revisión"
+  const pa = PA_ITEMS.find(x=>x.id===cronoReportActId);
+  if(pa){
+    const avanceTotal = cronoAvance(item.subtareas||[]);
+    if(avanceTotal===100 && pa.estatus!=='En revisión' && pa.estatus!=='Terminado'){
+      pa.estatus = 'En revisión';
+      if(typeof paSave==='function') paSave(pa);
+      if(_userRole==='proyectista' && typeof notifAdd==='function'){
+        notifAdd('🏁', `${(_miNombre||'').split(' ')[0]} terminó de reportar una actividad`,
+          `"${pa.folio||pa.actividad}" llegó al 100% de sus subtareas — lista para revisión`, 'avance', false);
+      }
+    }
   }
 
   document.getElementById('cronoReporteModalBg')?.classList.remove('open');
@@ -7894,7 +7914,7 @@ function renderCronoCalProyectista(){
   const esEsteMes = calProyMes===new Date().getMonth() && calProyAnio===new Date().getFullYear();
 
   let html = `
-  <div style="background:rgba(255,255,255,.03);border:0.5px solid rgba(255,255,255,.08);border-radius:12px;padding:16px">
+  <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div>
         <div style="font-size:14px;font-weight:600;color:var(--text)">📅 Mi reporte diario</div>
@@ -7929,7 +7949,7 @@ function renderCronoCalProyectista(){
     if(esHoy){
       bg='rgba(74,143,212,.12)'; border='rgba(74,143,212,.5)'; cursor='pointer';
     } else if(esFuturo || esFinSem){
-      bg='rgba(255,255,255,.01)'; border='rgba(255,255,255,.04)'; cursor='default';
+      bg='var(--surface2)'; border='var(--border)'; cursor='default';
     } else if(yaReporto){
       bg='rgba(61,214,140,.06)'; border='rgba(61,214,140,.2)'; cursor='pointer';
     } else if(justif){
@@ -7943,7 +7963,7 @@ function renderCronoCalProyectista(){
     html+=`<div onclick="${clickFn}" style="min-height:64px;border-radius:8px;padding:6px;border:0.5px solid ${border};background:${bg};cursor:${cursor};transition:background .15s"
       ${esHoy?`onmouseover="this.style.background='rgba(74,143,212,.2)'" onmouseout="this.style.background='${bg}'"`:''}
       ${justif?`title="🔖 Justificado: ${justif.motivo}"`:''}>
-      <div style="font-size:11px;font-weight:${esHoy?'700':'500'};color:${esHoy?'var(--accent)':esFinSem||esFuturo?'rgba(255,255,255,.2)':'var(--text)'}">${d}</div>
+      <div style="font-size:11px;font-weight:${esHoy?'700':'500'};color:${esHoy?'var(--accent)':esFinSem||esFuturo?'var(--dim)':'var(--text)'}">${d}</div>
       ${esHoy?`<div style="font-size:9px;color:var(--accent);margin-top:3px;font-weight:600">${yaReporto?'✓ Reportado':'→ Reportar'}</div>`:''}
       ${!esHoy && yaReporto?`<div style="font-size:9px;color:var(--green);margin-top:3px">✓ ${reps.length} rep.</div>`:''}
       ${!esHoy && !yaReporto && justif?`<div style="font-size:9px;color:#c084fc;margin-top:3px">🔖 Justificado</div>`:''}
@@ -8247,6 +8267,23 @@ async function calProyGuardarReporteHoy(){
     }
   }
   itemsAfectados.forEach(id=>cronoSaveItem(id));
+
+  // Si con este reporte alguna actividad llegó al 100% de avance en subtareas,
+  // pasarla automáticamente a "En revisión" y avisar al admin que ya puede revisarla.
+  itemsAfectados.forEach(actId=>{
+    const item = CRONO_ITEMS.find(x=>x.actividadId===actId);
+    const pa = PA_ITEMS.find(x=>x.id===actId);
+    if(!item || !pa) return;
+    const avanceTotal = cronoAvance(item.subtareas||[]);
+    if(avanceTotal===100 && pa.estatus!=='En revisión' && pa.estatus!=='Terminado'){
+      pa.estatus = 'En revisión';
+      if(typeof paSave==='function') paSave(pa);
+      if(typeof notifAdd==='function'){
+        notifAdd('🏁', `${(_miNombre||'').split(' ')[0]} terminó de reportar una actividad`,
+          `"${pa.folio||pa.actividad}" llegó al 100% de sus subtareas — lista para revisión`, 'avance', false);
+      }
+    }
+  });
 
   // Limpiar pendientes ya guardados
   window._calProyPendientes = [];
