@@ -316,7 +316,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 /* ── Modal editor de Home Office ── */
 .ho-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);z-index:900;display:none;align-items:center;justify-content:center;}
 .ho-modal-bg.open{display:flex;}
-.ho-modal{background:#070d1a;border:1px solid rgba(0,229,255,.3);border-radius:16px;padding:28px;width:540px;max-width:95vw;max-height:88vh;overflow-y:auto;box-shadow:0 0 40px rgba(0,229,255,.15),0 24px 60px rgba(0,0,0,.5);}
+.ho-modal{background:var(--surface);border:1px solid rgba(0,229,255,.3);border-radius:16px;padding:28px;width:540px;max-width:95vw;max-height:88vh;overflow-y:auto;box-shadow:0 0 40px rgba(0,229,255,.15),0 24px 60px rgba(0,0,0,.5);}
 .ho-modal-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;}
 .ho-modal-sub{font-size:11px;color:var(--muted);margin-bottom:20px;}
 .ho-day-section{margin-bottom:16px;border:1px solid var(--border);border-radius:10px;overflow:hidden;}
@@ -432,7 +432,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .srv-status-legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;padding:10px 14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);}
 .ud-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);z-index:900;display:none;align-items:center;justify-content:center;}
 .ud-modal-bg.open{display:flex;}
-.ud-modal{background:#070d1a;border:1px solid rgba(74,143,212,.3);border-radius:16px;padding:28px;width:640px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:0 0 40px rgba(74,143,212,.12),0 24px 60px rgba(0,0,0,.5);}
+.ud-modal{background:var(--surface);border:1px solid rgba(74,143,212,.3);border-radius:16px;padding:28px;width:640px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:0 0 40px rgba(74,143,212,.12),0 24px 60px rgba(0,0,0,.5);}
 .ud-modal-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:18px;}
 .ud-cat-section{margin-bottom:18px;}
 .ud-cat-head{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--accent);margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid var(--border);}
@@ -548,7 +548,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 /* Modal Servicio */
 .srv-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);z-index:900;display:none;align-items:center;justify-content:center;}
 .srv-modal-bg.open{display:flex;}
-.srv-modal{background:#070d1a;border:1px solid rgba(74,143,212,.3);border-radius:16px;padding:28px;width:600px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:0 0 40px rgba(74,143,212,.12),0 24px 60px rgba(0,0,0,.5);}
+.srv-modal{background:var(--surface);border:1px solid rgba(74,143,212,.3);border-radius:16px;padding:28px;width:600px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:0 0 40px rgba(74,143,212,.12),0 24px 60px rgba(0,0,0,.5);}
 .srv-modal-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:18px;display:flex;align-items:center;gap:8px;}
 .srv-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .srv-form-full{grid-column:1/-1;}
@@ -2100,6 +2100,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
               <th>Estatus</th>
               <th>COT</th>
               <th>OS</th>
+              <th>Validación</th>
               <th>Entregable</th>
               <th style="width:44px"></th>
             </tr>
@@ -15346,7 +15347,7 @@ function srvRenderTable(){
   if(srvFiltroEstado!=='todos') items = items.filter(s=>s.estado===srvFiltroEstado);
 
   if(!items.length){
-    tbody.innerHTML = `<tr><td colspan="13" style="text-align:center;padding:28px;color:var(--dim)">Sin registros${srvFiltroTipo!=='todos'||srvFiltroEstado!=='todos'?' con los filtros actuales':' — agrega una nueva solicitud'}.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" style="text-align:center;padding:28px;color:var(--dim)">Sin registros${srvFiltroTipo!=='todos'||srvFiltroEstado!=='todos'?' con los filtros actuales':' — agrega una nueva solicitud'}.</td></tr>`;
     return;
   }
 
@@ -15368,6 +15369,9 @@ function srvRenderTable(){
     const osCell = s.linkOS
       ? `<a class="srv-link" href="${s.linkOS}" target="_blank">📄 OS</a>`
       : `<span class="srv-add-link" onclick="srvInlineLink('${s.id}','linkOS')">+ agregar</span>`;
+    const valCell = s.linkValidacion
+      ? `<a class="srv-link" href="${s.linkValidacion}" target="_blank">✅ Val</a>`
+      : `<span class="srv-add-link" onclick="srvInlineLink('${s.id}','linkValidacion')">+ agregar</span>`;
     const entCell = s.linkEntregable
       ? `<a class="srv-link" href="${s.linkEntregable}" target="_blank">📁 Drive</a>`
       : `<span class="srv-add-link" onclick="srvInlineLink('${s.id}','linkEntregable')">+ agregar</span>`;
@@ -15384,6 +15388,7 @@ function srvRenderTable(){
       <td><span class="srv-badge ${sc.cls}"><span style="width:6px;height:6px;border-radius:50%;background:${sc.dot};flex-shrink:0"></span>${s.estatus}</span></td>
       <td>${cotCell}</td>
       <td>${osCell}</td>
+      <td>${valCell}</td>
       <td>${entCell}</td>
       <td style="white-space:nowrap">
         <button class="et-act-btn" onclick="srvOpenModal('${s.id}')" title="Editar">✎</button>
@@ -15400,7 +15405,7 @@ function srvGoToActivity(id){
 }
 
 function srvInlineLink(id, field){
-  const labels = { linkCOT:'URL de la Cotización (COT):', linkOS:'URL de la Orden de Servicio:', linkEntregable:'URL del entregable en Drive:' };
+  const labels = { linkCOT:'URL de la Cotización (COT):', linkOS:'URL de la Orden de Servicio:', linkValidacion:'URL de validación:', linkEntregable:'URL del entregable en Drive:' };
   const url = prompt(labels[field]||'URL:','');
   if(url===null) return;
   const s = SRV_ITEMS.find(x=>x.id===id); if(!s) return;
@@ -15491,6 +15496,10 @@ function srvBuildModal(s){
         <input type="url" id="srvLinkOS" value="${s?.linkOS||''}" placeholder="https://…">
       </div>
       <div class="srv-field">
+        <label>Link de Validación</label>
+        <input type="url" id="srvLinkValidacion" value="${s?.linkValidacion||''}" placeholder="https://…">
+      </div>
+      <div class="srv-field">
         <label>Link entregable en Drive</label>
         <input type="url" id="srvLinkEntregable" value="${s?.linkEntregable||''}" placeholder="https://drive.google.com/…">
       </div>
@@ -15573,6 +15582,7 @@ function srvSaveModal(){
     fechaEntrega: document.getElementById('srvFechaEntrega')?.value||'',
     linkCOT:      document.getElementById('srvLinkCOT')?.value?.trim()||'',
     linkOS:       document.getElementById('srvLinkOS')?.value?.trim()||'',
+    linkValidacion: document.getElementById('srvLinkValidacion')?.value?.trim()||'',
     linkEntregable: document.getElementById('srvLinkEntregable')?.value?.trim()||'',
     notas:        document.getElementById('srvNotas')?.value||'',
     linkedId:     srvLinkedActivity?.id||'',
@@ -16673,6 +16683,7 @@ async function supaSyncServicios(){
       estado:s.estado||null, km:s.km||null, estatus:s.estatus||'COT Firmada',
       fecha_solicitud:s.fechaSolicitud||null, fecha_inicio:s.fechaInicio||null,
       fecha_entrega:s.fechaEntrega||null, link_cot:s.linkCOT||null, link_os:s.linkOS||null,
+      link_validacion:s.linkValidacion||null,
       link_entregable:s.linkEntregable||null, notas:s.notas||null,
       linked_id:s.linkedId||null, updated_at:new Date().toISOString(),
     }));
@@ -17688,6 +17699,7 @@ async function supaLoadAll(){
         estado:s.estado||'', km:s.km||'', estatus:srvNormEstatus(s.estatus),
         fechaSolicitud:s.fecha_solicitud||'', fechaInicio:s.fecha_inicio||'',
         fechaEntrega:s.fecha_entrega||'', linkCOT:s.link_cot||'', linkOS:s.link_os||'',
+        linkValidacion:s.link_validacion||'',
         linkEntregable:s.link_entregable||'', notas:s.notas||'',
         linkedId:s.linked_id||'',
       }));
@@ -17904,6 +17916,7 @@ async function supaMigrateFromLocal(){
         estado:s.estado||null, km:s.km||null, estatus:s.estatus||'COT Firmada',
         fecha_solicitud:s.fechaSolicitud||null, fecha_inicio:s.fechaInicio||null,
         fecha_entrega:s.fechaEntrega||null, link_cot:s.linkCOT||null, link_os:s.linkOS||null,
+        link_validacion:s.linkValidacion||null,
         link_entregable:s.linkEntregable||null, notas:s.notas||null,
         linked_id:s.linkedId||null,
       }));
