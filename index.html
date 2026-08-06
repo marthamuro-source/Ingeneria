@@ -15935,8 +15935,9 @@ function avanceSetField(id, field, value){
   // Determinar quién está editando
   const editorNombre = (_userRole === 'proyectista' && _miNombre) ? _miNombre : (avancePersonaVista !== 'todos' ? avancePersonaVista : null);
 
-  // Si es proyectista → actualizar PA_ITEMS y sincronizar a Supabase
-  if(_userRole === 'proyectista' && _miNombre && (field === 'estatus' || field === 'km' || field === 'nota')){
+  // Actualizar SIEMPRE el campo real de la actividad (antes solo pasaba si era proyectista,
+  // así que cuando el admin cambiaba el estatus aquí, no se reflejaba en ningún otro lado).
+  if(field === 'estatus' || field === 'km' || field === 'nota'){
     const act = PA_ITEMS.find(a=>a.id===id);
     if(act){
       if(field === 'estatus') act.estatus = value;
