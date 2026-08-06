@@ -16782,11 +16782,37 @@ function segSetTab(tab){
   });
   segMount(tab);
 }
+async function paRefreshFromSupabase(){
+  if(!_supa || !SUPA_ONLINE) return;
+  try{
+    const { data: acts, error } = await _supa.from('actividades').select('*').order('created_at', {ascending:false});
+    if(error){ console.warn('paRefreshFromSupabase error:', error); return; }
+    if(acts){
+      PA_ITEMS = acts.map(a=>({
+        id:a.id, tipo:a.tipo||'Proyecto', proyecto:a.proyecto||'',
+        folio:a.folio||'', actividad:a.actividad||'',
+        responsable:a.responsable||'', propietario:a.propietario||'',
+        km:a.km||'', estatus:a.estatus||'Sin iniciar',
+        notas:a.notas||'', enlace:a.enlace||'',
+        fechaAsig:a.fecha_asig||'', fechaTermino:a.fecha_termino||'',
+        fechaReal:a.fecha_real||'', numBobina:a.num_bobina||'',
+        juegos:a.juegos||'', planosJuego:a.planos_juego||'',
+        createdAt:a.created_at, updatedAt:a.updated_at,
+      }));
+      localStorage.setItem('c3ntro_panel_actividades', JSON.stringify(PA_ITEMS));
+    }
+  }catch(e){ console.warn('paRefreshFromSupabase exception:', e); }
+}
+async function segRefrescarAsignacion(){
+  renderSegAvance(); // pintar de inmediato con lo que ya haya en memoria
+  await paRefreshFromSupabase();
+  if(segActiveTab==='avance') renderSegAvance(); // repintar con datos frescos
+}
 function segMount(tab){
   const mountMap = {
     udemy:    { target:'segUdemyMount',    source:'v-udemy',    render:()=>{ if(typeof renderUdemy==='function') renderUdemy(); } },
     reporteo: { target:'segReporteoMount', source:'v-reporteo', render:()=>{ if(typeof renderReporteoView==='function') renderReporteoView(); } },
-    avance:   { target:'segAvanceMount',   source:null,         render:()=>{ renderSegAvance(); } },
+    avance:   { target:'segAvanceMount',   source:null,         render:()=>{ segRefrescarAsignacion(); } },
     notas:    { target:'segNotasMount',    source:null,         render:()=>{ renderSegNotas(); } },
   };
   const cfg = mountMap[tab];
@@ -18073,6 +18099,7 @@ async function supaSyncActividad(a){
     if(error){
       console.error('❌ Error guardando actividad en Supabase:', error.message, error);
       supaIndicator(false);
+      alert('No se pudo guardar el cambio de esta actividad en Supabase, así que podría no verse reflejado para el resto del equipo.\n\nMotivo: '+(error.message||error.code||'desconocido')+'\n\nEsto normalmente pasa por permisos (RLS) en la tabla "actividades". Pídele a Claude que te ayude a revisarla.');
     } else {
       console.log('✅ Actividad guardada en Supabase:', a.id, 'estatus:', a.estatus);
     }
