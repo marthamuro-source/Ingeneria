@@ -391,12 +391,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .vac-leg-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
 
 /* ── SERVICIOS ESPECIALES ── */
-.srv-kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px;}
+.srv-kpi-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:18px;}
 .srv-kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
 .srv-kpi .val{font-size:22px;font-weight:700;color:var(--text);line-height:1;}
 .srv-kpi .lbl{font-size:10px;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.06em;}
 .srv-kpi .tip{font-size:10px;color:var(--dim);margin-top:2px;font-style:italic;}
-.srv-kpi.sol .val{color:#378ADD;} .srv-kpi.oc .val{color:#BA7517;} .srv-kpi.proc .val{color:#d4890a;} .srv-kpi.ent .val{color:var(--green);}
+.srv-kpi.cot .val{color:#9a6ef0;} .srv-kpi.sol .val{color:#378ADD;} .srv-kpi.oc .val{color:#BA7517;} .srv-kpi.proc .val{color:#d4890a;} .srv-kpi.ent .val{color:var(--green);}
 .srv-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
 .srv-chip{padding:4px 12px;border-radius:20px;font-size:11px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;transition:all .15s;}
 .srv-chip.on{background:rgba(74,143,212,.12);border-color:rgba(74,143,212,.35);color:var(--accent);}
@@ -409,6 +409,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .srv-table tr:last-child td{border-bottom:none;}
 .srv-table tr:hover td{background:var(--surface2);}
 .srv-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:600;white-space:nowrap;}
+.srv-b-cot{background:rgba(154,110,240,.15);color:#b79cf5;border:1px solid rgba(154,110,240,.25);}
 .srv-b-sol{background:rgba(55,138,221,.15);color:#63b3ff;border:1px solid rgba(55,138,221,.25);}
 .srv-b-oc{background:rgba(186,117,23,.15);color:#f0a940;border:1px solid rgba(186,117,23,.25);}
 .srv-b-proc{background:rgba(212,137,10,.15);color:#f5c242;border:1px solid rgba(212,137,10,.25);}
@@ -2103,31 +2104,38 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <!-- Leyenda de estatus -->
       <div class="srv-status-legend">
         <div class="srv-legend-item">
+          <div class="srv-legend-dot" style="background:#9a6ef0"></div>
+          <div class="srv-legend-text">
+            <div class="name">COT Firmada</div>
+            <div class="desc">Cotización firmada, en espera de generar la OS</div>
+          </div>
+        </div>
+        <div class="srv-legend-item">
           <div class="srv-legend-dot" style="background:#378ADD"></div>
           <div class="srv-legend-text">
-            <div class="name">Solicitado</div>
-            <div class="desc">OC pedida, esperando que la generen</div>
+            <div class="name">OS Solicitada</div>
+            <div class="desc">OS pedida, esperando que la generen</div>
           </div>
         </div>
         <div class="srv-legend-item">
           <div class="srv-legend-dot" style="background:#BA7517"></div>
           <div class="srv-legend-text">
-            <div class="name">OS Generada</div>
+            <div class="name">OS Resuelta</div>
             <div class="desc">Orden de Servicio emitida, proveedor por arrancar</div>
           </div>
         </div>
         <div class="srv-legend-item">
           <div class="srv-legend-dot" style="background:#d4890a"></div>
           <div class="srv-legend-text">
-            <div class="name">En proceso</div>
-            <div class="desc">Actividades en campo o gabinete en curso</div>
+            <div class="name">En Validación</div>
+            <div class="desc">Entregables en revisión de campo o gabinete</div>
           </div>
         </div>
         <div class="srv-legend-item">
           <div class="srv-legend-dot" style="background:#3dd68c"></div>
           <div class="srv-legend-text">
-            <div class="name">Entregado</div>
-            <div class="desc">Información recibida y lista en Drive</div>
+            <div class="name">Liberada</div>
+            <div class="desc">Información validada, liberada y lista en Drive</div>
           </div>
         </div>
       </div>
@@ -2146,6 +2154,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
               <th>F. Inicio</th>
               <th>F. Entrega pactada</th>
               <th>Estatus</th>
+              <th>COT</th>
               <th>OS</th>
               <th>Entregable</th>
               <th style="width:44px"></th>
@@ -15869,10 +15878,11 @@ window.addEventListener('load', async function(){
 const SRV_KEY   = 'srv_items_v1';
 const SRV_TIPOS_KEY = 'srv_tipos_v1';
 const SRV_STATUS = [
-  { key:'Solicitado',   cls:'srv-b-sol',  dot:'#378ADD' },
-  { key:'OS Generada',  cls:'srv-b-oc',   dot:'#BA7517' },
-  { key:'En proceso',   cls:'srv-b-proc', dot:'#d4890a' },
-  { key:'Entregado',    cls:'srv-b-ent',  dot:'#3dd68c' },
+  { key:'COT Firmada',   cls:'srv-b-cot',  dot:'#9a6ef0' },
+  { key:'OS Solicitada', cls:'srv-b-sol',  dot:'#378ADD' },
+  { key:'OS Resuelta',   cls:'srv-b-oc',   dot:'#BA7517' },
+  { key:'En Validación', cls:'srv-b-proc', dot:'#d4890a' },
+  { key:'Liberada',      cls:'srv-b-ent',  dot:'#3dd68c' },
 ];
 const SRV_TIPOS_BASE = ['Topografía','Geotecnia','Levantamiento físico'];
 const ESTADOS_MX = ['Aguascalientes','Baja California','Baja California Sur','Campeche','Chiapas','Chihuahua','Ciudad de México','Coahuila','Colima','Durango','Estado de México','Guanajuato','Guerrero','Hidalgo','Jalisco','Michoacán','Morelos','Nayarit','Nuevo León','Oaxaca','Puebla','Querétaro','Quintana Roo','San Luis Potosí','Sinaloa','Sonora','Tabasco','Tamaulipas','Tlaxcala','Veracruz','Yucatán','Zacatecas'];
@@ -15908,10 +15918,11 @@ function srvRenderKpis(){
   const bySt = k => SRV_ITEMS.filter(s=>s.estatus===k).length;
   el.innerHTML = `
     <div class="srv-kpi"><div class="val">${total}</div><div class="lbl">Total</div></div>
-    <div class="srv-kpi sol"><div class="val">${bySt('Solicitado')}</div><div class="lbl">Solicitado</div><div class="tip">En espera de OS</div></div>
-    <div class="srv-kpi oc"><div class="val">${bySt('OS Generada')}</div><div class="lbl">OS Generada</div><div class="tip">Por arrancar</div></div>
-    <div class="srv-kpi proc"><div class="val">${bySt('En proceso')}</div><div class="lbl">En proceso</div><div class="tip">Actividades en curso</div></div>
-    <div class="srv-kpi ent"><div class="val">${bySt('Entregado')}</div><div class="lbl">Entregado</div><div class="tip">Info recibida</div></div>`;
+    <div class="srv-kpi cot"><div class="val">${bySt('COT Firmada')}</div><div class="lbl">COT Firmada</div><div class="tip">En espera de OS</div></div>
+    <div class="srv-kpi sol"><div class="val">${bySt('OS Solicitada')}</div><div class="lbl">OS Solicitada</div><div class="tip">Esperando que la generen</div></div>
+    <div class="srv-kpi oc"><div class="val">${bySt('OS Resuelta')}</div><div class="lbl">OS Resuelta</div><div class="tip">Por arrancar</div></div>
+    <div class="srv-kpi proc"><div class="val">${bySt('En Validación')}</div><div class="lbl">En Validación</div><div class="tip">Revisando entregables</div></div>
+    <div class="srv-kpi ent"><div class="val">${bySt('Liberada')}</div><div class="lbl">Liberada</div><div class="tip">Info lista en Drive</div></div>`;
 }
 
 function srvRenderFilters(){
@@ -15940,14 +15951,14 @@ function srvRenderTable(){
   if(srvFiltroEstado!=='todos') items = items.filter(s=>s.estado===srvFiltroEstado);
 
   if(!items.length){
-    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:28px;color:var(--dim)">Sin registros${srvFiltroTipo!=='todos'||srvFiltroEstado!=='todos'?' con los filtros actuales':' — agrega una nueva solicitud'}.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="13" style="text-align:center;padding:28px;color:var(--dim)">Sin registros${srvFiltroTipo!=='todos'||srvFiltroEstado!=='todos'?' con los filtros actuales':' — agrega una nueva solicitud'}.</td></tr>`;
     return;
   }
 
   tbody.innerHTML = items.map(s=>{
     const sc = SRV_STATUS.find(x=>x.key===s.estatus)||SRV_STATUS[0];
     const tipoClass = s.tipo==='Topografía'?'srv-t-topo':s.tipo==='Geotecnia'?'srv-t-geo':s.tipo==='Levantamiento físico'?'srv-t-lev':'srv-t-otro';
-    const overdue = s.fechaEntrega && s.estatus!=='Entregado' && s.fechaEntrega < today;
+    const overdue = s.fechaEntrega && s.estatus!=='Liberada' && s.fechaEntrega < today;
 
     // Actividad vinculada
     const linked = s.linkedId ? PA_ITEMS.find(a=>a.id===s.linkedId) : null;
@@ -15955,7 +15966,10 @@ function srvRenderTable(){
       ? `<span class="srv-folio-link" onclick="srvGoToActivity('${s.linkedId}')" title="${(linked.actividad||'').replace(/"/g,'&quot;')}">${linked.folio||linked.tipo}</span>`
       : `<span class="srv-unlinked" onclick="srvOpenLinkPicker('${s.id}')">+ ligar</span>`;
 
-    // Links OS y Entregable
+    // Links COT, OS y Entregable
+    const cotCell = s.linkCOT
+      ? `<a class="srv-link" href="${s.linkCOT}" target="_blank">🧾 COT</a>`
+      : `<span class="srv-add-link" onclick="srvInlineLink('${s.id}','linkCOT')">+ agregar</span>`;
     const osCell = s.linkOS
       ? `<a class="srv-link" href="${s.linkOS}" target="_blank">📄 OS</a>`
       : `<span class="srv-add-link" onclick="srvInlineLink('${s.id}','linkOS')">+ agregar</span>`;
@@ -15973,6 +15987,7 @@ function srvRenderTable(){
       <td style="font-size:11px;white-space:nowrap;color:var(--muted)">${fmtD(s.fechaInicio)}</td>
       <td style="font-size:11px;white-space:nowrap${overdue?' class="srv-overdue"':''}">${fmtD(s.fechaEntrega)}${overdue?' ▲':''}</td>
       <td><span class="srv-badge ${sc.cls}"><span style="width:6px;height:6px;border-radius:50%;background:${sc.dot};flex-shrink:0"></span>${s.estatus}</span></td>
+      <td>${cotCell}</td>
       <td>${osCell}</td>
       <td>${entCell}</td>
       <td style="white-space:nowrap">
@@ -15990,7 +16005,8 @@ function srvGoToActivity(id){
 }
 
 function srvInlineLink(id, field){
-  const url = prompt(field==='linkOS'?'URL de la Orden de Servicio:':'URL del entregable en Drive:','');
+  const prompts = {linkCOT:'URL de la Cotización firmada:', linkOS:'URL de la Orden de Servicio:', linkEntregable:'URL del entregable en Drive:'};
+  const url = prompt(prompts[field]||'URL:','');
   if(url===null) return;
   const s = SRV_ITEMS.find(x=>x.id===id); if(!s) return;
   s[field]=url.trim(); srvSave(); srvRenderTable();
@@ -16070,6 +16086,10 @@ function srvBuildModal(s){
       <div class="srv-field">
         <label>Fecha de entrega pactada</label>
         <input type="date" id="srvFechaEntrega" value="${s?.fechaEntrega||''}">
+      </div>
+      <div class="srv-field">
+        <label>Link Cotización firmada</label>
+        <input type="url" id="srvLinkCOT" value="${s?.linkCOT||''}" placeholder="https://…">
       </div>
       <div class="srv-field">
         <label>Link Orden de Servicio</label>
@@ -16152,10 +16172,11 @@ function srvSaveModal(){
     tipo:         tipoFinal,
     estado:       document.getElementById('srvEstado')?.value||'',
     km:           document.getElementById('srvKm')?.value||'',
-    estatus:      document.getElementById('srvEstatus')?.value||'Solicitado',
+    estatus:      document.getElementById('srvEstatus')?.value||'COT Firmada',
     fechaSolicitud: document.getElementById('srvFechaSolicitud')?.value||'',
     fechaInicio:  document.getElementById('srvFechaInicio')?.value||'',
     fechaEntrega: document.getElementById('srvFechaEntrega')?.value||'',
+    linkCOT:      document.getElementById('srvLinkCOT')?.value?.trim()||'',
     linkOS:       document.getElementById('srvLinkOS')?.value?.trim()||'',
     linkEntregable: document.getElementById('srvLinkEntregable')?.value?.trim()||'',
     notas:        document.getElementById('srvNotas')?.value||'',
@@ -17254,9 +17275,9 @@ async function supaSyncServicios(){
     if(!SRV_ITEMS.length) return;
     const rows = SRV_ITEMS.map(s=>({
       id:s.id, proyecto:s.proyecto||null, tipo:s.tipo||null,
-      estado:s.estado||null, km:s.km||null, estatus:s.estatus||'Solicitado',
+      estado:s.estado||null, km:s.km||null, estatus:s.estatus||'COT Firmada',
       fecha_solicitud:s.fechaSolicitud||null, fecha_inicio:s.fechaInicio||null,
-      fecha_entrega:s.fechaEntrega||null, link_os:s.linkOS||null,
+      fecha_entrega:s.fechaEntrega||null, link_cot:s.linkCOT||null, link_os:s.linkOS||null,
       link_entregable:s.linkEntregable||null, notas:s.notas||null,
       linked_id:s.linkedId||null, updated_at:new Date().toISOString(),
     }));
@@ -18269,9 +18290,9 @@ async function supaLoadAll(){
     if(srvs && srvs.length){
       SRV_ITEMS = srvs.map(s=>({
         id:s.id, proyecto:s.proyecto||'', tipo:s.tipo||'',
-        estado:s.estado||'', km:s.km||'', estatus:s.estatus||'Solicitado',
+        estado:s.estado||'', km:s.km||'', estatus:s.estatus||'COT Firmada',
         fechaSolicitud:s.fecha_solicitud||'', fechaInicio:s.fecha_inicio||'',
-        fechaEntrega:s.fecha_entrega||'', linkOS:s.link_os||'',
+        fechaEntrega:s.fecha_entrega||'', linkCOT:s.link_cot||'', linkOS:s.link_os||'',
         linkEntregable:s.link_entregable||'', notas:s.notas||'',
         linkedId:s.linked_id||'',
       }));
@@ -18485,9 +18506,9 @@ async function supaMigrateFromLocal(){
     if(typeof SRV_ITEMS!=='undefined' && SRV_ITEMS.length){
       const rows = SRV_ITEMS.map(s=>({
         id:s.id, proyecto:s.proyecto||null, tipo:s.tipo||null,
-        estado:s.estado||null, km:s.km||null, estatus:s.estatus||'Solicitado',
+        estado:s.estado||null, km:s.km||null, estatus:s.estatus||'COT Firmada',
         fecha_solicitud:s.fechaSolicitud||null, fecha_inicio:s.fechaInicio||null,
-        fecha_entrega:s.fechaEntrega||null, link_os:s.linkOS||null,
+        fecha_entrega:s.fechaEntrega||null, link_cot:s.linkCOT||null, link_os:s.linkOS||null,
         link_entregable:s.linkEntregable||null, notas:s.notas||null,
         linked_id:s.linkedId||null,
       }));
