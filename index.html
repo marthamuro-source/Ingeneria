@@ -430,6 +430,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .srv-unlinked:hover{color:var(--accent);}
 /* Estatus tooltip legend */
 .srv-status-legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;padding:10px 14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);}
+.eval-legend{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:16px;}
+.eval-legend-hd{font-size:11px;font-weight:600;color:var(--text);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;display:flex;align-items:center;gap:6px;}
+.eval-legend-row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;}
+.eval-legend-item{display:flex;align-items:flex-start;gap:8px;flex:1;min-width:180px;}
+.eval-legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+.eval-legend-text .name{font-size:11px;font-weight:600;color:var(--text);}
+.eval-legend-text .desc{font-size:10px;color:var(--muted);line-height:1.4;margin-top:1px;}
+.eval-legend-foot{font-size:10.5px;color:var(--dim);border-top:1px solid var(--border);padding-top:10px;line-height:1.6;}
 .ud-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);z-index:900;display:none;align-items:center;justify-content:center;}
 .ud-modal-bg.open{display:flex;}
 .ud-modal{background:#070d1a;border:1px solid rgba(74,143,212,.3);border-radius:16px;padding:28px;width:640px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:0 0 40px rgba(74,143,212,.12),0 24px 60px rgba(0,0,0,.5);}
@@ -2231,6 +2239,32 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <button id="evalPesosBtn" onclick="togglePesos()" class="btn-ghost" style="font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;font-family:var(--font)">⚖ Configurar pesos</button>
     </div>
     <div class="content">
+
+      <!-- Leyenda: qué se evalúa y cómo se calcula -->
+      <div class="eval-legend">
+        <div class="eval-legend-hd">ℹ️ ¿Qué se evalúa y cómo se calcula el score?</div>
+        <div class="eval-legend-row">
+          <div class="eval-legend-item">
+            <div class="eval-legend-dot" style="background:#4a8fd4"></div>
+            <div class="eval-legend-text"><div class="name">Avance</div><div class="desc">Actividades resueltas (a tiempo o tarde) vs. las asignadas en el periodo — Panel de Seguimiento.</div></div>
+          </div>
+          <div class="eval-legend-item">
+            <div class="eval-legend-dot" style="background:#3dd68c"></div>
+            <div class="eval-legend-text"><div class="name">Reporteo</div><div class="desc">% de días hábiles con reporte diario cumplido, sin faltas — Panel de Seguimiento.</div></div>
+          </div>
+          <div class="eval-legend-item">
+            <div class="eval-legend-dot" style="background:#f5a623"></div>
+            <div class="eval-legend-text"><div class="name">Calidad</div><div class="desc">% de revisiones sin deficiencias ni "no cumple", tomado del CSV de calidad que cargues.</div></div>
+          </div>
+          <div class="eval-legend-item">
+            <div class="eval-legend-dot" style="background:#2dd4bf"></div>
+            <div class="eval-legend-text"><div class="name">Udemy</div><div class="desc">% de cursos asignados ya completados — Panel de Seguimiento › Udemy.</div></div>
+          </div>
+        </div>
+        <div class="eval-legend-foot">
+          El <strong style="color:var(--text)">Score general</strong> es el promedio ponderado de estos 4 módulos, según los porcentajes definidos en <strong style="color:var(--accent)">⚖ Configurar pesos</strong> (deben sumar 100%). Categorías: <strong style="color:#3dd68c">🟢 Destacado</strong> ≥ 80% · <strong style="color:#f5a623">🟡 Regular</strong> 60–79% · <strong style="color:#ff5c5c">🔴 Atención</strong> &lt; 60%. Un módulo sin datos cargados se excluye del cálculo (no resta puntos).
+        </div>
+      </div>
 
       <!-- Panel de pesos -->
       <div id="evalPesosPanel" class="panel" style="display:none;margin-bottom:18px">
