@@ -466,6 +466,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .notif-toast-wrap{position:fixed;bottom:24px;right:24px;z-index:1500;display:flex;flex-direction:column;gap:8px;pointer-events:none;}
 .notif-toast{pointer-events:all;display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:#0a1628;border:1px solid rgba(74,143,212,.35);border-radius:12px;min-width:280px;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.5),0 0 20px rgba(74,143,212,.1);animation:toast-in .3s ease;position:relative;}
 [data-theme="light"] .notif-toast{background:#ffffff;border-color:rgba(26,86,208,.3);box-shadow:0 8px 28px rgba(20,30,60,.16),0 0 16px rgba(26,86,208,.06);}
+.notif-toast.warn{border-color:rgba(255,92,92,.45);box-shadow:0 8px 32px rgba(0,0,0,.5),0 0 20px rgba(255,92,92,.15);}
+[data-theme="light"] .notif-toast.warn{border-color:rgba(255,92,92,.4);box-shadow:0 8px 28px rgba(20,30,60,.16),0 0 16px rgba(255,92,92,.12);}
 @keyframes toast-in{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:translateX(0);}}
 @keyframes toast-out{to{opacity:0;transform:translateX(20px);}}
 .notif-toast.out{animation:toast-out .25s ease forwards;}
@@ -493,6 +495,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .notif-item:hover{background:var(--surface2);}
 .notif-item.unread{background:rgba(74,143,212,.05);border-left:3px solid var(--accent);}
 .notif-item.unread:hover{background:rgba(74,143,212,.08);}
+.notif-item.warn{background:rgba(255,92,92,.06);border-left:3px solid var(--red);}
+.notif-item.warn:hover{background:rgba(255,92,92,.1);}
 .notif-item-icon{font-size:18px;flex-shrink:0;margin-top:2px;}
 .notif-item-body{flex:1;min-width:0;}
 .notif-item-title{font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px;}
@@ -5129,6 +5133,9 @@ function toggleTheme(){
   const next = cur==='light' ? 'dark' : 'light';
   applyTheme(next);
   try{ localStorage.setItem(THEME_KEY, next); }catch(e){}
+  // Algunas vistas calculan sus colores al vuelo (no solo con variables CSS),
+  // así que se vuelven a dibujar para reflejar el nuevo tema de inmediato.
+  try{ if(typeof refresh==='function') refresh(); }catch(e){}
 }
 (function initTheme(){
   let saved = 'dark';
@@ -5325,6 +5332,16 @@ function cronoDiasParaSubtarea(st){
     // Ej: 6 km/día, tengo 18 km → 3 días
     return Math.ceil(cant / rend);
   }
+}
+
+// ── Rendimiento mínimo esperado en un solo día para una subtarea ──
+// 'unidades_por_dia': el rendimiento YA es la meta diaria (ej. 6 cortes/día → mínimo 6).
+// 'dias_por_unidad':  el rendimiento son días que toma 1 unidad → la meta diaria es 1/rendimiento
+//                     (ej. 2 días/cruce → se espera ~0.5 cruces por día).
+function cronoRendimientoMinDia(st){
+  const rend = parseFloat(st?.rendimiento)||0;
+  if(!rend) return 0;
+  return (st.tipo==='dias_por_unidad') ? (1/rend) : rend;
 }
 
 // ── Calcular fecha pronóstico sumando días hábiles ──
@@ -8442,19 +8459,31 @@ async function calProyGuardarReporteHoy(){
   await cronoRecargarDeSupabase();
 
   const itemsAfectados = new Set();
+  const bajoRendimiento = []; // subtareas reportadas hoy por debajo del rendimiento mínimo esperado
   for(const entry of pendientes){
     const item = CRONO_ITEMS.find(x=>x.actividadId===entry.stData.actividadId);
     const st = item?.subtareas?.find(s=>s.id===entry.stData.st.id);
     if(!st||!item) continue;
 
     const esPct = st.unidad==='%' || st.esOperativo;
+    const prevAcum = st.avanceAcum||0;
     if(esPct){
       st.avanceAcum = Math.max(0, Math.min(100, entry.cantidad)); // valor absoluto reportado, tope 0-100
     } else {
-      const nuevoAcum = (st.avanceAcum||0) + entry.cantidad;
+      const nuevoAcum = prevAcum + entry.cantidad;
       st.avanceAcum = st.cantidad ? Math.min(nuevoAcum, st.cantidad) : nuevoAcum;
     }
     st.estatus = entry.estatus;
+
+    // Avance realmente logrado hoy: en % es la diferencia contra lo que ya llevaba antes de este reporte;
+    // en el resto de unidades ya es lo que capturaron como "avanzado hoy".
+    const avanceHoy = esPct ? Math.max(0, st.avanceAcum-prevAcum) : entry.cantidad;
+    const rendMinDia = Math.round(cronoRendimientoMinDia(st)*100)/100;
+    // No se marca como bajo rendimiento si quedó bloqueada (ya explica el motivo) o si se completó
+    // (terminar con menos de una jornada de trabajo restante es normal, no bajo desempeño).
+    const esBajoRendimiento = rendMinDia>0 && entry.estatus==='en_progreso' && avanceHoy < rendMinDia;
+    if(esBajoRendimiento) bajoRendimiento.push({ nombre:st.nombre, avanceHoy, rendMinDia, unidad:st.unidad });
+
     if(!item.reportes) item.reportes=[];
     item.reportes.push({
       id:'rep_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
@@ -8463,14 +8492,20 @@ async function calProyGuardarReporteHoy(){
       subtareaId: st.id,
       subtareaNombre: st.nombre,
       unidad: st.unidad,
-      cantidad: entry.cantidad, nota: entry.nota, estatus: entry.estatus
+      cantidad: entry.cantidad, nota: entry.nota, estatus: entry.estatus,
+      bajoRendimiento: esBajoRendimiento, rendMinDia,
     });
     itemsAfectados.add(item.actividadId);
 
-    // Notificar a Raquel por cada subtarea reportada
+    // Notificar a Raquel por cada subtarea reportada (con alerta distinta si vino bajo de rendimiento)
     if(typeof notifAdd==='function'){
-      notifAdd('📋',`${(_miNombre||'').split(' ')[0]} reportó avance`,
-        `${st.nombre}: +${entry.cantidad} ${st.unidad}${entry.nota?' — '+entry.nota.slice(0,35):''}`, 'avance', false);
+      if(esBajoRendimiento){
+        notifAdd('🔴', `${(_miNombre||'').split(' ')[0]} reportó bajo rendimiento`,
+          `${st.nombre}: ${avanceHoy} de ${rendMinDia} ${st.unidad}/día esperados${entry.nota?' — '+entry.nota.slice(0,35):''}`, 'rendimiento_bajo', false);
+      } else {
+        notifAdd('📋',`${(_miNombre||'').split(' ')[0]} reportó avance`,
+          `${st.nombre}: +${entry.cantidad} ${st.unidad}${entry.nota?' — '+entry.nota.slice(0,35):''}`, 'avance', false);
+      }
     }
   }
   itemsAfectados.forEach(id=>cronoSaveItem(id));
@@ -8497,11 +8532,21 @@ async function calProyGuardarReporteHoy(){
 
   // Confirmación visual y refrescar
   const btn = document.querySelector('#calProyPanelHoy .pa-btn-primary');
+  if(bajoRendimiento.length){
+    // Advertencia clara e inmediata para quien reportó: quedó por debajo del mínimo esperado ese día.
+    const detalle = bajoRendimiento.map(b=>`• ${b.nombre}: reportaste ${b.avanceHoy} de ${b.rendMinDia} ${b.unidad}/día esperados`).join('\n');
+    alert(`⚠️ Rendimiento por debajo del mínimo esperado hoy:\n\n${detalle}\n\nSi hubo un bloqueo o justificación, coméntalo en la nota o marca la subtarea como "Bloqueada".`);
+  }
   if(btn){
-    btn.innerHTML = `✓ ${pendientes.length} subtarea${pendientes.length!==1?'s':''} guardada${pendientes.length!==1?'s':''}`;
-    btn.style.background = 'var(--green)';
+    if(bajoRendimiento.length){
+      btn.innerHTML = `⚠ Guardado — ${bajoRendimiento.length} por debajo del rendimiento mínimo`;
+      btn.style.background = 'var(--red)';
+    } else {
+      btn.innerHTML = `✓ ${pendientes.length} subtarea${pendientes.length!==1?'s':''} guardada${pendientes.length!==1?'s':''}`;
+      btn.style.background = 'var(--green)';
+    }
     btn.disabled = true;
-    setTimeout(()=>{ renderCronoCalProyectista(); }, 800);
+    setTimeout(()=>{ renderCronoCalProyectista(); }, bajoRendimiento.length?1600:800);
   } else {
     renderCronoCalProyectista();
   }
@@ -8680,7 +8725,9 @@ function renderCronoCalendario(){
         nota: r.nota||'',
         actividadId: item.actividadId,
         proyecto: item.proyecto||'',
-        folio: (PA_ITEMS.find(a=>a.id===item.actividadId)?.folio)||''
+        folio: (PA_ITEMS.find(a=>a.id===item.actividadId)?.folio)||'',
+        bajoRendimiento: !!r.bajoRendimiento,
+        rendMinDia: r.rendMinDia||0,
       });
     });
   });
@@ -8706,8 +8753,13 @@ function renderCronoCalendario(){
     return match ? colorMap[match] : '#888';
   }
 
+  // Tinte del cuadriculado adaptado al tema: en claro se usa un tinte oscuro sobre blanco
+  // (un tinte blanco casi transparente, pensado para fondo oscuro, es invisible en tema claro).
+  const calLight = document.documentElement.getAttribute('data-theme')==='light';
+  const calTint = a => calLight ? `rgba(20,30,60,${a})` : `rgba(255,255,255,${a})`;
+
   let html = `
-  <div style="background:rgba(255,255,255,.03);border:0.5px solid rgba(255,255,255,.08);border-radius:12px;padding:16px;margin-top:8px">
+  <div style="background:${calTint(calLight?.025:.03)};border:0.5px solid ${calTint(calLight?.14:.08)};border-radius:12px;padding:16px;margin-top:8px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div style="font-size:14px;font-weight:600;color:var(--text)">📅 Reportes diarios — ${meses[calMes]} ${calAnio}</div>
       <div style="display:flex;gap:6px">
@@ -8741,12 +8793,13 @@ function renderCronoCalendario(){
     // Justificaciones activas este día (para cualquier persona)
     const justHoy = PA_MEMBERS.filter(m=>justGet(fecha,m));
 
+    const diaBg = esSel?'rgba(74,143,212,.15)':esHoy?'rgba(74,143,212,.06)':esFinSem?calTint(calLight?.03:.01):calTint(calLight?.045:.02);
     html += `<div onclick="calSelDia('${fecha}')"
       style="min-height:72px;border-radius:8px;padding:6px;cursor:pointer;transition:background .15s;
-        background:${esSel?'rgba(74,143,212,.15)':esHoy?'rgba(74,143,212,.06)':esFinSem?'rgba(255,255,255,.01)':'rgba(255,255,255,.02)'};
-        border:0.5px solid ${esSel?'rgba(74,143,212,.5)':esHoy?'rgba(74,143,212,.25)':'rgba(255,255,255,.05)'}"
+        background:${diaBg};
+        border:0.5px solid ${esSel?'rgba(74,143,212,.5)':esHoy?'rgba(74,143,212,.25)':calTint(calLight?.12:.05)}"
       onmouseover="this.style.background='rgba(74,143,212,.08)'"
-      onmouseout="this.style.background='${esSel?'rgba(74,143,212,.15)':esHoy?'rgba(74,143,212,.06)':esFinSem?'rgba(255,255,255,.01)':'rgba(255,255,255,.02)'}'">
+      onmouseout="this.style.background='${diaBg}'">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <div style="font-size:11px;font-weight:${esHoy?'700':'500'};color:${esHoy?'var(--accent)':esFinSem?'var(--dim)':'var(--text)'}">${d}</div>
         ${justHoy.length?`<span title="${justHoy.length} justificación${justHoy.length>1?'es':''} este día" style="font-size:9px;color:#c084fc">🔖${justHoy.length}</span>`:''}
@@ -8760,7 +8813,7 @@ function renderCronoCalendario(){
           ${quienes.length>3?`<div style="font-size:9px;color:var(--dim);display:flex;align-items:center">+${quienes.length-3}</div>`:''}
         </div>
         <div style="font-size:9px;color:var(--dim)">${reps.length} reporte${reps.length!==1?'s':''}</div>
-      ` : `<div style="font-size:9px;color:rgba(255,255,255,.1);margin-top:4px">—</div>`}
+      ` : `<div style="font-size:9px;color:${calTint(calLight?.22:.1)};margin-top:4px">—</div>`}
     </div>`;
   }
 
@@ -8791,7 +8844,7 @@ function renderCronoCalendario(){
 
     if(reps.length){
       html += reps.map(r=>`
-        <div onclick="cronoIrASubtarea('${r.actividadId}','${r.subtareaId}')" style="display:flex;gap:10px;padding:10px 8px;border-bottom:0.5px solid var(--border);cursor:pointer;border-radius:6px;transition:background .15s" onmouseover="this.style.background='rgba(74,143,212,.06)'" onmouseout="this.style.background='none'" title="Ir a esta subtarea">
+        <div onclick="cronoIrASubtarea('${r.actividadId}','${r.subtareaId}')" style="display:flex;gap:10px;padding:10px 8px;border-bottom:0.5px solid var(--border);cursor:pointer;border-radius:6px;transition:background .15s${r.bajoRendimiento?';background:rgba(255,92,92,.05)':''}" onmouseover="this.style.background='rgba(74,143,212,.06)'" onmouseout="this.style.background='${r.bajoRendimiento?'rgba(255,92,92,.05)':'none'}'" title="Ir a esta subtarea">
           <div style="width:28px;height:28px;border-radius:50%;background:${quienColor(r.quien)};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">
             ${r.quien.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase()}
           </div>
@@ -8800,9 +8853,10 @@ function renderCronoCalendario(){
               <span style="font-size:12px;font-weight:600;color:var(--text)">${r.quien.split(' ').slice(0,2).join(' ')}</span>
               <span style="font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(74,143,212,.12);color:var(--accent)">${r.subtareaNombre||'—'}</span>
               ${r.folio?`<span style="font-size:10px;color:var(--dim)">${r.folio}</span>`:''}
+              ${r.bajoRendimiento?`<span style="font-size:9px;padding:1px 6px;border-radius:10px;background:rgba(255,92,92,.15);color:var(--red);font-weight:600" title="Se esperaban ${r.rendMinDia} ${r.unidad}/día">⚠ bajo rendimiento</span>`:''}
             </div>
             ${r.nota?`<div style="font-size:12px;color:var(--text);margin-bottom:3px">${r.nota}</div>`:''}
-            ${r.cantidad?`<div style="font-size:11px;color:var(--accent);font-weight:500">+${r.cantidad} ${r.unidad}</div>`:''}
+            ${r.cantidad?`<div style="font-size:11px;color:${r.bajoRendimiento?'var(--red)':'var(--accent)'};font-weight:500">+${r.cantidad} ${r.unidad}</div>`:''}
           </div>
           <div style="align-self:center;color:var(--dim);font-size:14px;flex-shrink:0">›</div>
         </div>`).join('');
@@ -8812,7 +8866,7 @@ function renderCronoCalendario(){
 
     if(requiereReporte && sinReportar.length){
       const sinJustificar = sinReportar.filter(m=>!justGet(calDiaSeleccionado,m));
-      html += `<div style="margin-top:12px;padding-top:12px;border-top:0.5px solid rgba(255,255,255,.08)">
+      html += `<div style="margin-top:12px;padding-top:12px;border-top:0.5px solid ${calTint(calLight?.14:.08)}">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <div style="font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.04em">Sin reportar (${sinReportar.length})</div>
           ${puedeJustificar && sinJustificar.length>1?`<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--dim);cursor:pointer">
@@ -16512,7 +16566,7 @@ function notifFmtTime(iso){
 function notifShowToast(n){
   const wrap = document.getElementById('notifToastWrap'); if(!wrap) return;
   const div = document.createElement('div');
-  div.className = 'notif-toast';
+  div.className = 'notif-toast'+(n.tipo==='rendimiento_bajo'?' warn':'');
   div.id = 'toast_'+n.id;
   div.innerHTML = `
     <div class="notif-toast-icon">${n.icon}</div>
@@ -16556,7 +16610,7 @@ function notifRenderPanel(){
     return;
   }
   list.innerHTML = NOTIFS.map(n=>`
-    <div class="notif-item${n.read?'':' unread'}" onclick="notifMarkRead('${n.id}')">
+    <div class="notif-item${n.read?'':' unread'}${n.tipo==='rendimiento_bajo'?' warn':''}" onclick="notifMarkRead('${n.id}')">
       <div class="notif-item-icon">${n.icon}</div>
       <div class="notif-item-body">
         <div class="notif-item-title">${n.title}</div>
