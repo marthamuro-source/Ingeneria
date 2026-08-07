@@ -9987,16 +9987,12 @@ function generatePDF(uid){
 
 </body></html>`;
 
-  // ── Download as file ─────────────────────────────────────────────────────────
+  // ── Abrir en pestaña nueva y mandar a imprimir/guardar como PDF ───────────────
   const blob=new Blob([html],{type:'text/html;charset=utf-8'});
   const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;
-  a.download=`Evaluacion_${p.replace(/\s+/g,'_')}_${quarter}_${year}.html`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url),5000);
+  const win=window.open(url,'_blank');
+  if(!win) alert('Permite ventanas emergentes para generar el PDF.');
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -10544,13 +10540,9 @@ function o2oDownloadPDF(rec){
 
   const blob=new Blob([html],{type:'text/html;charset=utf-8'});
   const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;
-  a.download=`1a1_${String(rec.persona).replace(/\s+/g,'_')}_${rec.fecha}.html`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url),5000);
+  const win=window.open(url,'_blank');
+  if(!win) alert('Permite ventanas emergentes para generar el PDF.');
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
 
 function toggleEval(p){
