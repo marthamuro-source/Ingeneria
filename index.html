@@ -17291,8 +17291,15 @@ async function supaSyncServicios(){
       link_validacion:s.linkValidacion||null, link_entregable:s.linkEntregable||null, notas:s.notas||null,
       linked_id:s.linkedId||null, updated_at:new Date().toISOString(),
     }));
-    await _supa.from('servicios_esp').upsert(rows,{onConflict:'id'});
-  }catch(e){ console.warn('supaSyncServicios:', e); }
+    const {error} = await _supa.from('servicios_esp').upsert(rows,{onConflict:'id'});
+    if(error){
+      console.error('❌ supaSyncServicios Supabase:', error);
+      alert('Se guardó localmente en este navegador, pero NO se pudo guardar en Supabase, así que se puede perder al recargar o no lo va a ver el resto del equipo.\n\nMotivo: '+(error.message||error.code||'desconocido')+'\n\nEsto normalmente pasa si faltan columnas nuevas en la tabla "servicios_esp" (como link_cot o link_validacion). Corre el SQL que te dio Claude para agregarlas, o pídele que te ayude a revisar la tabla.');
+    }
+  }catch(e){
+    console.error('❌ supaSyncServicios exception:', e);
+    alert('Ocurrió un error de conexión al guardar en Supabase. Se guardó solo localmente en este navegador, así que podría perderse.');
+  }
 }
 
 async function supaSyncDeleteServicio(id){
