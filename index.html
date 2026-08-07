@@ -2156,6 +2156,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
               <th>Estatus</th>
               <th>COT</th>
               <th>OS</th>
+              <th>Validación</th>
               <th>Entregable</th>
               <th style="width:44px"></th>
             </tr>
@@ -15951,7 +15952,7 @@ function srvRenderTable(){
   if(srvFiltroEstado!=='todos') items = items.filter(s=>s.estado===srvFiltroEstado);
 
   if(!items.length){
-    tbody.innerHTML = `<tr><td colspan="13" style="text-align:center;padding:28px;color:var(--dim)">Sin registros${srvFiltroTipo!=='todos'||srvFiltroEstado!=='todos'?' con los filtros actuales':' — agrega una nueva solicitud'}.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" style="text-align:center;padding:28px;color:var(--dim)">Sin registros${srvFiltroTipo!=='todos'||srvFiltroEstado!=='todos'?' con los filtros actuales':' — agrega una nueva solicitud'}.</td></tr>`;
     return;
   }
 
@@ -15973,6 +15974,9 @@ function srvRenderTable(){
     const osCell = s.linkOS
       ? `<a class="srv-link" href="${s.linkOS}" target="_blank">📄 OS</a>`
       : `<span class="srv-add-link" onclick="srvInlineLink('${s.id}','linkOS')">+ agregar</span>`;
+    const valCell = s.linkValidacion
+      ? `<a class="srv-link" href="${s.linkValidacion}" target="_blank">🔍 Valid.</a>`
+      : `<span class="srv-add-link" onclick="srvInlineLink('${s.id}','linkValidacion')">+ agregar</span>`;
     const entCell = s.linkEntregable
       ? `<a class="srv-link" href="${s.linkEntregable}" target="_blank">📁 Drive</a>`
       : `<span class="srv-add-link" onclick="srvInlineLink('${s.id}','linkEntregable')">+ agregar</span>`;
@@ -15989,6 +15993,7 @@ function srvRenderTable(){
       <td><span class="srv-badge ${sc.cls}"><span style="width:6px;height:6px;border-radius:50%;background:${sc.dot};flex-shrink:0"></span>${s.estatus}</span></td>
       <td>${cotCell}</td>
       <td>${osCell}</td>
+      <td>${valCell}</td>
       <td>${entCell}</td>
       <td style="white-space:nowrap">
         <button class="et-act-btn" onclick="srvOpenModal('${s.id}')" title="Editar">✎</button>
@@ -16005,7 +16010,7 @@ function srvGoToActivity(id){
 }
 
 function srvInlineLink(id, field){
-  const prompts = {linkCOT:'URL de la Cotización firmada:', linkOS:'URL de la Orden de Servicio:', linkEntregable:'URL del entregable en Drive:'};
+  const prompts = {linkCOT:'URL de la Cotización firmada:', linkOS:'URL de la Orden de Servicio:', linkValidacion:'URL de la validación:', linkEntregable:'URL del entregable en Drive:'};
   const url = prompt(prompts[field]||'URL:','');
   if(url===null) return;
   const s = SRV_ITEMS.find(x=>x.id===id); if(!s) return;
@@ -16096,6 +16101,10 @@ function srvBuildModal(s){
         <input type="url" id="srvLinkOS" value="${s?.linkOS||''}" placeholder="https://…">
       </div>
       <div class="srv-field">
+        <label>Link de Validación</label>
+        <input type="url" id="srvLinkValidacion" value="${s?.linkValidacion||''}" placeholder="https://…">
+      </div>
+      <div class="srv-field">
         <label>Link entregable en Drive</label>
         <input type="url" id="srvLinkEntregable" value="${s?.linkEntregable||''}" placeholder="https://drive.google.com/…">
       </div>
@@ -16178,6 +16187,7 @@ function srvSaveModal(){
     fechaEntrega: document.getElementById('srvFechaEntrega')?.value||'',
     linkCOT:      document.getElementById('srvLinkCOT')?.value?.trim()||'',
     linkOS:       document.getElementById('srvLinkOS')?.value?.trim()||'',
+    linkValidacion: document.getElementById('srvLinkValidacion')?.value?.trim()||'',
     linkEntregable: document.getElementById('srvLinkEntregable')?.value?.trim()||'',
     notas:        document.getElementById('srvNotas')?.value||'',
     linkedId:     srvLinkedActivity?.id||'',
@@ -17278,7 +17288,7 @@ async function supaSyncServicios(){
       estado:s.estado||null, km:s.km||null, estatus:s.estatus||'COT Firmada',
       fecha_solicitud:s.fechaSolicitud||null, fecha_inicio:s.fechaInicio||null,
       fecha_entrega:s.fechaEntrega||null, link_cot:s.linkCOT||null, link_os:s.linkOS||null,
-      link_entregable:s.linkEntregable||null, notas:s.notas||null,
+      link_validacion:s.linkValidacion||null, link_entregable:s.linkEntregable||null, notas:s.notas||null,
       linked_id:s.linkedId||null, updated_at:new Date().toISOString(),
     }));
     await _supa.from('servicios_esp').upsert(rows,{onConflict:'id'});
@@ -18293,7 +18303,7 @@ async function supaLoadAll(){
         estado:s.estado||'', km:s.km||'', estatus:s.estatus||'COT Firmada',
         fechaSolicitud:s.fecha_solicitud||'', fechaInicio:s.fecha_inicio||'',
         fechaEntrega:s.fecha_entrega||'', linkCOT:s.link_cot||'', linkOS:s.link_os||'',
-        linkEntregable:s.link_entregable||'', notas:s.notas||'',
+        linkValidacion:s.link_validacion||'', linkEntregable:s.link_entregable||'', notas:s.notas||'',
         linkedId:s.linked_id||'',
       }));
       localStorage.setItem(SRV_KEY, JSON.stringify(SRV_ITEMS));
@@ -18509,7 +18519,7 @@ async function supaMigrateFromLocal(){
         estado:s.estado||null, km:s.km||null, estatus:s.estatus||'COT Firmada',
         fecha_solicitud:s.fechaSolicitud||null, fecha_inicio:s.fechaInicio||null,
         fecha_entrega:s.fechaEntrega||null, link_cot:s.linkCOT||null, link_os:s.linkOS||null,
-        link_entregable:s.linkEntregable||null, notas:s.notas||null,
+        link_validacion:s.linkValidacion||null, link_entregable:s.linkEntregable||null, notas:s.notas||null,
         linked_id:s.linkedId||null,
       }));
       const {error} = await _supa.from('servicios_esp').upsert(rows,{onConflict:'id'});
