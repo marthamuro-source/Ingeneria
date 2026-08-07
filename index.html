@@ -2187,12 +2187,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <div class="dash-subtabs" style="margin-bottom:20px">
         <div class="dash-subtab on" id="segTab-reporteo" onclick="segSetTab('reporteo')">📅 Reporteo</div>
         <div class="dash-subtab"   id="segTab-avance"   onclick="segSetTab('avance')">📊 Asignación</div>
+        <div class="dash-subtab"   id="segTab-calidad"  onclick="segSetTab('calidad')">✅ Calidad</div>
         <div class="dash-subtab"   id="segTab-udemy"    onclick="segSetTab('udemy')">🎓 Udemy</div>
         <div class="dash-subtab"   id="segTab-notas"    onclick="segSetTab('notas')">📌 Notas</div>
       </div>
       <div id="segView-reporteo"><div id="segReporteoMount"></div></div>
       <div id="segView-udemy"   style="display:none"><div id="segUdemyMount"></div></div>
       <div id="segView-avance"  style="display:none"><div id="segAvanceMount"></div></div>
+      <div id="segView-calidad" style="display:none"><div id="segCalidadMount"></div></div>
       <div id="segView-notas"   style="display:none"><div id="segNotasMount"></div></div>
     </div>
   </div>
@@ -16803,6 +16805,65 @@ function renderSegAvance(){
 }
 
 // ══════════════════════════════════════════════════════
+//  CALIDAD — revisión de actividades en estatus "En revisión"
+// ══════════════════════════════════════════════════════
+function renderSegCalidad(){
+  const el = document.getElementById('segCalidadMount'); if(!el) return;
+  const isAdmin = (_userRole==='admin'||_userRole==='jefe');
+  const fmtD = d => d ? new Date(d+'T00:00:00').toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
+
+  let items = PA_ITEMS.filter(a=>a.estatus==='En revisión');
+  if(_userRole==='proyectista' && _miNombre){
+    items = items.filter(a=>samePersonMatch(a.responsable||'', _miNombre));
+  }
+  items = [...items].sort((a,b)=>(a.fechaTermino||'9999').localeCompare(b.fechaTermino||'9999'));
+
+  let html = `<div style="margin-bottom:14px;padding:10px 14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);font-size:11px;color:var(--muted)">
+    ✅ Aquí aparecen todas las asignaciones (Proyecto, Trabajo Operativo, Conectividad, Impresiones) que ya llegaron a estatus <strong style="color:var(--text)">"En revisión"</strong> y están listas para que ${isAdmin?'inicies la validación':'tu líder las revise'}.
+  </div>`;
+
+  if(!items.length){
+    el.innerHTML = html + `<div style="padding:28px;text-align:center;color:var(--dim);font-size:12px">Sin actividades en revisión por ahora.</div>`;
+    return;
+  }
+
+  html += `<div style="overflow-x:auto;background:var(--surface);border-radius:10px;border:1px solid var(--border)">
+  <table class="avance-table"><thead><tr>
+    <th style="padding-left:12px">Tipo</th>
+    <th>Proyecto</th>
+    <th>Folio / Actividad</th>
+    <th>Responsable</th>
+    <th>F. Término</th>
+    <th style="text-align:center;width:170px">Revisión de calidad</th>
+  </tr></thead><tbody>`;
+
+  items.forEach(a=>{
+    const folio = (a.folio||a.actividad||'—');
+    const proy = (a.proyecto||'—');
+    const tipoColor = a.tipo==='Proyecto'?'#4a8fd4':a.tipo==='Trabajo Operativo'?'#f5a623':a.tipo==='Planos de Conectividad'?'#9a6ef0':'#5ce8a6';
+    html += `<tr>
+      <td style="padding-left:12px"><span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${tipoColor}1a;color:${tipoColor};font-weight:500">${a.tipo||'—'}</span></td>
+      <td><div style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(proy||'').replace(/"/g,'&quot;')}">${proy}</div></td>
+      <td><div style="font-family:var(--mono);font-size:11px;color:var(--accent);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(folio||'').replace(/"/g,'&quot;')}">${folio}</div></td>
+      <td style="font-size:11px;color:var(--muted);white-space:nowrap">${(a.responsable||'—').split(' ').slice(0,2).join(' ')}</td>
+      <td style="font-size:11px;white-space:nowrap;color:var(--muted)">${fmtD(a.fechaTermino)}</td>
+      <td style="text-align:center">${isAdmin
+        ? `<button class="et-act-btn" style="padding:5px 12px;font-size:11px;background:rgba(90,159,240,.12);border:1px solid rgba(90,159,240,.3);color:var(--accent);border-radius:6px" onclick="calAbrirRevision('${a.id}')">▶ Iniciar revisión</button>`
+        : `<span style="font-size:10.5px;color:var(--dim);font-style:italic">Pendiente de revisión</span>`}</td>
+    </tr>`;
+  });
+
+  html += `</tbody></table></div>`;
+  el.innerHTML = html;
+}
+
+function calAbrirRevision(id){
+  const a = PA_ITEMS.find(x=>x.id===id); if(!a) return;
+  // Paso siguiente: aquí se abrirá el formulario con las preguntas de validación de calidad.
+  alert('Siguiente paso: aquí se va a abrir el formulario con las preguntas para validar "'+(a.folio||a.actividad||'esta actividad')+'". Lo construimos en el próximo avance.');
+}
+
+// ══════════════════════════════════════════════════════
 //  NOTAS RÁPIDAS DEL PROYECTISTA
 // ══════════════════════════════════════════════════════
 const PROY_NOTAS_KEY = 'c3ntro_proy_notas_v1';
@@ -17464,7 +17525,7 @@ const _segMounted = {};
 function renderSeguimiento(){ segSetTab(segActiveTab); }
 function segSetTab(tab){
   segActiveTab = tab;
-  ['reporteo','udemy','avance','notas'].forEach(t=>{
+  ['reporteo','udemy','avance','calidad','notas'].forEach(t=>{
     const el = document.getElementById('segTab-'+t);
     if(el) el.classList.toggle('on', t===tab);
     const v = document.getElementById('segView-'+t);
@@ -17503,6 +17564,7 @@ function segMount(tab){
     udemy:    { target:'segUdemyMount',    source:'v-udemy',    render:()=>{ if(typeof renderUdemy==='function') renderUdemy(); } },
     reporteo: { target:'segReporteoMount', source:'v-reporteo', render:()=>{ if(typeof renderReporteoView==='function') renderReporteoView(); } },
     avance:   { target:'segAvanceMount',   source:null,         render:()=>{ segRefrescarAsignacion(); } },
+    calidad:  { target:'segCalidadMount',  source:null,         render:()=>{ renderSegCalidad(); } },
     notas:    { target:'segNotasMount',    source:null,         render:()=>{ renderSegNotas(); } },
   };
   const cfg = mountMap[tab];
