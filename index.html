@@ -316,7 +316,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 /* ── Modal editor de Home Office ── */
 .ho-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);z-index:900;display:none;align-items:center;justify-content:center;}
 .ho-modal-bg.open{display:flex;}
-.ho-modal{background:var(--surface);border:1px solid rgba(0,229,255,.3);border-radius:16px;padding:28px;width:540px;max-width:95vw;max-height:88vh;overflow-y:auto;box-shadow:0 0 40px rgba(0,229,255,.15),0 24px 60px rgba(0,0,0,.5);}
+.ho-modal{background:#070d1a;border:1px solid rgba(0,229,255,.3);border-radius:16px;padding:28px;width:540px;max-width:95vw;max-height:88vh;overflow-y:auto;box-shadow:0 0 40px rgba(0,229,255,.15),0 24px 60px rgba(0,0,0,.5);}
 .ho-modal-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;}
 .ho-modal-sub{font-size:11px;color:var(--muted);margin-bottom:20px;}
 .ho-day-section{margin-bottom:16px;border:1px solid var(--border);border-radius:10px;overflow:hidden;}
@@ -391,12 +391,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .vac-leg-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
 
 /* ── SERVICIOS ESPECIALES ── */
-.srv-kpi-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:18px;}
+.srv-kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px;}
 .srv-kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
 .srv-kpi .val{font-size:22px;font-weight:700;color:var(--text);line-height:1;}
 .srv-kpi .lbl{font-size:10px;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.06em;}
 .srv-kpi .tip{font-size:10px;color:var(--dim);margin-top:2px;font-style:italic;}
-.srv-kpi.cot .val{color:#8b5cf6;} .srv-kpi.sol .val{color:#378ADD;} .srv-kpi.oc .val{color:#BA7517;} .srv-kpi.proc .val{color:#d4890a;} .srv-kpi.ent .val{color:var(--green);}
+.srv-kpi.sol .val{color:#378ADD;} .srv-kpi.oc .val{color:#BA7517;} .srv-kpi.proc .val{color:#d4890a;} .srv-kpi.ent .val{color:var(--green);}
 .srv-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
 .srv-chip{padding:4px 12px;border-radius:20px;font-size:11px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;transition:all .15s;}
 .srv-chip.on{background:rgba(74,143,212,.12);border-color:rgba(74,143,212,.35);color:var(--accent);}
@@ -409,7 +409,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .srv-table tr:last-child td{border-bottom:none;}
 .srv-table tr:hover td{background:var(--surface2);}
 .srv-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:600;white-space:nowrap;}
-.srv-b-cot{background:rgba(139,92,246,.15);color:#a78bfa;border:1px solid rgba(139,92,246,.25);}
 .srv-b-sol{background:rgba(55,138,221,.15);color:#63b3ff;border:1px solid rgba(55,138,221,.25);}
 .srv-b-oc{background:rgba(186,117,23,.15);color:#f0a940;border:1px solid rgba(186,117,23,.25);}
 .srv-b-proc{background:rgba(212,137,10,.15);color:#f5c242;border:1px solid rgba(212,137,10,.25);}
@@ -432,7 +431,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .srv-status-legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;padding:10px 14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);}
 .ud-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);z-index:900;display:none;align-items:center;justify-content:center;}
 .ud-modal-bg.open{display:flex;}
-.ud-modal{background:var(--surface);border:1px solid rgba(74,143,212,.3);border-radius:16px;padding:28px;width:640px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:0 0 40px rgba(74,143,212,.12),0 24px 60px rgba(0,0,0,.5);}
+.ud-modal{background:#070d1a;border:1px solid rgba(74,143,212,.3);border-radius:16px;padding:28px;width:640px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:0 0 40px rgba(74,143,212,.12),0 24px 60px rgba(0,0,0,.5);}
 .ud-modal-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:18px;}
 .ud-cat-section{margin-bottom:18px;}
 .ud-cat-head{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--accent);margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid var(--border);}
@@ -466,8 +465,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .notif-toast-wrap{position:fixed;bottom:24px;right:24px;z-index:1500;display:flex;flex-direction:column;gap:8px;pointer-events:none;}
 .notif-toast{pointer-events:all;display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:#0a1628;border:1px solid rgba(74,143,212,.35);border-radius:12px;min-width:280px;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.5),0 0 20px rgba(74,143,212,.1);animation:toast-in .3s ease;position:relative;}
 [data-theme="light"] .notif-toast{background:#ffffff;border-color:rgba(26,86,208,.3);box-shadow:0 8px 28px rgba(20,30,60,.16),0 0 16px rgba(26,86,208,.06);}
-.notif-toast.warn{border-color:rgba(255,92,92,.45);box-shadow:0 8px 32px rgba(0,0,0,.5),0 0 20px rgba(255,92,92,.15);}
-[data-theme="light"] .notif-toast.warn{border-color:rgba(255,92,92,.4);box-shadow:0 8px 28px rgba(20,30,60,.16),0 0 16px rgba(255,92,92,.12);}
 @keyframes toast-in{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:translateX(0);}}
 @keyframes toast-out{to{opacity:0;transform:translateX(20px);}}
 .notif-toast.out{animation:toast-out .25s ease forwards;}
@@ -495,8 +492,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .notif-item:hover{background:var(--surface2);}
 .notif-item.unread{background:rgba(74,143,212,.05);border-left:3px solid var(--accent);}
 .notif-item.unread:hover{background:rgba(74,143,212,.08);}
-.notif-item.warn{background:rgba(255,92,92,.06);border-left:3px solid var(--red);}
-.notif-item.warn:hover{background:rgba(255,92,92,.1);}
 .notif-item-icon{font-size:18px;flex-shrink:0;margin-top:2px;}
 .notif-item-body{flex:1;min-width:0;}
 .notif-item-title{font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px;}
@@ -519,7 +514,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 
 /* ── Notas proyectista (corcho) ── */
 .proy-notas-board{background:repeating-linear-gradient(0deg,transparent,transparent 28px,rgba(120,80,30,.04) 28px,rgba(120,80,30,.04) 29px),repeating-linear-gradient(90deg,transparent,transparent 28px,rgba(120,80,30,.04) 28px,rgba(120,80,30,.04) 29px),linear-gradient(135deg,#1a1200,#110d00)!important;border-radius:8px;padding:20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:20px;}
-[data-theme="light"] .proy-notas-board{background:repeating-linear-gradient(0deg,transparent,transparent 28px,rgba(120,80,30,.06) 28px,rgba(120,80,30,.06) 29px),repeating-linear-gradient(90deg,transparent,transparent 28px,rgba(120,80,30,.06) 28px,rgba(120,80,30,.06) 29px),linear-gradient(135deg,#e8dcc0,#ddcda6)!important;box-shadow:inset 0 0 0 1px rgba(120,80,30,.15);}
 /* Badge de Raquel en nota */
 .nota-raquel-badge{position:absolute;top:6px;left:8px;font-size:9px;font-weight:700;background:linear-gradient(135deg,rgba(74,143,212,.8),rgba(0,120,255,.7));color:#fff;border-radius:4px;padding:1px 6px;letter-spacing:.04em;text-transform:uppercase;box-shadow:0 1px 4px rgba(0,0,0,.3);}
 @keyframes raquel-pulse{0%,100%{box-shadow:0 0 0 2px rgba(74,143,212,.6),0 0 14px rgba(74,143,212,.4),0 3px 10px rgba(0,0,0,.35);}50%{box-shadow:0 0 0 2px rgba(74,143,212,.3),0 0 28px rgba(74,143,212,.7),0 3px 10px rgba(0,0,0,.35);}}
@@ -552,7 +546,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 /* Modal Servicio */
 .srv-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);z-index:900;display:none;align-items:center;justify-content:center;}
 .srv-modal-bg.open{display:flex;}
-.srv-modal{background:var(--surface);border:1px solid rgba(74,143,212,.3);border-radius:16px;padding:28px;width:600px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:0 0 40px rgba(74,143,212,.12),0 24px 60px rgba(0,0,0,.5);}
+.srv-modal{background:#070d1a;border:1px solid rgba(74,143,212,.3);border-radius:16px;padding:28px;width:600px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:0 0 40px rgba(74,143,212,.12),0 24px 60px rgba(0,0,0,.5);}
 .srv-modal-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:18px;display:flex;align-items:center;gap:8px;}
 .srv-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .srv-form-full{grid-column:1/-1;}
@@ -634,6 +628,64 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .pa-row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .pa-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
 .pa-modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;}
+
+/* ══ ONE TO ONE (1:1) ══ */
+#o2oModalBg{z-index:4500;}
+.o2o-modal{max-width:760px;width:100%;}
+.o2o-hd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.o2o-hd-name{font-size:14px;font-weight:600;color:var(--text);}
+.o2o-hd-meta{font-size:11px;color:var(--muted);margin-top:2px;font-family:var(--mono);}
+.o2o-global-pill{font-size:10.5px;padding:4px 11px;border-radius:12px;font-weight:600;white-space:nowrap;cursor:pointer;border:none;font-family:var(--font);}
+.o2o-snap{display:flex;gap:6px;padding:0 20px 16px;flex-wrap:wrap;}
+.o2o-body{padding:0 20px 4px;display:flex;flex-direction:column;gap:16px;}
+.o2o-sec{border:1px solid var(--border);border-radius:10px;background:var(--surface2);overflow:hidden;}
+.o2o-sec-hd{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;gap:10px;}
+.o2o-sec-title{font-size:12px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:7px;}
+.o2o-sec-num{width:19px;height:19px;border-radius:50%;background:rgba(90,159,240,.15);color:var(--accent);font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:var(--mono);flex-shrink:0;}
+.o2o-sec-hint{font-size:10.5px;color:var(--dim);padding:0 14px 8px;margin-top:-4px;line-height:1.5;}
+.o2o-sec-body{padding:0 14px 14px;}
+.o2o-sec textarea{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-family:var(--font);font-size:12px;resize:vertical;min-height:52px;outline:none;}
+.o2o-sec textarea:focus{border-color:rgba(90,159,240,.45);}
+.o2o-sem{display:flex;gap:5px;flex-shrink:0;}
+.o2o-sem-btn{width:28px;height:23px;border-radius:6px;border:1px solid var(--border);background:none;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.4;transition:all .15s;}
+.o2o-sem-btn.on{opacity:1;border-color:currentColor;}
+.o2o-sem-btn.sem-g.on{background:rgba(61,214,140,.14);color:#3dd68c;}
+.o2o-sem-btn.sem-y.on{background:rgba(245,166,35,.14);color:#f5a623;}
+.o2o-sem-btn.sem-r.on{background:rgba(255,92,92,.14);color:#ff5c5c;}
+.o2o-prev-commit{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px dashed var(--border);}
+.o2o-prev-commit:last-child{border-bottom:none;}
+.o2o-prev-commit-txt{font-size:11.5px;color:var(--text);}
+.o2o-prev-commit-sub{font-size:10px;color:var(--dim);margin-top:2px;}
+.o2o-clima-q{display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid var(--border);}
+.o2o-clima-q:last-of-type{border-bottom:none;}
+.o2o-clima-q-txt{flex:1;min-width:0;}
+.o2o-clima-q-label{font-size:11.5px;color:var(--text);font-weight:500;}
+.o2o-clima-q-hint{font-size:10px;color:var(--dim);margin-top:1px;}
+.o2o-clima-dots{display:flex;gap:5px;flex-shrink:0;}
+.o2o-clima-dot{width:24px;height:24px;border-radius:50%;border:1px solid var(--border);background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--dim);cursor:pointer;transition:all .15s;}
+.o2o-clima-dot.on{border-color:#2dd4bf;background:rgba(45,212,191,.16);color:#2dd4bf;font-weight:700;}
+.o2o-clima-legend{display:flex;justify-content:space-between;font-size:9px;color:var(--dim);margin-top:6px;padding:0 2px;}
+.o2o-commit-row{display:grid;grid-template-columns:1fr 120px 26px;gap:7px;margin-bottom:7px;}
+.o2o-commit-row input{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 9px;color:var(--text);font-family:var(--font);font-size:11.5px;outline:none;width:100%;}
+.o2o-commit-row input:focus{border-color:rgba(90,159,240,.45);}
+.o2o-rm-btn{background:none;border:1px solid var(--border);border-radius:6px;color:var(--dim);cursor:pointer;font-size:12px;}
+.o2o-add-commit{font-size:11px;color:var(--accent);background:rgba(90,159,240,.1);border:1px dashed rgba(90,159,240,.35);border-radius:6px;padding:6px 12px;cursor:pointer;text-align:center;font-family:var(--font);}
+.o2o-ft{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
+.o2o-ft-left{font-size:10.5px;color:var(--dim);}
+.o2o-btn1{display:inline-flex;align-items:center;gap:6px;padding:8px 15px;border-radius:8px;font-family:var(--font);font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:none;color:var(--muted);}
+.o2o-btn1-primary{background:linear-gradient(135deg,#1a3a6a,#4a8fd4);border:none;color:#fff;font-weight:600;}
+.o2o-hist-item{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px 13px;margin-bottom:7px;}
+.o2o-hist-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.o2o-hist-date{font-size:11.5px;font-weight:500;color:var(--text);width:100px;flex-shrink:0;}
+.o2o-hist-sub{font-size:10.5px;color:var(--muted);flex:1;}
+.o2o-hist-actions{display:flex;gap:6px;}
+.o2o-hist-btn{font-size:10px;padding:4px 9px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;font-family:var(--font);}
+.o2o-tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);padding:0 20px;}
+.o2o-tab{padding:10px 14px;font-size:11.5px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;font-weight:500;background:none;border-left:none;border-right:none;border-top:none;font-family:var(--font);}
+.o2o-tab.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
+.o2o-card-btn{background:rgba(154,110,240,.12);border:1px solid rgba(154,110,240,.3);color:#b79cf5;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:10px;font-family:var(--font);white-space:nowrap;}
+.o2o-last-badge{font-size:9.5px;color:var(--dim);margin-top:4px;}
+
 .pa-datepicker-wrap{position:relative;display:flex;align-items:center;}
 .pa-dateinput{width:100%;padding:7px 36px 7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font);font-size:13px;}
 .pa-dateinput:focus{outline:none;border-color:rgba(74,143,212,.38);}
@@ -818,7 +870,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .notas-pending-grid{position:relative;}
 /* Fondo corcho */
 .notas-board{background:repeating-linear-gradient(0deg,transparent,transparent 28px,rgba(120,80,30,.04) 28px,rgba(120,80,30,.04) 29px),repeating-linear-gradient(90deg,transparent,transparent 28px,rgba(120,80,30,.04) 28px,rgba(120,80,30,.04) 29px),linear-gradient(135deg,#1a1200,#110d00)!important;border-radius:8px;}
-[data-theme="light"] .notas-board{background:repeating-linear-gradient(0deg,transparent,transparent 28px,rgba(120,80,30,.06) 28px,rgba(120,80,30,.06) 29px),repeating-linear-gradient(90deg,transparent,transparent 28px,rgba(120,80,30,.06) 28px,rgba(120,80,30,.06) 29px),linear-gradient(135deg,#e8dcc0,#ddcda6)!important;box-shadow:inset 0 0 0 1px rgba(120,80,30,.15);}
 /* Chincheta SVG via ::before */
 .postit{position:relative;border-radius:3px;padding:22px 14px 36px;min-height:120px;display:flex;flex-direction:column;box-shadow:0 3px 10px rgba(0,0,0,.35),0 1px 2px rgba(0,0,0,.2);transform:rotate(var(--tilt,0deg));transition:transform .15s;font-family:var(--font);}
 .postit::before{content:'';position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ff6b6b,#c0392b);box-shadow:0 2px 6px rgba(0,0,0,.5),0 0 0 2px rgba(0,0,0,.2),inset 0 1px 2px rgba(255,255,255,.3);z-index:10;}
@@ -2052,38 +2103,31 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <!-- Leyenda de estatus -->
       <div class="srv-status-legend">
         <div class="srv-legend-item">
-          <div class="srv-legend-dot" style="background:#8b5cf6"></div>
-          <div class="srv-legend-text">
-            <div class="name">COT Firmada</div>
-            <div class="desc">Cotización firmada, lista para solicitar la OS</div>
-          </div>
-        </div>
-        <div class="srv-legend-item">
           <div class="srv-legend-dot" style="background:#378ADD"></div>
           <div class="srv-legend-text">
-            <div class="name">OS Solicitada</div>
-            <div class="desc">OS pedida, esperando que la generen</div>
+            <div class="name">Solicitado</div>
+            <div class="desc">OC pedida, esperando que la generen</div>
           </div>
         </div>
         <div class="srv-legend-item">
           <div class="srv-legend-dot" style="background:#BA7517"></div>
           <div class="srv-legend-text">
-            <div class="name">OS Resuelta</div>
+            <div class="name">OS Generada</div>
             <div class="desc">Orden de Servicio emitida, proveedor por arrancar</div>
           </div>
         </div>
         <div class="srv-legend-item">
           <div class="srv-legend-dot" style="background:#d4890a"></div>
           <div class="srv-legend-text">
-            <div class="name">En Validación</div>
-            <div class="desc">Información recibida, en revisión antes de liberar</div>
+            <div class="name">En proceso</div>
+            <div class="desc">Actividades en campo o gabinete en curso</div>
           </div>
         </div>
         <div class="srv-legend-item">
           <div class="srv-legend-dot" style="background:#3dd68c"></div>
           <div class="srv-legend-text">
-            <div class="name">Liberada</div>
-            <div class="desc">Entregable validado y liberado en Drive</div>
+            <div class="name">Entregado</div>
+            <div class="desc">Información recibida y lista en Drive</div>
           </div>
         </div>
       </div>
@@ -2102,9 +2146,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
               <th>F. Inicio</th>
               <th>F. Entrega pactada</th>
               <th>Estatus</th>
-              <th>COT</th>
               <th>OS</th>
-              <th>Validación</th>
               <th>Entregable</th>
               <th style="width:44px"></th>
             </tr>
@@ -5133,9 +5175,6 @@ function toggleTheme(){
   const next = cur==='light' ? 'dark' : 'light';
   applyTheme(next);
   try{ localStorage.setItem(THEME_KEY, next); }catch(e){}
-  // Algunas vistas calculan sus colores al vuelo (no solo con variables CSS),
-  // así que se vuelven a dibujar para reflejar el nuevo tema de inmediato.
-  try{ if(typeof refresh==='function') refresh(); }catch(e){}
 }
 (function initTheme(){
   let saved = 'dark';
@@ -5332,16 +5371,6 @@ function cronoDiasParaSubtarea(st){
     // Ej: 6 km/día, tengo 18 km → 3 días
     return Math.ceil(cant / rend);
   }
-}
-
-// ── Rendimiento mínimo esperado en un solo día para una subtarea ──
-// 'unidades_por_dia': el rendimiento YA es la meta diaria (ej. 6 cortes/día → mínimo 6).
-// 'dias_por_unidad':  el rendimiento son días que toma 1 unidad → la meta diaria es 1/rendimiento
-//                     (ej. 2 días/cruce → se espera ~0.5 cruces por día).
-function cronoRendimientoMinDia(st){
-  const rend = parseFloat(st?.rendimiento)||0;
-  if(!rend) return 0;
-  return (st.tipo==='dias_por_unidad') ? (1/rend) : rend;
 }
 
 // ── Calcular fecha pronóstico sumando días hábiles ──
@@ -8459,31 +8488,19 @@ async function calProyGuardarReporteHoy(){
   await cronoRecargarDeSupabase();
 
   const itemsAfectados = new Set();
-  const bajoRendimiento = []; // subtareas reportadas hoy por debajo del rendimiento mínimo esperado
   for(const entry of pendientes){
     const item = CRONO_ITEMS.find(x=>x.actividadId===entry.stData.actividadId);
     const st = item?.subtareas?.find(s=>s.id===entry.stData.st.id);
     if(!st||!item) continue;
 
     const esPct = st.unidad==='%' || st.esOperativo;
-    const prevAcum = st.avanceAcum||0;
     if(esPct){
       st.avanceAcum = Math.max(0, Math.min(100, entry.cantidad)); // valor absoluto reportado, tope 0-100
     } else {
-      const nuevoAcum = prevAcum + entry.cantidad;
+      const nuevoAcum = (st.avanceAcum||0) + entry.cantidad;
       st.avanceAcum = st.cantidad ? Math.min(nuevoAcum, st.cantidad) : nuevoAcum;
     }
     st.estatus = entry.estatus;
-
-    // Avance realmente logrado hoy: en % es la diferencia contra lo que ya llevaba antes de este reporte;
-    // en el resto de unidades ya es lo que capturaron como "avanzado hoy".
-    const avanceHoy = esPct ? Math.max(0, st.avanceAcum-prevAcum) : entry.cantidad;
-    const rendMinDia = Math.round(cronoRendimientoMinDia(st)*100)/100;
-    // No se marca como bajo rendimiento si quedó bloqueada (ya explica el motivo) o si se completó
-    // (terminar con menos de una jornada de trabajo restante es normal, no bajo desempeño).
-    const esBajoRendimiento = rendMinDia>0 && entry.estatus==='en_progreso' && avanceHoy < rendMinDia;
-    if(esBajoRendimiento) bajoRendimiento.push({ nombre:st.nombre, avanceHoy, rendMinDia, unidad:st.unidad });
-
     if(!item.reportes) item.reportes=[];
     item.reportes.push({
       id:'rep_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
@@ -8492,20 +8509,14 @@ async function calProyGuardarReporteHoy(){
       subtareaId: st.id,
       subtareaNombre: st.nombre,
       unidad: st.unidad,
-      cantidad: entry.cantidad, nota: entry.nota, estatus: entry.estatus,
-      bajoRendimiento: esBajoRendimiento, rendMinDia,
+      cantidad: entry.cantidad, nota: entry.nota, estatus: entry.estatus
     });
     itemsAfectados.add(item.actividadId);
 
-    // Notificar a Raquel por cada subtarea reportada (con alerta distinta si vino bajo de rendimiento)
+    // Notificar a Raquel por cada subtarea reportada
     if(typeof notifAdd==='function'){
-      if(esBajoRendimiento){
-        notifAdd('🔴', `${(_miNombre||'').split(' ')[0]} reportó bajo rendimiento`,
-          `${st.nombre}: ${avanceHoy} de ${rendMinDia} ${st.unidad}/día esperados${entry.nota?' — '+entry.nota.slice(0,35):''}`, 'rendimiento_bajo', false);
-      } else {
-        notifAdd('📋',`${(_miNombre||'').split(' ')[0]} reportó avance`,
-          `${st.nombre}: +${entry.cantidad} ${st.unidad}${entry.nota?' — '+entry.nota.slice(0,35):''}`, 'avance', false);
-      }
+      notifAdd('📋',`${(_miNombre||'').split(' ')[0]} reportó avance`,
+        `${st.nombre}: +${entry.cantidad} ${st.unidad}${entry.nota?' — '+entry.nota.slice(0,35):''}`, 'avance', false);
     }
   }
   itemsAfectados.forEach(id=>cronoSaveItem(id));
@@ -8532,21 +8543,11 @@ async function calProyGuardarReporteHoy(){
 
   // Confirmación visual y refrescar
   const btn = document.querySelector('#calProyPanelHoy .pa-btn-primary');
-  if(bajoRendimiento.length){
-    // Advertencia clara e inmediata para quien reportó: quedó por debajo del mínimo esperado ese día.
-    const detalle = bajoRendimiento.map(b=>`• ${b.nombre}: reportaste ${b.avanceHoy} de ${b.rendMinDia} ${b.unidad}/día esperados`).join('\n');
-    alert(`⚠️ Rendimiento por debajo del mínimo esperado hoy:\n\n${detalle}\n\nSi hubo un bloqueo o justificación, coméntalo en la nota o marca la subtarea como "Bloqueada".`);
-  }
   if(btn){
-    if(bajoRendimiento.length){
-      btn.innerHTML = `⚠ Guardado — ${bajoRendimiento.length} por debajo del rendimiento mínimo`;
-      btn.style.background = 'var(--red)';
-    } else {
-      btn.innerHTML = `✓ ${pendientes.length} subtarea${pendientes.length!==1?'s':''} guardada${pendientes.length!==1?'s':''}`;
-      btn.style.background = 'var(--green)';
-    }
+    btn.innerHTML = `✓ ${pendientes.length} subtarea${pendientes.length!==1?'s':''} guardada${pendientes.length!==1?'s':''}`;
+    btn.style.background = 'var(--green)';
     btn.disabled = true;
-    setTimeout(()=>{ renderCronoCalProyectista(); }, bajoRendimiento.length?1600:800);
+    setTimeout(()=>{ renderCronoCalProyectista(); }, 800);
   } else {
     renderCronoCalProyectista();
   }
@@ -8725,9 +8726,7 @@ function renderCronoCalendario(){
         nota: r.nota||'',
         actividadId: item.actividadId,
         proyecto: item.proyecto||'',
-        folio: (PA_ITEMS.find(a=>a.id===item.actividadId)?.folio)||'',
-        bajoRendimiento: !!r.bajoRendimiento,
-        rendMinDia: r.rendMinDia||0,
+        folio: (PA_ITEMS.find(a=>a.id===item.actividadId)?.folio)||''
       });
     });
   });
@@ -8753,13 +8752,8 @@ function renderCronoCalendario(){
     return match ? colorMap[match] : '#888';
   }
 
-  // Tinte del cuadriculado adaptado al tema: en claro se usa un tinte oscuro sobre blanco
-  // (un tinte blanco casi transparente, pensado para fondo oscuro, es invisible en tema claro).
-  const calLight = document.documentElement.getAttribute('data-theme')==='light';
-  const calTint = a => calLight ? `rgba(20,30,60,${a})` : `rgba(255,255,255,${a})`;
-
   let html = `
-  <div style="background:${calTint(calLight?.025:.03)};border:0.5px solid ${calTint(calLight?.14:.08)};border-radius:12px;padding:16px;margin-top:8px">
+  <div style="background:rgba(255,255,255,.03);border:0.5px solid rgba(255,255,255,.08);border-radius:12px;padding:16px;margin-top:8px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div style="font-size:14px;font-weight:600;color:var(--text)">📅 Reportes diarios — ${meses[calMes]} ${calAnio}</div>
       <div style="display:flex;gap:6px">
@@ -8793,13 +8787,12 @@ function renderCronoCalendario(){
     // Justificaciones activas este día (para cualquier persona)
     const justHoy = PA_MEMBERS.filter(m=>justGet(fecha,m));
 
-    const diaBg = esSel?'rgba(74,143,212,.15)':esHoy?'rgba(74,143,212,.06)':esFinSem?calTint(calLight?.03:.01):calTint(calLight?.045:.02);
     html += `<div onclick="calSelDia('${fecha}')"
       style="min-height:72px;border-radius:8px;padding:6px;cursor:pointer;transition:background .15s;
-        background:${diaBg};
-        border:0.5px solid ${esSel?'rgba(74,143,212,.5)':esHoy?'rgba(74,143,212,.25)':calTint(calLight?.12:.05)}"
+        background:${esSel?'rgba(74,143,212,.15)':esHoy?'rgba(74,143,212,.06)':esFinSem?'rgba(255,255,255,.01)':'rgba(255,255,255,.02)'};
+        border:0.5px solid ${esSel?'rgba(74,143,212,.5)':esHoy?'rgba(74,143,212,.25)':'rgba(255,255,255,.05)'}"
       onmouseover="this.style.background='rgba(74,143,212,.08)'"
-      onmouseout="this.style.background='${diaBg}'">
+      onmouseout="this.style.background='${esSel?'rgba(74,143,212,.15)':esHoy?'rgba(74,143,212,.06)':esFinSem?'rgba(255,255,255,.01)':'rgba(255,255,255,.02)'}'">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <div style="font-size:11px;font-weight:${esHoy?'700':'500'};color:${esHoy?'var(--accent)':esFinSem?'var(--dim)':'var(--text)'}">${d}</div>
         ${justHoy.length?`<span title="${justHoy.length} justificación${justHoy.length>1?'es':''} este día" style="font-size:9px;color:#c084fc">🔖${justHoy.length}</span>`:''}
@@ -8813,7 +8806,7 @@ function renderCronoCalendario(){
           ${quienes.length>3?`<div style="font-size:9px;color:var(--dim);display:flex;align-items:center">+${quienes.length-3}</div>`:''}
         </div>
         <div style="font-size:9px;color:var(--dim)">${reps.length} reporte${reps.length!==1?'s':''}</div>
-      ` : `<div style="font-size:9px;color:${calTint(calLight?.22:.1)};margin-top:4px">—</div>`}
+      ` : `<div style="font-size:9px;color:rgba(255,255,255,.1);margin-top:4px">—</div>`}
     </div>`;
   }
 
@@ -8844,7 +8837,7 @@ function renderCronoCalendario(){
 
     if(reps.length){
       html += reps.map(r=>`
-        <div onclick="cronoIrASubtarea('${r.actividadId}','${r.subtareaId}')" style="display:flex;gap:10px;padding:10px 8px;border-bottom:0.5px solid var(--border);cursor:pointer;border-radius:6px;transition:background .15s${r.bajoRendimiento?';background:rgba(255,92,92,.05)':''}" onmouseover="this.style.background='rgba(74,143,212,.06)'" onmouseout="this.style.background='${r.bajoRendimiento?'rgba(255,92,92,.05)':'none'}'" title="Ir a esta subtarea">
+        <div onclick="cronoIrASubtarea('${r.actividadId}','${r.subtareaId}')" style="display:flex;gap:10px;padding:10px 8px;border-bottom:0.5px solid var(--border);cursor:pointer;border-radius:6px;transition:background .15s" onmouseover="this.style.background='rgba(74,143,212,.06)'" onmouseout="this.style.background='none'" title="Ir a esta subtarea">
           <div style="width:28px;height:28px;border-radius:50%;background:${quienColor(r.quien)};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">
             ${r.quien.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase()}
           </div>
@@ -8853,10 +8846,9 @@ function renderCronoCalendario(){
               <span style="font-size:12px;font-weight:600;color:var(--text)">${r.quien.split(' ').slice(0,2).join(' ')}</span>
               <span style="font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(74,143,212,.12);color:var(--accent)">${r.subtareaNombre||'—'}</span>
               ${r.folio?`<span style="font-size:10px;color:var(--dim)">${r.folio}</span>`:''}
-              ${r.bajoRendimiento?`<span style="font-size:9px;padding:1px 6px;border-radius:10px;background:rgba(255,92,92,.15);color:var(--red);font-weight:600" title="Se esperaban ${r.rendMinDia} ${r.unidad}/día">⚠ bajo rendimiento</span>`:''}
             </div>
             ${r.nota?`<div style="font-size:12px;color:var(--text);margin-bottom:3px">${r.nota}</div>`:''}
-            ${r.cantidad?`<div style="font-size:11px;color:${r.bajoRendimiento?'var(--red)':'var(--accent)'};font-weight:500">+${r.cantidad} ${r.unidad}</div>`:''}
+            ${r.cantidad?`<div style="font-size:11px;color:var(--accent);font-weight:500">+${r.cantidad} ${r.unidad}</div>`:''}
           </div>
           <div style="align-self:center;color:var(--dim);font-size:14px;flex-shrink:0">›</div>
         </div>`).join('');
@@ -8866,7 +8858,7 @@ function renderCronoCalendario(){
 
     if(requiereReporte && sinReportar.length){
       const sinJustificar = sinReportar.filter(m=>!justGet(calDiaSeleccionado,m));
-      html += `<div style="margin-top:12px;padding-top:12px;border-top:0.5px solid ${calTint(calLight?.14:.08)}">
+      html += `<div style="margin-top:12px;padding-top:12px;border-top:0.5px solid rgba(255,255,255,.08)">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <div style="font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.04em">Sin reportar (${sinReportar.length})</div>
           ${puedeJustificar && sinJustificar.length>1?`<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--dim);cursor:pointer">
@@ -9587,12 +9579,22 @@ function buildEvalCard(d){
       ['Cuenta','Activa','#3dd68c'],
     ])) : '';
 
+  const isEvalAdmin = (_userRole==='admin'||_userRole==='jefe');
+  const o2oUlt = (isEvalAdmin && typeof o2oUltimo==='function') ? o2oUltimo(p) : null;
+  const o2oBadge = isEvalAdmin ? (o2oUlt
+    ? `<div class="o2o-last-badge">🤝 Último 1:1: ${o2oDiasDesde(o2oUlt.fecha)} · ${o2oEstatusEmoji(o2oUlt.estatus_global)} ${o2oEstatusLabel(o2oUlt.estatus_global)}</div>`
+    : `<div class="o2o-last-badge">🤝 Sin 1:1 registrado</div>`) : '';
+  const o2oBtn = isEvalAdmin
+    ? `<button onclick="event.stopPropagation();o2oOpenModal('${uid}')" title="1:1 con ${p.replace(/"/g,'')}" style="background:rgba(154,110,240,.12);border:1px solid rgba(154,110,240,.3);color:#b79cf5;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:10px;font-family:var(--font);white-space:nowrap">🤝 1:1</button>`
+    : '';
+
   return `<div style="background:var(--surface);border:1px solid ${sc>=80?'rgba(61,214,140,.2)':sc>=60?'rgba(245,166,35,.2)':'rgba(255,92,92,.2)'};border-radius:12px;overflow:hidden">
     <div onclick="toggleEval('${p.replace(/'/g,"\\'")}')" style="padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;user-select:none">
       <div class="av" style="background:${bg};color:${c};width:38px;height:38px;border-radius:9px;font-size:13px;flex-shrink:0">${ini(p)}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p}</div>
         <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px">${chips}</div>
+        ${o2oBadge}
       </div>
       <div style="text-align:right;flex-shrink:0;margin-right:6px">
         <div style="font-size:26px;font-weight:300;font-family:var(--mono);color:${scColor};line-height:1">${globalScore!=null?sc+'%':'—'}</div>
@@ -9601,6 +9603,7 @@ function buildEvalCard(d){
       <div style="display:flex;flex-direction:column;gap:5px;align-items:center;flex-shrink:0">
         <div style="font-size:18px;color:var(--dim);transition:transform .2s;${isOpen?'transform:rotate(90deg)':''}">›</div>
         <button onclick="event.stopPropagation();generatePDF('${uid}')" title="Descargar reporte PDF" style="background:rgba(74,143,212,.12);border:1px solid rgba(74,143,212,.3);color:#7fa8ff;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:10px;font-family:var(--font);white-space:nowrap">⬇ PDF</button>
+        ${o2oBtn}
       </div>
     </div>
     <div style="height:3px;background:var(--surface2)"><div style="height:100%;width:${sc}%;background:${scColor};transition:width .5s"></div></div>
@@ -9995,6 +9998,561 @@ function generatePDF(uid){
   document.body.removeChild(a);
   setTimeout(()=>URL.revokeObjectURL(url),5000);
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  ONE TO ONE (1:1) — reuniones personales, historial y PDF
+// ══════════════════════════════════════════════════════════════════════════════
+let O2O_ITEMS = []; // registros {id,persona,evaluador,fecha,estatus_global,datos:{...}}
+const O2O_LOCAL_KEY = 'c3ntro_one_on_ones_v1';
+let o2oCurrentUid = null;
+let o2oCurrentPersona = null;
+let o2oGlobalOverride = null; // null=auto | 'g'|'y'|'r'
+let o2oActiveTab = 'nuevo';   // 'nuevo' | 'historial'
+let o2oCommitRowCount = 0;
+
+function o2oEstatusEmoji(code){ return {g:'🟢',y:'🟡',r:'🔴'}[code]||'⚪'; }
+function o2oEstatusLabel(code){ return {g:'Destacado',y:'Regular',r:'Atención'}[code]||'Sin datos'; }
+function o2oEstatusColor(code){ return {g:'#3dd68c',y:'#f5a623',r:'#ff5c5c'}[code]||'var(--dim)'; }
+function o2oFechaCorta(iso){ try{ const [y,m,dd]=String(iso).split('-'); return `${dd}/${m}/${y}`; }catch(e){ return iso; } }
+function o2oDiasDesde(iso){
+  try{
+    const then=new Date(iso+'T00:00:00'), now=new Date();
+    const diff=Math.floor((now-then)/(1000*60*60*24));
+    if(diff<=0) return 'hoy';
+    if(diff===1) return 'ayer';
+    return `hace ${diff} días`;
+  }catch(e){ return iso; }
+}
+function o2oHistFor(persona){
+  return O2O_ITEMS.filter(x=>samePersonMatch(x.persona||'',persona)).sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||'')));
+}
+function o2oUltimo(persona){ const h=o2oHistFor(persona); return h[0]||null; }
+
+// ── Carga / persistencia ──────────────────────────────────────────────────────
+async function o2oLoadFromSupabase(){
+  try{
+    if(!_supa){ try{ O2O_ITEMS=JSON.parse(localStorage.getItem(O2O_LOCAL_KEY)||'[]'); }catch(e){ O2O_ITEMS=[]; } return; }
+    const {data,error}=await _supa.from('one_on_ones').select('*').order('fecha',{ascending:false});
+    if(error){
+      console.warn('o2oLoadFromSupabase error (¿falta la tabla one_on_ones?):', error);
+      try{ O2O_ITEMS=JSON.parse(localStorage.getItem(O2O_LOCAL_KEY)||'[]'); }catch(e){ O2O_ITEMS=[]; }
+      return;
+    }
+    O2O_ITEMS=(data||[]).map(r=>{ let dj={}; try{ dj=JSON.parse(r.datos||'{}'); }catch(e){ dj={}; } return {...r, datos:dj}; });
+    try{ localStorage.setItem(O2O_LOCAL_KEY, JSON.stringify(O2O_ITEMS)); }catch(e){}
+  }catch(e){
+    console.warn('o2oLoadFromSupabase exception:', e);
+    try{ O2O_ITEMS=JSON.parse(localStorage.getItem(O2O_LOCAL_KEY)||'[]'); }catch(e2){ O2O_ITEMS=[]; }
+  }
+}
+
+// ── Abrir / cerrar modal ───────────────────────────────────────────────────────
+function o2oOpenModal(uid){
+  const d=EVAL_STORE[uid];
+  if(!d){ alert('Recarga la vista de evaluaciones antes de iniciar el 1:1'); return; }
+  o2oCurrentUid=uid; o2oCurrentPersona=d.p; o2oGlobalOverride=null; o2oActiveTab='nuevo';
+  o2oRenderModal();
+  const bg=document.getElementById('o2oModalBg');
+  if(bg) bg.style.display='flex';
+}
+function o2oCloseModal(){
+  const bg=document.getElementById('o2oModalBg');
+  if(bg) bg.style.display='none';
+  o2oCurrentUid=null; o2oCurrentPersona=null;
+}
+function o2oSetTab(tab){ o2oActiveTab=tab; o2oRenderModal(); }
+
+// ── Render principal ───────────────────────────────────────────────────────────
+function o2oRenderModal(){
+  const inner=document.getElementById('o2oModalInner');
+  if(!inner || !o2oCurrentPersona) return;
+  const persona=o2oCurrentPersona;
+  const d=EVAL_STORE[o2oCurrentUid]||{};
+  const pc=pcolor(persona);
+  const hist=o2oHistFor(persona);
+  const ultimo=hist[0]||null;
+  const prevCommits=(ultimo && ultimo.datos && ultimo.datos.compromisosNuevos)||[];
+  const fechaLabel=new Date().toLocaleDateString('es-MX',{year:'numeric',month:'long',day:'numeric'});
+  const evaluador=_miNombre||(_currentUser&&_currentUser.email)||'Administrador';
+
+  const headerHtml=`<div class="pa-modal-hd">
+    <div class="o2o-hd">
+      <div class="av" style="background:${pc.bg};color:${pc.c};width:40px;height:40px;border-radius:9px;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${ini(persona)}</div>
+      <div>
+        <div class="o2o-hd-name">1:1 con ${herrEsc(persona)}</div>
+        <div class="o2o-hd-meta">${fechaLabel} · Evaluador: ${herrEsc(evaluador)}</div>
+      </div>
+    </div>
+    <button class="pa-modal-close" onclick="o2oCloseModal()">&times;</button>
+  </div>`;
+
+  const tabsHtml=`<div class="o2o-tabs">
+    <button class="o2o-tab ${o2oActiveTab==='nuevo'?'on':''}" onclick="o2oSetTab('nuevo')">📝 Nueva sesión</button>
+    <button class="o2o-tab ${o2oActiveTab==='historial'?'on':''}" onclick="o2oSetTab('historial')">🕓 Historial (${hist.length})</button>
+  </div>`;
+
+  if(o2oActiveTab==='historial'){
+    inner.innerHTML=headerHtml+tabsHtml+o2oRenderHistorial(persona);
+    return;
+  }
+
+  const snapChips=[
+    `<span class="o2o-global-pill" id="o2oGlobalPill" onclick="o2oCycleGlobal()" title="Clic para fijarlo manualmente (ciclo: automático → Destacado → Regular → Atención)">⚪ Estatus general: calculando…</span>`,
+    d.actScore!=null?`<span class="chip" style="font-size:10.5px;padding:3px 9px;border-radius:10px;background:rgba(74,143,212,.12);color:#7fa8ff">Ava ${d.actScore}%</span>`:'',
+    d.repScore!=null?`<span class="chip" style="font-size:10.5px;padding:3px 9px;border-radius:10px;background:rgba(61,214,140,.1);color:#5ce8a6">Rep ${d.repScore}%</span>`:'',
+    d.udScore!=null?`<span class="chip" style="font-size:10.5px;padding:3px 9px;border-radius:10px;background:rgba(45,212,191,.1);color:#5de8dc">Udm ${d.udScore}%</span>`:'',
+    d.globalScore!=null?`<span class="chip" style="font-size:10.5px;padding:3px 9px;border-radius:10px;background:${scoreColor(d.globalScore)}22;color:${scoreColor(d.globalScore)}">Score global ${d.globalScore}% · ${scoreLabel(d.globalScore)}</span>`:'',
+  ].filter(Boolean).join('');
+
+  inner.innerHTML=headerHtml+tabsHtml+`
+    <div class="o2o-snap">${snapChips}</div>
+    <div class="o2o-body">
+      ${o2oSecPrevCommits(prevCommits, ultimo)}
+      ${o2oSecTexto(3,'logros','Logros y reconocimientos','¿Qué destacó en este periodo? ¿Algo que quieras reconocerle directamente?')}
+      ${o2oSecTexto(4,'retos','Retos y bloqueos','¿Qué se le ha complicado? ¿Dónde necesita apoyo o algo está bloqueado?')}
+      ${o2oSecTexto(5,'desarrollo','Desarrollo y crecimiento','Capacitación, Udemy, hacia dónde quiere crecer.')}
+      ${o2oSecClima()}
+      ${o2oSecTexto(7,'feedback','Feedback hacia arriba','Espacio para que hable de cómo ve al equipo, al liderazgo o el proceso.')}
+      ${o2oSecCompromisos()}
+      ${o2oSecNotas()}
+    </div>
+    <div class="o2o-ft">
+      <div class="o2o-ft-left">El estatus general se calcula solo según los semáforos que marques — clic en la pastilla de arriba para fijarlo a mano.</div>
+      <div style="display:flex;gap:8px">
+        <button class="o2o-btn1" onclick="o2oCloseModal()">Cancelar</button>
+        <button class="o2o-btn1 o2o-btn1-primary" onclick="o2oSave()">💾 Guardar 1:1</button>
+      </div>
+    </div>
+  `;
+  o2oRecalcGlobal();
+}
+
+function o2oSecPrevCommits(list, ultimo){
+  if(!list || !list.length){
+    return `<div class="o2o-sec">
+      <div class="o2o-sec-hd"><div class="o2o-sec-title"><span class="o2o-sec-num">2</span> Seguimiento de compromisos anteriores</div></div>
+      <div class="o2o-sec-hint">${ultimo?`No se registraron compromisos nuevos en el 1:1 anterior (${o2oFechaCorta(ultimo.fecha)}).`:'Este parece ser el primer 1:1 registrado con esta persona.'}</div>
+    </div>`;
+  }
+  const rows=list.map((c,i)=>`
+    <div class="o2o-prev-commit">
+      <div>
+        <div class="o2o-prev-commit-txt">${herrEsc(c.texto||'')}</div>
+        <div class="o2o-prev-commit-sub">Comprometido para: ${herrEsc(c.fecha||'—')}</div>
+      </div>
+      <div class="o2o-sem" id="o2o_prevsem_${i}" data-value="">
+        <button class="o2o-sem-btn sem-g" onclick="o2oPickPrevSem(${i},'g',this)" title="Cumplido">🟢</button>
+        <button class="o2o-sem-btn sem-y" onclick="o2oPickPrevSem(${i},'y',this)" title="Parcial">🟡</button>
+        <button class="o2o-sem-btn sem-r" onclick="o2oPickPrevSem(${i},'r',this)" title="No cumplido">🔴</button>
+      </div>
+    </div>`).join('');
+  return `<div class="o2o-sec">
+    <div class="o2o-sec-hd"><div class="o2o-sec-title"><span class="o2o-sec-num">2</span> Seguimiento de compromisos anteriores</div></div>
+    <div class="o2o-sec-hint">Revisa lo que se acordó en el 1:1 pasado (${ultimo?o2oFechaCorta(ultimo.fecha):''}) antes de seguir.</div>
+    <div class="o2o-sec-body">${rows}</div>
+  </div>`;
+}
+function o2oPickPrevSem(i,val,el){
+  const g=document.getElementById('o2o_prevsem_'+i);
+  if(!g) return;
+  g.querySelectorAll('.o2o-sem-btn').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on'); g.dataset.value=val;
+  o2oRecalcGlobal();
+}
+
+function o2oSecTexto(num,key,title,hint){
+  return `<div class="o2o-sec">
+    <div class="o2o-sec-hd">
+      <div class="o2o-sec-title"><span class="o2o-sec-num">${num}</span> ${title}</div>
+      <div class="o2o-sem" id="o2o_sem_${key}" data-value="">
+        <button class="o2o-sem-btn sem-g" onclick="o2oPickSem('${key}','g',this)" title="Bien">🟢</button>
+        <button class="o2o-sem-btn sem-y" onclick="o2oPickSem('${key}','y',this)" title="Atención media">🟡</button>
+        <button class="o2o-sem-btn sem-r" onclick="o2oPickSem('${key}','r',this)" title="Crítico">🔴</button>
+      </div>
+    </div>
+    <div class="o2o-sec-hint">${hint}</div>
+    <div class="o2o-sec-body"><textarea id="o2o_notas_${key}" placeholder="Escribe aquí lo que te comparta..."></textarea></div>
+  </div>`;
+}
+function o2oPickSem(key,val,el){
+  const g=document.getElementById('o2o_sem_'+key);
+  if(!g) return;
+  g.querySelectorAll('.o2o-sem-btn').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on'); g.dataset.value=val;
+  o2oRecalcGlobal();
+}
+
+function o2oSecClima(){
+  const qs=[
+    {key:'q1',label:'¿Cómo te sientes con tu carga de trabajo y el equipo en general?',hint:''},
+    {key:'q2',label:'¿Qué tan acompañada(o) te sientes por mi liderazgo?',hint:'Feedback, disponibilidad, apoyo cuando lo necesitas.'},
+    {key:'q3',label:'¿Tan clara tienes la dirección y lo que espero de ti?',hint:''},
+    {key:'q4',label:'¿Sientes que tu esfuerzo y logros se reconocen de forma justa?',hint:''},
+  ];
+  const rows=qs.map(q=>`
+    <div class="o2o-clima-q">
+      <div class="o2o-clima-q-txt">
+        <div class="o2o-clima-q-label">${q.label}</div>
+        ${q.hint?`<div class="o2o-clima-q-hint">${q.hint}</div>`:''}
+      </div>
+      <div class="o2o-clima-dots" id="o2o_clima_${q.key}" data-value="">
+        ${[1,2,3,4,5].map(n=>`<div class="o2o-clima-dot" onclick="o2oPickClima('${q.key}',${n},this)">${n}</div>`).join('')}
+      </div>
+    </div>`).join('');
+  return `<div class="o2o-sec">
+    <div class="o2o-sec-hd"><div class="o2o-sec-title"><span class="o2o-sec-num">6</span> Clima, satisfacción y liderazgo</div></div>
+    <div class="o2o-sec-hint">Escala 1 a 5 para cada pregunta — mide cómo está la persona, y también cómo te está viendo a ti como líder.</div>
+    <div class="o2o-sec-body">
+      ${rows}
+      <div class="o2o-clima-legend"><span>1 · Nada / Mal</span><span>5 · Mucho / Muy bien</span></div>
+      <div style="margin-top:10px"><textarea id="o2o_clima_comentario" placeholder="Comentario breve (opcional, aplica a las 4 preguntas de arriba)..."></textarea></div>
+    </div>
+  </div>`;
+}
+function o2oPickClima(key,val,el){
+  const g=document.getElementById('o2o_clima_'+key);
+  if(!g) return;
+  g.querySelectorAll('.o2o-clima-dot').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on'); g.dataset.value=String(val);
+}
+
+function o2oSecCompromisos(){
+  o2oCommitRowCount=0;
+  return `<div class="o2o-sec">
+    <div class="o2o-sec-hd"><div class="o2o-sec-title"><span class="o2o-sec-num">8</span> Compromisos y próximos pasos</div></div>
+    <div class="o2o-sec-hint">Qué se compromete a hacer, y para cuándo.</div>
+    <div class="o2o-sec-body" id="o2oCommitList">
+      <div class="o2o-commit-row" data-row="0">
+        <input type="text" placeholder="Descripción del compromiso" class="o2o-commit-txt">
+        <input type="text" placeholder="Fecha compromiso" class="o2o-commit-fecha">
+        <button class="o2o-rm-btn" onclick="this.closest('.o2o-commit-row').remove()">✕</button>
+      </div>
+      <div class="o2o-add-commit" onclick="o2oAddCommitRow()">+ Agregar compromiso</div>
+    </div>
+  </div>`;
+}
+function o2oAddCommitRow(){
+  o2oCommitRowCount++;
+  const list=document.getElementById('o2oCommitList');
+  if(!list) return;
+  const addBtn=list.querySelector('.o2o-add-commit');
+  const row=document.createElement('div');
+  row.className='o2o-commit-row'; row.dataset.row=String(o2oCommitRowCount);
+  row.innerHTML=`<input type="text" placeholder="Descripción del compromiso" class="o2o-commit-txt">
+    <input type="text" placeholder="Fecha compromiso" class="o2o-commit-fecha">
+    <button class="o2o-rm-btn" onclick="this.closest('.o2o-commit-row').remove()">✕</button>`;
+  if(addBtn) list.insertBefore(row, addBtn); else list.appendChild(row);
+}
+
+function o2oSecNotas(){
+  return `<div class="o2o-sec">
+    <div class="o2o-sec-hd"><div class="o2o-sec-title"><span class="o2o-sec-num">9</span> Notas libres</div></div>
+    <div class="o2o-sec-body"><textarea id="o2o_notas_libres" placeholder="Cualquier otra cosa que haya salido en la plática..."></textarea></div>
+  </div>`;
+}
+
+// ── Estatus global ─────────────────────────────────────────────────────────────
+function o2oRecalcGlobal(){
+  if(o2oGlobalOverride){ o2oUpdateGlobalPill(o2oGlobalOverride,true); return; }
+  const keys=['logros','retos','desarrollo','feedback'];
+  const vals=keys.map(k=>{ const g=document.getElementById('o2o_sem_'+k); return g?g.dataset.value:''; }).filter(Boolean);
+  document.querySelectorAll('[id^="o2o_prevsem_"]').forEach(g=>{ if(g.dataset.value) vals.push(g.dataset.value); });
+  let code='';
+  if(vals.includes('r')) code='r';
+  else if(vals.includes('y')) code='y';
+  else if(vals.includes('g')) code='g';
+  o2oUpdateGlobalPill(code,false);
+}
+function o2oUpdateGlobalPill(code,isManual){
+  const chip=document.getElementById('o2oGlobalPill');
+  if(!chip) return;
+  if(!code){ chip.textContent='⚪ Estatus general: calculando…'; chip.style.background='var(--surface2)'; chip.style.color='var(--dim)'; return; }
+  const colorMap={g:'#3dd68c',y:'#f5a623',r:'#ff5c5c'};
+  chip.textContent=`${o2oEstatusEmoji(code)} Estatus general: ${o2oEstatusLabel(code)}${isManual?' (fijado a mano)':''}`;
+  chip.style.background=colorMap[code]+'22'; chip.style.color=colorMap[code];
+}
+function o2oCycleGlobal(){
+  const order=[null,'g','y','r'];
+  const idx=order.indexOf(o2oGlobalOverride);
+  o2oGlobalOverride=order[(idx+1)%order.length];
+  o2oRecalcGlobal();
+}
+
+// ── Guardar ────────────────────────────────────────────────────────────────────
+async function o2oSave(){
+  if(!o2oCurrentUid || !o2oCurrentPersona) return;
+  const persona=o2oCurrentPersona;
+  const getVal=id=>{ const el=document.getElementById(id); return el?el.value.trim():''; };
+  const getSem=key=>{ const g=document.getElementById('o2o_sem_'+key); return g?(g.dataset.value||''):''; };
+  const getClima=key=>{ const g=document.getElementById('o2o_clima_'+key); return (g&&g.dataset.value)?+g.dataset.value:null; };
+
+  const hist=o2oHistFor(persona);
+  const ultimo=hist[0]||null;
+  const prevList=(ultimo&&ultimo.datos&&ultimo.datos.compromisosNuevos)||[];
+  const prevEstatus=[];
+  document.querySelectorAll('[id^="o2o_prevsem_"]').forEach(g=>{
+    const idx=parseInt(g.id.replace('o2o_prevsem_',''),10);
+    prevEstatus[idx]=g.dataset.value||'';
+  });
+  const compromisosPrev=prevList.map((c,i)=>({texto:c.texto, fecha:c.fecha, estatus:prevEstatus[i]||''}));
+
+  const compromisosNuevos=[];
+  document.querySelectorAll('#o2oCommitList .o2o-commit-row').forEach(row=>{
+    const txt=row.querySelector('.o2o-commit-txt')?.value.trim()||'';
+    const fecha=row.querySelector('.o2o-commit-fecha')?.value.trim()||'';
+    if(txt) compromisosNuevos.push({texto:txt, fecha});
+  });
+
+  const d=EVAL_STORE[o2oCurrentUid]||{};
+  const snapshot={ava:d.actScore??null, rep:d.repScore??null, udm:d.udScore??null, cal:d.calScore??null, global:d.globalScore??null, globalLabel:d.globalScore!=null?scoreLabel(d.globalScore):null};
+
+  const datos={
+    snapshot,
+    compromisosPrev,
+    logros:{estatus:getSem('logros'), notas:getVal('o2o_notas_logros')},
+    retos:{estatus:getSem('retos'), notas:getVal('o2o_notas_retos')},
+    desarrollo:{estatus:getSem('desarrollo'), notas:getVal('o2o_notas_desarrollo')},
+    feedback:{estatus:getSem('feedback'), notas:getVal('o2o_notas_feedback')},
+    clima:{q1:getClima('q1'), q2:getClima('q2'), q3:getClima('q3'), q4:getClima('q4'), comentario:getVal('o2o_clima_comentario')},
+    compromisosNuevos,
+    notas:getVal('o2o_notas_libres'),
+  };
+
+  let estatusGlobal=o2oGlobalOverride;
+  if(!estatusGlobal){
+    const sems=[datos.logros.estatus,datos.retos.estatus,datos.desarrollo.estatus,datos.feedback.estatus,...compromisosPrev.map(c=>c.estatus)].filter(Boolean);
+    estatusGlobal = sems.includes('r')?'r':sems.includes('y')?'y':sems.includes('g')?'g':'';
+  }
+
+  const fechaISO=new Date().toISOString().slice(0,10);
+  const evaluador=_miNombre||(_currentUser&&_currentUser.email)||'Administrador';
+  const rec={
+    id:'o2o_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),
+    persona, evaluador, fecha:fechaISO,
+    estatus_global: estatusGlobal||null,
+    datos: JSON.stringify(datos),
+  };
+
+  if(_supa){
+    try{
+      const {error}=await _supa.from('one_on_ones').insert(rec);
+      if(error){
+        console.error('❌ o2oSave Supabase:', error);
+        alert('Se guardó localmente en esta sesión, pero no se pudo guardar en Supabase, así que no se verá en el historial desde otros dispositivos.\n\nMotivo: '+(error.message||error.code||'desconocido')+'\n\nEsto normalmente pasa si la tabla "one_on_ones" no existe todavía en tu Supabase. Pídele a Claude que te ayude a crearla.');
+      }
+    }catch(e){
+      console.error('❌ o2oSave exception:', e);
+      alert('Ocurrió un error de conexión al guardar el 1:1 en Supabase. Se guardó solo localmente en esta sesión.');
+    }
+  }
+
+  const recLocal={...rec, datos};
+  O2O_ITEMS.unshift(recLocal);
+  try{ localStorage.setItem(O2O_LOCAL_KEY, JSON.stringify(O2O_ITEMS)); }catch(e){}
+
+  o2oDownloadPDF(recLocal);
+  o2oCloseModal();
+  if(typeof renderEvaluaciones==='function') renderEvaluaciones();
+}
+
+// ── Historial ──────────────────────────────────────────────────────────────────
+function o2oRenderHistorial(persona){
+  const hist=o2oHistFor(persona);
+  if(!hist.length){
+    return `<div class="pa-modal-body"><div style="text-align:center;padding:24px 0;color:var(--dim);font-size:12px">Todavía no hay sesiones de 1:1 registradas con ${herrEsc(persona)}.</div></div>`;
+  }
+  const rows=hist.map(rec=>{
+    const color=o2oEstatusColor(rec.estatus_global);
+    const nNew=(rec.datos&&rec.datos.compromisosNuevos)?rec.datos.compromisosNuevos.length:0;
+    const nPrev=(rec.datos&&rec.datos.compromisosPrev)?rec.datos.compromisosPrev.length:0;
+    const nPrevOk=(rec.datos&&rec.datos.compromisosPrev)?rec.datos.compromisosPrev.filter(c=>c.estatus==='g').length:0;
+    return `<div class="o2o-hist-item">
+      <div class="o2o-hist-dot" style="background:${color}"></div>
+      <div class="o2o-hist-date">${o2oFechaCorta(rec.fecha)}</div>
+      <div class="o2o-hist-sub">${o2oEstatusEmoji(rec.estatus_global)} ${o2oEstatusLabel(rec.estatus_global)}${nPrev?` · ${nPrevOk}/${nPrev} compromisos previos cumplidos`:''}${nNew?` · ${nNew} compromiso${nNew>1?'s':''} nuevo${nNew>1?'s':''}`:''}</div>
+      <div class="o2o-hist-actions">
+        <button class="o2o-hist-btn" onclick="o2oViewRecord('${rec.id}')">Ver</button>
+        <button class="o2o-hist-btn" onclick="o2oDownloadPDFById('${rec.id}')">⬇ PDF</button>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="pa-modal-body">${rows}</div>`;
+}
+
+function o2oViewRecord(id){
+  const rec=O2O_ITEMS.find(x=>x.id===id);
+  if(!rec) return;
+  const inner=document.getElementById('o2oModalInner');
+  if(!inner) return;
+  const dt=rec.datos||{};
+  const pc=pcolor(rec.persona);
+  const sem=code=>`${o2oEstatusEmoji(code)} ${o2oEstatusLabel(code)}`;
+  const secRO=(num,title,obj)=> obj?`<div class="o2o-sec">
+      <div class="o2o-sec-hd"><div class="o2o-sec-title"><span class="o2o-sec-num">${num}</span> ${title}</div><div style="font-size:11px">${obj.estatus?sem(obj.estatus):''}</div></div>
+      <div class="o2o-sec-body"><div style="font-size:12px;color:var(--text);white-space:pre-wrap">${herrEsc(obj.notas||'—')}</div></div>
+    </div>`:'';
+  const prevRows=(dt.compromisosPrev||[]).map(c=>`<div class="o2o-prev-commit"><div><div class="o2o-prev-commit-txt">${herrEsc(c.texto)}</div><div class="o2o-prev-commit-sub">Para: ${herrEsc(c.fecha||'—')}</div></div><div style="font-size:13px;flex-shrink:0">${c.estatus?sem(c.estatus):'—'}</div></div>`).join('');
+  const newRows=(dt.compromisosNuevos||[]).map(c=>`<div class="o2o-prev-commit"><div class="o2o-prev-commit-txt">${herrEsc(c.texto)}</div><div class="o2o-prev-commit-sub" style="margin-top:2px">${herrEsc(c.fecha||'—')}</div></div>`).join('');
+  const climaLabels={q1:'General',q2:'Acompañamiento de liderazgo',q3:'Claridad de dirección',q4:'Reconocimiento'};
+  const climaRows=dt.clima?Object.keys(climaLabels).map(k=>dt.clima[k]!=null?`<div style="display:flex;justify-content:space-between;font-size:11.5px;padding:4px 0"><span style="color:var(--muted)">${climaLabels[k]}</span><span style="font-weight:700;color:#2dd4bf">${dt.clima[k]}/5</span></div>`:'').join(''):'';
+
+  inner.innerHTML=`
+    <div class="pa-modal-hd">
+      <div class="o2o-hd">
+        <div class="av" style="background:${pc.bg};color:${pc.c};width:40px;height:40px;border-radius:9px;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${ini(rec.persona)}</div>
+        <div>
+          <div class="o2o-hd-name">1:1 con ${herrEsc(rec.persona)} · ${o2oFechaCorta(rec.fecha)}</div>
+          <div class="o2o-hd-meta">Evaluador: ${herrEsc(rec.evaluador||'—')} · ${sem(rec.estatus_global)}</div>
+        </div>
+      </div>
+      <button class="pa-modal-close" onclick="o2oSetTab('historial')">&times;</button>
+    </div>
+    <div class="o2o-body" style="padding-top:16px">
+      <div class="o2o-sec"><div class="o2o-sec-hd"><div class="o2o-sec-title"><span class="o2o-sec-num">2</span> Seguimiento de compromisos anteriores</div></div><div class="o2o-sec-body">${prevRows||'<div style="font-size:11px;color:var(--dim)">— sin compromisos previos —</div>'}</div></div>
+      ${secRO(3,'Logros y reconocimientos',dt.logros)}
+      ${secRO(4,'Retos y bloqueos',dt.retos)}
+      ${secRO(5,'Desarrollo y crecimiento',dt.desarrollo)}
+      <div class="o2o-sec"><div class="o2o-sec-hd"><div class="o2o-sec-title"><span class="o2o-sec-num">6</span> Clima, satisfacción y liderazgo</div></div><div class="o2o-sec-body">${climaRows}${dt.clima&&dt.clima.comentario?`<div style="font-size:11.5px;color:var(--text);margin-top:8px;white-space:pre-wrap">${herrEsc(dt.clima.comentario)}</div>`:''}</div></div>
+      ${secRO(7,'Feedback hacia arriba',dt.feedback)}
+      <div class="o2o-sec"><div class="o2o-sec-hd"><div class="o2o-sec-title"><span class="o2o-sec-num">8</span> Compromisos y próximos pasos</div></div><div class="o2o-sec-body">${newRows||'<div style="font-size:11px;color:var(--dim)">— sin compromisos nuevos —</div>'}</div></div>
+      ${dt.notas?`<div class="o2o-sec"><div class="o2o-sec-hd"><div class="o2o-sec-title"><span class="o2o-sec-num">9</span> Notas libres</div></div><div class="o2o-sec-body"><div style="font-size:12px;color:var(--text);white-space:pre-wrap">${herrEsc(dt.notas)}</div></div></div>`:''}
+    </div>
+    <div class="o2o-ft">
+      <div class="o2o-ft-left">Sesión de solo lectura.</div>
+      <div style="display:flex;gap:8px">
+        <button class="o2o-btn1" onclick="o2oSetTab('historial')">← Volver al historial</button>
+        <button class="o2o-btn1 o2o-btn1-primary" onclick="o2oDownloadPDFById('${rec.id}')">⬇ Descargar PDF</button>
+      </div>
+    </div>
+  `;
+}
+
+// ── PDF (mismo patrón que generatePDF: descarga HTML que imprime solo al abrirlo) ──
+function o2oDownloadPDFById(id){
+  const rec=O2O_ITEMS.find(x=>x.id===id);
+  if(!rec){ alert('No se encontró ese registro de 1:1.'); return; }
+  o2oDownloadPDF(rec);
+}
+function o2oDownloadPDF(rec){
+  const dt=rec.datos||{};
+  const ac=pcolor(rec.persona).c;
+  const navy='#0F2044', red='#DC2626', amber='#D97706', green='#16A34A', teal='#0891B2', border='#E2E8F0', text='#1E293B', muted='#64748B';
+  const semColor={g:green,y:amber,r:red};
+  const semLbl={g:'Bien',y:'Atención',r:'Crítico'};
+  const scHex=semColor[rec.estatus_global]||muted;
+  const scLbl=o2oEstatusLabel(rec.estatus_global);
+  const fechaFmt=o2oFechaCorta(rec.fecha);
+  const esc=s=>String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  function secBlock(title,obj){
+    if(!obj) return '';
+    const color=semColor[obj.estatus]||muted;
+    const lbl=obj.estatus?semLbl[obj.estatus]:'Sin marcar';
+    return `<div class="section-wrap">
+      <div class="section-label" style="display:flex;justify-content:space-between;align-items:center">
+        <span>${title.toUpperCase()}</span>
+        <span style="padding:2px 8px;border-radius:8px;background:${color}18;color:${color};font-weight:700;font-size:9px">${lbl}</span>
+      </div>
+      <div style="padding:10px 12px;font-size:11.5px;color:${text};line-height:1.7;white-space:pre-wrap">${esc(obj.notas||'—')}</div>
+    </div>`;
+  }
+  const prevRows=(dt.compromisosPrev||[]).map(c=>{
+    const color=semColor[c.estatus]||muted, lbl=c.estatus?semLbl[c.estatus]:'Sin marcar';
+    return `<tr style="border-bottom:1px solid ${border}">
+      <td style="padding:6px 8px;font-size:11px;color:${text}">${esc(c.texto)}</td>
+      <td style="padding:6px 8px;font-size:10px;color:${muted};width:90px">${esc(c.fecha||'—')}</td>
+      <td style="padding:6px 8px;text-align:center;width:90px"><span style="font-size:10px;padding:2px 8px;border-radius:9px;background:${color}18;color:${color};font-weight:700">${lbl}</span></td>
+    </tr>`;
+  }).join('');
+  const newRows=(dt.compromisosNuevos||[]).map(c=>`<tr style="border-bottom:1px solid ${border}">
+    <td style="padding:6px 8px;font-size:11px;color:${text}">${esc(c.texto)}</td>
+    <td style="padding:6px 8px;font-size:10px;color:${muted};width:120px">${esc(c.fecha||'—')}</td>
+  </tr>`).join('');
+  const climaLabels={q1:'General',q2:'Acompañamiento de liderazgo',q3:'Claridad de dirección',q4:'Reconocimiento'};
+  const climaRows=dt.clima?Object.keys(climaLabels).map(k=>dt.clima[k]!=null?`<tr style="border-bottom:1px solid ${border}"><td style="padding:5px 8px;font-size:11px;color:${text}">${climaLabels[k]}</td><td style="padding:5px 8px;text-align:center;font-size:12px;font-weight:700;color:${teal}">${dt.clima[k]}/5</td></tr>`:'').join(''):'';
+
+  const html=`<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8">
+<title>1:1 · ${rec.persona} · ${fechaFmt}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#fff;color:${text};-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .page{width:210mm;margin:0 auto;padding:14mm 16mm 12mm;}
+  .topbar{background:${navy};color:#fff;padding:10px 20px;display:flex;justify-content:space-between;align-items:center;}
+  .topbar-l{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.9;}
+  .topbar-r{font-size:11px;opacity:.65;}
+  .header{display:flex;align-items:center;gap:18px;padding:20px 0 16px;border-bottom:2px solid ${navy};}
+  .av{width:52px;height:52px;border-radius:11px;background:${ac};color:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:800;flex-shrink:0;}
+  .h-name{font-size:20px;font-weight:800;color:${navy};}
+  .h-sub{font-size:12px;color:${muted};margin-top:3px;}
+  .score-box{text-align:right;flex-shrink:0;}
+  .score-lbl{font-size:13px;font-weight:800;color:${scHex};letter-spacing:.04em;text-transform:uppercase;}
+  .section-wrap{margin-bottom:14px;border:1px solid ${border};border-radius:8px;overflow:hidden;}
+  .section-label{font-size:9px;font-weight:700;letter-spacing:.1em;padding:8px 12px;background:#F8FAFC;border-bottom:1px solid ${border};}
+  table{width:100%;border-collapse:collapse;font-family:'Inter','Segoe UI',Arial,sans-serif;}
+  .footer{margin-top:16px;padding-top:10px;border-top:1px solid ${border};display:flex;justify-content:space-between;}
+  .footer span{font-size:10px;color:${muted};}
+  @media print{ .page{padding:8mm 12mm;} }
+</style>
+</head>
+<body onload="setTimeout(function(){window.print();},500)">
+<div class="topbar">
+  <span class="topbar-l">C3NTRO Telecom · Coordinación de Ingeniería</span>
+  <span class="topbar-r">Minuta de 1:1 · Confidencial</span>
+</div>
+<div class="page">
+  <div class="header">
+    <div class="av">${ini(rec.persona)}</div>
+    <div style="flex:1;min-width:0">
+      <div class="h-name">1:1 con ${esc(rec.persona)}</div>
+      <div class="h-sub">${fechaFmt} · Evaluador: ${esc(rec.evaluador||'—')}</div>
+    </div>
+    <div class="score-box"><div class="score-lbl">${o2oEstatusEmoji(rec.estatus_global)} ${scLbl}</div></div>
+  </div>
+
+  <div class="section-wrap">
+    <div class="section-label">SEGUIMIENTO DE COMPROMISOS ANTERIORES</div>
+    ${prevRows?`<table><tbody>${prevRows}</tbody></table>`:`<div style="padding:10px 12px;font-size:11px;color:${muted}">— sin compromisos de una sesión anterior —</div>`}
+  </div>
+
+  ${secBlock('Logros y reconocimientos', dt.logros)}
+  ${secBlock('Retos y bloqueos', dt.retos)}
+  ${secBlock('Desarrollo y crecimiento', dt.desarrollo)}
+
+  <div class="section-wrap">
+    <div class="section-label">CLIMA, SATISFACCIÓN Y LIDERAZGO</div>
+    ${climaRows?`<table><tbody>${climaRows}</tbody></table>`:''}
+    ${dt.clima&&dt.clima.comentario?`<div style="padding:10px 12px;font-size:11px;color:${text};line-height:1.6">${esc(dt.clima.comentario)}</div>`:''}
+  </div>
+
+  ${secBlock('Feedback hacia arriba', dt.feedback)}
+
+  <div class="section-wrap">
+    <div class="section-label">COMPROMISOS Y PRÓXIMOS PASOS</div>
+    ${newRows?`<table><tbody>${newRows}</tbody></table>`:`<div style="padding:10px 12px;font-size:11px;color:${muted}">— sin compromisos nuevos —</div>`}
+  </div>
+
+  ${dt.notas?`<div class="section-wrap"><div class="section-label">NOTAS LIBRES</div><div style="padding:10px 12px;font-size:11px;color:${text};line-height:1.6;white-space:pre-wrap">${esc(dt.notas)}</div></div>`:''}
+
+  <div class="footer">
+    <span>Generado el ${new Date().toLocaleDateString('es-MX',{year:'numeric',month:'long',day:'numeric'})}</span>
+    <span>C3NTRO · Documento confidencial de recursos humanos</span>
+  </div>
+</div>
+</body></html>`;
+
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`1a1_${String(rec.persona).replace(/\s+/g,'_')}_${rec.fecha}.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+}
+
 function toggleEval(p){
   evalExpanded[p]=!evalExpanded[p];
   renderEvaluaciones();
@@ -15111,6 +15669,7 @@ function enterDashboard(){
     typeof evalLoadPesos==='function' ? evalLoadPesos() : Promise.resolve(),
     typeof justLoad==='function' ? justLoad() : Promise.resolve(),
     typeof supaLoadAll==='function' ? supaLoadAll() : Promise.resolve(),
+    typeof o2oLoadFromSupabase==='function' ? o2oLoadFromSupabase() : Promise.resolve(),
     (async()=>{
       if(!_supa) return;
       try{
@@ -15318,21 +15877,11 @@ window.addEventListener('load', async function(){
 const SRV_KEY   = 'srv_items_v1';
 const SRV_TIPOS_KEY = 'srv_tipos_v1';
 const SRV_STATUS = [
-  { key:'COT Firmada',   cls:'srv-b-cot',  dot:'#8b5cf6' },
-  { key:'OS Solicitada', cls:'srv-b-sol',  dot:'#378ADD' },
-  { key:'OS Resuelta',   cls:'srv-b-oc',   dot:'#BA7517' },
-  { key:'En Validación', cls:'srv-b-proc', dot:'#d4890a' },
-  { key:'Liberada',      cls:'srv-b-ent',  dot:'#3dd68c' },
+  { key:'Solicitado',   cls:'srv-b-sol',  dot:'#378ADD' },
+  { key:'OS Generada',  cls:'srv-b-oc',   dot:'#BA7517' },
+  { key:'En proceso',   cls:'srv-b-proc', dot:'#d4890a' },
+  { key:'Entregado',    cls:'srv-b-ent',  dot:'#3dd68c' },
 ];
-// Compatibilidad: mapea los estatus antiguos (antes de este cambio) a los nuevos nombres,
-// para que registros ya guardados en Supabase/localStorage se sigan viendo bien.
-const SRV_STATUS_MIGRATE = {
-  'Solicitado':  'OS Solicitada',
-  'OS Generada': 'OS Resuelta',
-  'En proceso':  'En Validación',
-  'Entregado':   'Liberada',
-};
-function srvNormEstatus(e){ return SRV_STATUS_MIGRATE[e] || e || 'COT Firmada'; }
 const SRV_TIPOS_BASE = ['Topografía','Geotecnia','Levantamiento físico'];
 const ESTADOS_MX = ['Aguascalientes','Baja California','Baja California Sur','Campeche','Chiapas','Chihuahua','Ciudad de México','Coahuila','Colima','Durango','Estado de México','Guanajuato','Guerrero','Hidalgo','Jalisco','Michoacán','Morelos','Nayarit','Nuevo León','Oaxaca','Puebla','Querétaro','Quintana Roo','San Luis Potosí','Sinaloa','Sonora','Tabasco','Tamaulipas','Tlaxcala','Veracruz','Yucatán','Zacatecas'];
 
@@ -15346,7 +15895,6 @@ let srvLinkedActivity = null;
 function srvLoad(){
   try{ SRV_ITEMS = JSON.parse(localStorage.getItem(SRV_KEY)||'[]'); }catch(e){ SRV_ITEMS=[]; }
   try{ SRV_TIPOS_CUSTOM = JSON.parse(localStorage.getItem(SRV_TIPOS_KEY)||'[]'); }catch(e){ SRV_TIPOS_CUSTOM=[]; }
-  SRV_ITEMS.forEach(s=>{ s.estatus = srvNormEstatus(s.estatus); });
 }
 function srvSave(){
   localStorage.setItem(SRV_KEY, JSON.stringify(SRV_ITEMS));
@@ -15368,11 +15916,10 @@ function srvRenderKpis(){
   const bySt = k => SRV_ITEMS.filter(s=>s.estatus===k).length;
   el.innerHTML = `
     <div class="srv-kpi"><div class="val">${total}</div><div class="lbl">Total</div></div>
-    <div class="srv-kpi cot"><div class="val">${bySt('COT Firmada')}</div><div class="lbl">COT Firmada</div><div class="tip">Lista para solicitar OS</div></div>
-    <div class="srv-kpi sol"><div class="val">${bySt('OS Solicitada')}</div><div class="lbl">OS Solicitada</div><div class="tip">En espera de OS</div></div>
-    <div class="srv-kpi oc"><div class="val">${bySt('OS Resuelta')}</div><div class="lbl">OS Resuelta</div><div class="tip">Por arrancar</div></div>
-    <div class="srv-kpi proc"><div class="val">${bySt('En Validación')}</div><div class="lbl">En Validación</div><div class="tip">Info en revisión</div></div>
-    <div class="srv-kpi ent"><div class="val">${bySt('Liberada')}</div><div class="lbl">Liberada</div><div class="tip">Entregable liberado</div></div>`;
+    <div class="srv-kpi sol"><div class="val">${bySt('Solicitado')}</div><div class="lbl">Solicitado</div><div class="tip">En espera de OS</div></div>
+    <div class="srv-kpi oc"><div class="val">${bySt('OS Generada')}</div><div class="lbl">OS Generada</div><div class="tip">Por arrancar</div></div>
+    <div class="srv-kpi proc"><div class="val">${bySt('En proceso')}</div><div class="lbl">En proceso</div><div class="tip">Actividades en curso</div></div>
+    <div class="srv-kpi ent"><div class="val">${bySt('Entregado')}</div><div class="lbl">Entregado</div><div class="tip">Info recibida</div></div>`;
 }
 
 function srvRenderFilters(){
@@ -15401,14 +15948,14 @@ function srvRenderTable(){
   if(srvFiltroEstado!=='todos') items = items.filter(s=>s.estado===srvFiltroEstado);
 
   if(!items.length){
-    tbody.innerHTML = `<tr><td colspan="14" style="text-align:center;padding:28px;color:var(--dim)">Sin registros${srvFiltroTipo!=='todos'||srvFiltroEstado!=='todos'?' con los filtros actuales':' — agrega una nueva solicitud'}.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:28px;color:var(--dim)">Sin registros${srvFiltroTipo!=='todos'||srvFiltroEstado!=='todos'?' con los filtros actuales':' — agrega una nueva solicitud'}.</td></tr>`;
     return;
   }
 
   tbody.innerHTML = items.map(s=>{
     const sc = SRV_STATUS.find(x=>x.key===s.estatus)||SRV_STATUS[0];
     const tipoClass = s.tipo==='Topografía'?'srv-t-topo':s.tipo==='Geotecnia'?'srv-t-geo':s.tipo==='Levantamiento físico'?'srv-t-lev':'srv-t-otro';
-    const overdue = s.fechaEntrega && s.estatus!=='Liberada' && s.fechaEntrega < today;
+    const overdue = s.fechaEntrega && s.estatus!=='Entregado' && s.fechaEntrega < today;
 
     // Actividad vinculada
     const linked = s.linkedId ? PA_ITEMS.find(a=>a.id===s.linkedId) : null;
@@ -15416,16 +15963,10 @@ function srvRenderTable(){
       ? `<span class="srv-folio-link" onclick="srvGoToActivity('${s.linkedId}')" title="${(linked.actividad||'').replace(/"/g,'&quot;')}">${linked.folio||linked.tipo}</span>`
       : `<span class="srv-unlinked" onclick="srvOpenLinkPicker('${s.id}')">+ ligar</span>`;
 
-    // Links COT, OS y Entregable
-    const cotCell = s.linkCOT
-      ? `<a class="srv-link" href="${s.linkCOT}" target="_blank">🧾 COT</a>`
-      : `<span class="srv-add-link" onclick="srvInlineLink('${s.id}','linkCOT')">+ agregar</span>`;
+    // Links OS y Entregable
     const osCell = s.linkOS
       ? `<a class="srv-link" href="${s.linkOS}" target="_blank">📄 OS</a>`
       : `<span class="srv-add-link" onclick="srvInlineLink('${s.id}','linkOS')">+ agregar</span>`;
-    const valCell = s.linkValidacion
-      ? `<a class="srv-link" href="${s.linkValidacion}" target="_blank">✅ Val</a>`
-      : `<span class="srv-add-link" onclick="srvInlineLink('${s.id}','linkValidacion')">+ agregar</span>`;
     const entCell = s.linkEntregable
       ? `<a class="srv-link" href="${s.linkEntregable}" target="_blank">📁 Drive</a>`
       : `<span class="srv-add-link" onclick="srvInlineLink('${s.id}','linkEntregable')">+ agregar</span>`;
@@ -15440,9 +15981,7 @@ function srvRenderTable(){
       <td style="font-size:11px;white-space:nowrap;color:var(--muted)">${fmtD(s.fechaInicio)}</td>
       <td style="font-size:11px;white-space:nowrap${overdue?' class="srv-overdue"':''}">${fmtD(s.fechaEntrega)}${overdue?' ▲':''}</td>
       <td><span class="srv-badge ${sc.cls}"><span style="width:6px;height:6px;border-radius:50%;background:${sc.dot};flex-shrink:0"></span>${s.estatus}</span></td>
-      <td>${cotCell}</td>
       <td>${osCell}</td>
-      <td>${valCell}</td>
       <td>${entCell}</td>
       <td style="white-space:nowrap">
         <button class="et-act-btn" onclick="srvOpenModal('${s.id}')" title="Editar">✎</button>
@@ -15459,8 +15998,7 @@ function srvGoToActivity(id){
 }
 
 function srvInlineLink(id, field){
-  const labels = { linkCOT:'URL de la Cotización (COT):', linkOS:'URL de la Orden de Servicio:', linkValidacion:'URL de validación:', linkEntregable:'URL del entregable en Drive:' };
-  const url = prompt(labels[field]||'URL:','');
+  const url = prompt(field==='linkOS'?'URL de la Orden de Servicio:':'URL del entregable en Drive:','');
   if(url===null) return;
   const s = SRV_ITEMS.find(x=>x.id===id); if(!s) return;
   s[field]=url.trim(); srvSave(); srvRenderTable();
@@ -15542,16 +16080,8 @@ function srvBuildModal(s){
         <input type="date" id="srvFechaEntrega" value="${s?.fechaEntrega||''}">
       </div>
       <div class="srv-field">
-        <label>Link Cotización (COT)</label>
-        <input type="url" id="srvLinkCOT" value="${s?.linkCOT||''}" placeholder="https://…">
-      </div>
-      <div class="srv-field">
         <label>Link Orden de Servicio</label>
         <input type="url" id="srvLinkOS" value="${s?.linkOS||''}" placeholder="https://…">
-      </div>
-      <div class="srv-field">
-        <label>Link de Validación</label>
-        <input type="url" id="srvLinkValidacion" value="${s?.linkValidacion||''}" placeholder="https://…">
       </div>
       <div class="srv-field">
         <label>Link entregable en Drive</label>
@@ -15630,13 +16160,11 @@ function srvSaveModal(){
     tipo:         tipoFinal,
     estado:       document.getElementById('srvEstado')?.value||'',
     km:           document.getElementById('srvKm')?.value||'',
-    estatus:      document.getElementById('srvEstatus')?.value||'COT Firmada',
+    estatus:      document.getElementById('srvEstatus')?.value||'Solicitado',
     fechaSolicitud: document.getElementById('srvFechaSolicitud')?.value||'',
     fechaInicio:  document.getElementById('srvFechaInicio')?.value||'',
     fechaEntrega: document.getElementById('srvFechaEntrega')?.value||'',
-    linkCOT:      document.getElementById('srvLinkCOT')?.value?.trim()||'',
     linkOS:       document.getElementById('srvLinkOS')?.value?.trim()||'',
-    linkValidacion: document.getElementById('srvLinkValidacion')?.value?.trim()||'',
     linkEntregable: document.getElementById('srvLinkEntregable')?.value?.trim()||'',
     notas:        document.getElementById('srvNotas')?.value||'',
     linkedId:     srvLinkedActivity?.id||'',
@@ -16566,7 +17094,7 @@ function notifFmtTime(iso){
 function notifShowToast(n){
   const wrap = document.getElementById('notifToastWrap'); if(!wrap) return;
   const div = document.createElement('div');
-  div.className = 'notif-toast'+(n.tipo==='rendimiento_bajo'?' warn':'');
+  div.className = 'notif-toast';
   div.id = 'toast_'+n.id;
   div.innerHTML = `
     <div class="notif-toast-icon">${n.icon}</div>
@@ -16610,7 +17138,7 @@ function notifRenderPanel(){
     return;
   }
   list.innerHTML = NOTIFS.map(n=>`
-    <div class="notif-item${n.read?'':' unread'}${n.tipo==='rendimiento_bajo'?' warn':''}" onclick="notifMarkRead('${n.id}')">
+    <div class="notif-item${n.read?'':' unread'}" onclick="notifMarkRead('${n.id}')">
       <div class="notif-item-icon">${n.icon}</div>
       <div class="notif-item-body">
         <div class="notif-item-title">${n.title}</div>
@@ -16734,10 +17262,9 @@ async function supaSyncServicios(){
     if(!SRV_ITEMS.length) return;
     const rows = SRV_ITEMS.map(s=>({
       id:s.id, proyecto:s.proyecto||null, tipo:s.tipo||null,
-      estado:s.estado||null, km:s.km||null, estatus:s.estatus||'COT Firmada',
+      estado:s.estado||null, km:s.km||null, estatus:s.estatus||'Solicitado',
       fecha_solicitud:s.fechaSolicitud||null, fecha_inicio:s.fechaInicio||null,
-      fecha_entrega:s.fechaEntrega||null, link_cot:s.linkCOT||null, link_os:s.linkOS||null,
-      link_validacion:s.linkValidacion||null,
+      fecha_entrega:s.fechaEntrega||null, link_os:s.linkOS||null,
       link_entregable:s.linkEntregable||null, notas:s.notas||null,
       linked_id:s.linkedId||null, updated_at:new Date().toISOString(),
     }));
@@ -17750,10 +18277,9 @@ async function supaLoadAll(){
     if(srvs && srvs.length){
       SRV_ITEMS = srvs.map(s=>({
         id:s.id, proyecto:s.proyecto||'', tipo:s.tipo||'',
-        estado:s.estado||'', km:s.km||'', estatus:srvNormEstatus(s.estatus),
+        estado:s.estado||'', km:s.km||'', estatus:s.estatus||'Solicitado',
         fechaSolicitud:s.fecha_solicitud||'', fechaInicio:s.fecha_inicio||'',
-        fechaEntrega:s.fecha_entrega||'', linkCOT:s.link_cot||'', linkOS:s.link_os||'',
-        linkValidacion:s.link_validacion||'',
+        fechaEntrega:s.fecha_entrega||'', linkOS:s.link_os||'',
         linkEntregable:s.link_entregable||'', notas:s.notas||'',
         linkedId:s.linked_id||'',
       }));
@@ -17967,10 +18493,9 @@ async function supaMigrateFromLocal(){
     if(typeof SRV_ITEMS!=='undefined' && SRV_ITEMS.length){
       const rows = SRV_ITEMS.map(s=>({
         id:s.id, proyecto:s.proyecto||null, tipo:s.tipo||null,
-        estado:s.estado||null, km:s.km||null, estatus:s.estatus||'COT Firmada',
+        estado:s.estado||null, km:s.km||null, estatus:s.estatus||'Solicitado',
         fecha_solicitud:s.fechaSolicitud||null, fecha_inicio:s.fechaInicio||null,
-        fecha_entrega:s.fechaEntrega||null, link_cot:s.linkCOT||null, link_os:s.linkOS||null,
-        link_validacion:s.linkValidacion||null,
+        fecha_entrega:s.fechaEntrega||null, link_os:s.linkOS||null,
         link_entregable:s.linkEntregable||null, notas:s.notas||null,
         linked_id:s.linkedId||null,
       }));
@@ -18364,5 +18889,10 @@ supaTestConnection().then(()=>{
   </div>
 </div>
 <div class="ho-toast" id="hoToast">⚠️ <span id="hoToastMsg"></span></div>
+
+<!-- MODAL: 1:1 (evaluaciones) -->
+<div class="pa-modal-bg" id="o2oModalBg" onclick="if(event.target===this)o2oCloseModal()">
+  <div class="pa-modal o2o-modal" id="o2oModalInner" onclick="event.stopPropagation()"></div>
+</div>
 
 </body></html>
