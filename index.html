@@ -17192,10 +17192,11 @@ async function calRevSaveCritico(rev){ // guardado con alerta visible — se usa
 async function calRevRecargarDeSupabase(){
   if(!_supa) return;
   try{
+    const localSnapshot = CAL_REVISIONES.slice(); // lo que ya había en memoria/localStorage antes de traer de Supabase
     const {data, error} = await _supa.from('revisiones_calidad').select('*');
     if(error){ console.warn('calRevRecargar error:', error); return; }
     if(data){
-      CAL_REVISIONES = data.map(r=>({
+      const remoteRevs = data.map(r=>({
         id:r.id, actividadId:r.actividad_id, proyecto:r.proyecto||'', folio:r.folio||'', tipo:r.tipo||'',
         proyectista:r.proyectista||'', validador:r.validador||'', tipoRevision:r.tipo_revision||'',
         dependencia:r.dependencia||'', kmTotales:r.km_totales||'',
@@ -17205,7 +17206,20 @@ async function calRevRecargarDeSupabase(){
         observaciones: calParseObservacionesRaw(r.observaciones), estatus:r.estatus||'en_progreso', resultado:r.resultado||null,
         fechaCompletado:r.fecha_completado||'', completadoPor:r.completado_por||'',
       }));
+      const remoteIds = new Set(remoteRevs.map(r=>r.id));
+      // Si alguna revisión existe en memoria/localStorage pero NO llegó a Supabase (por ejemplo,
+      // por un error de permisos ya corregido), no la descartamos: la conservamos en la lista y
+      // reintentamos guardarla ahora que puede que el problema ya esté resuelto.
+      const pendientes = localSnapshot.filter(r=>r && r.id && !remoteIds.has(r.id));
+      CAL_REVISIONES = remoteRevs.concat(pendientes);
       calRevSaveLocal();
+      if(pendientes.length && (_userRole==='admin'||_userRole==='jefe')){
+        console.warn(`⚠ ${pendientes.length} revisión(es) de calidad no estaban sincronizadas con Supabase. Reintentando guardarlas...`);
+        for(const rev of pendientes){
+          const ok = await calRevSaveCritico(rev);
+          if(ok) console.log('✅ Revisión de calidad '+rev.id+' sincronizada correctamente tras reintento.');
+        }
+      }
     }
   }catch(e){ console.warn('calRevRecargar exception:', e); }
 }
