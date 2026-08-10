@@ -5886,6 +5886,7 @@ function cronoToggle(actId){
 
 // ── Modal agregar subtarea ──
 let cronoModalActId = null;
+let cronoCorrNuevas = []; // correcciones nuevas capturadas a mano (sin entrega anterior) dentro del panel de corrección dinámica
 // ── Subtarea simplificada para actividades de Trabajo Operativo ──
 // Solo pide descripción + tiempo de entrega en días; el avance se reporta como % acumulado, no unidades.
 function cronoAddSubtareaOperativaModal(actId){
@@ -6014,6 +6015,56 @@ function cronoAddSubtareaModal(actId){
         Marca cuáles de las subtareas ya entregadas necesitan corrección. Por cada una marcada se crea una nueva subtarea "Corrección — [nombre]" con la misma cantidad y rendimiento del original, lista para reportar de nuevo.
       </div>
       <div id="cronoCorrLista" style="margin-bottom:8px"></div>
+
+      <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:12px">
+        <div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">O agrega una corrección nueva (sin entrega anterior)</div>
+        <div id="cronoCorrNuevasLista" style="margin-bottom:8px"></div>
+        <button type="button" id="cronoCorrNuevaAddBtn" class="pa-btn pa-btn-ghost" style="font-size:11px;padding:6px 12px" onclick="cronoCorrNuevaFormToggle()">+ Agregar corrección nueva</button>
+
+        <div id="cronoCorrNuevaForm" style="display:none;margin-top:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
+          <div style="margin-bottom:10px">
+            <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Nombre de la corrección</label>
+            <input id="cronoCorrNvNombre" type="text" placeholder="Ej. Ajuste de coordenadas faltantes"
+              style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+            <div style="font-size:10px;color:var(--dim);margin-top:3px">Se va a guardar como "Corrección — [este nombre]"</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+              <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Unidad</label>
+              <input id="cronoCorrNvUnidad" type="text" placeholder="km, cortes, AP..."
+                style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Cantidad total</label>
+              <input id="cronoCorrNvCantidad" type="number" min="0.1" step="0.1" placeholder="0"
+                style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+            </div>
+          </div>
+          <div style="margin-bottom:10px">
+            <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:6px">Tipo de rendimiento</label>
+            <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden" id="cronoCorrNvTipoWrap">
+              <button type="button" id="btnCorrNvTipoUnidDia" onclick="cronoCorrNuevaSetTipo('unidades_por_dia')"
+                class="crono-tipo-btn crono-tipo-on" style="flex:1;padding:6px 10px;font-size:11px;border:none;cursor:pointer;transition:all .15s">
+                📊 Unidades/día
+              </button>
+              <button type="button" id="btnCorrNvTipoDiaUnid" onclick="cronoCorrNuevaSetTipo('dias_por_unidad')"
+                class="crono-tipo-btn" style="flex:1;padding:6px 10px;font-size:11px;border:none;cursor:pointer;transition:all .15s">
+                📅 Días/unidad
+              </button>
+            </div>
+            <input type="hidden" id="cronoCorrNvTipo" value="unidades_por_dia">
+          </div>
+          <div style="margin-bottom:12px">
+            <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px" id="cronoCorrNvRendLabel">Rendimiento (unidades/día)</label>
+            <input id="cronoCorrNvRend" type="number" min="0.1" step="0.1" placeholder="0"
+              style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button type="button" class="pa-btn pa-btn-ghost" onclick="cronoCorrNuevaFormToggle()">Cancelar</button>
+            <button type="button" class="pa-btn pa-btn-primary" onclick="cronoCorrNuevaAgregar()">Agregar a la lista</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div id="cronoFormNormal">
@@ -6162,16 +6213,90 @@ function cronoRenderCorrLista(){
   const subtareas = (item?.subtareas||[]).filter(st=>!st.esCorreccion); // no listar correcciones previas como base
   if(!subtareas.length){
     el.innerHTML = `<div style="font-size:11.5px;color:var(--dim);padding:8px 0">Esta actividad todavía no tiene subtareas entregadas.</div>`;
-    return;
+  } else {
+    el.innerHTML = subtareas.map(st=>`
+      <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:5px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer">
+        <input type="checkbox" class="cronoCorrChk" value="${st.id}" style="flex-shrink:0">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11.5px;color:var(--text)">${st.nombre}</div>
+          <div style="font-size:10px;color:var(--dim)">${st.cantidad} ${st.unidad} · ${st.rendimiento} ${st.unidad}/día · ${st.estatus==='completada'?'✓ completada':st.estatus}</div>
+        </div>
+      </label>`).join('');
   }
-  el.innerHTML = subtareas.map(st=>`
-    <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:5px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer">
-      <input type="checkbox" class="cronoCorrChk" value="${st.id}" style="flex-shrink:0">
+  // Reiniciar la lista de correcciones nuevas (sin entrega anterior) cada vez que se abre este panel
+  cronoCorrNuevas = [];
+  cronoCorrNuevasRender();
+  const form = document.getElementById('cronoCorrNuevaForm');
+  if(form) form.style.display = 'none';
+}
+
+function cronoCorrNuevaFormToggle(){
+  const form = document.getElementById('cronoCorrNuevaForm');
+  if(!form) return;
+  const abrir = form.style.display === 'none';
+  form.style.display = abrir ? 'block' : 'none';
+  if(abrir){
+    const nombreInp = document.getElementById('cronoCorrNvNombre');
+    const unidadInp = document.getElementById('cronoCorrNvUnidad');
+    const cantInp = document.getElementById('cronoCorrNvCantidad');
+    const rendInp = document.getElementById('cronoCorrNvRend');
+    if(nombreInp) nombreInp.value = '';
+    if(unidadInp) unidadInp.value = '';
+    if(cantInp) cantInp.value = '';
+    if(rendInp) rendInp.value = '';
+    cronoCorrNuevaSetTipo('unidades_por_dia');
+  }
+}
+
+function cronoCorrNuevaSetTipo(tipo){
+  const tipoInp = document.getElementById('cronoCorrNvTipo');
+  if(tipoInp) tipoInp.value = tipo;
+  const btnU = document.getElementById('btnCorrNvTipoUnidDia');
+  const btnD = document.getElementById('btnCorrNvTipoDiaUnid');
+  const lbl  = document.getElementById('cronoCorrNvRendLabel');
+  if(btnU && btnD){
+    if(tipo==='unidades_por_dia'){
+      btnU.classList.add('crono-tipo-on'); btnD.classList.remove('crono-tipo-on');
+      if(lbl) lbl.textContent='Rendimiento (unidades/día)';
+    } else {
+      btnD.classList.add('crono-tipo-on'); btnU.classList.remove('crono-tipo-on');
+      if(lbl) lbl.textContent='Rendimiento (días/unidad)';
+    }
+  }
+}
+
+function cronoCorrNuevaAgregar(){
+  const nombre = document.getElementById('cronoCorrNvNombre')?.value.trim();
+  const unidad = document.getElementById('cronoCorrNvUnidad')?.value.trim();
+  const cantidad = parseFloat(document.getElementById('cronoCorrNvCantidad')?.value)||0;
+  const rendimiento = parseFloat(document.getElementById('cronoCorrNvRend')?.value)||0;
+  const tipo = document.getElementById('cronoCorrNvTipo')?.value || 'unidades_por_dia';
+  if(!nombre){ alert('Falta el nombre de la corrección'); return; }
+  if(!unidad){ alert('Falta la unidad'); return; }
+  if(!cantidad){ alert('Falta la cantidad total'); return; }
+  if(!rendimiento){ alert('Falta el rendimiento'); return; }
+  cronoCorrNuevas.push({nombre, unidad, cantidad, rendimiento, tipo});
+  cronoCorrNuevasRender();
+  cronoCorrNuevaFormToggle(); // cierra el formulario tras agregarla a la lista
+}
+
+function cronoCorrNuevaQuitar(idx){
+  cronoCorrNuevas.splice(idx,1);
+  cronoCorrNuevasRender();
+}
+
+function cronoCorrNuevasRender(){
+  const el = document.getElementById('cronoCorrNuevasLista');
+  if(!el) return;
+  if(!cronoCorrNuevas.length){ el.innerHTML=''; return; }
+  el.innerHTML = cronoCorrNuevas.map((n,idx)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:5px;background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.25);border-radius:6px">
       <div style="flex:1;min-width:0">
-        <div style="font-size:11.5px;color:var(--text)">${st.nombre}</div>
-        <div style="font-size:10px;color:var(--dim)">${st.cantidad} ${st.unidad} · ${st.rendimiento} ${st.unidad}/día · ${st.estatus==='completada'?'✓ completada':st.estatus}</div>
+        <div style="font-size:11.5px;color:var(--text)">🔧 Corrección — ${escapeHtml(n.nombre)}</div>
+        <div style="font-size:10px;color:var(--dim)">${n.cantidad} ${escapeHtml(n.unidad)} · ${n.rendimiento} ${escapeHtml(n.unidad)}/día</div>
       </div>
-    </label>`).join('');
+      <button type="button" onclick="cronoCorrNuevaQuitar(${idx})" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px;flex-shrink:0" title="Quitar">✕</button>
+    </div>`).join('');
 }
 
 function cronoPaqUpdateLista(){
@@ -6373,8 +6498,10 @@ async function cronoGuardarSubtarea(){
 
 async function cronoGuardarCorreccion(){
   const checks = [...document.querySelectorAll('.cronoCorrChk:checked')];
-  if(!checks.length){ alert('Marca al menos una subtarea que necesite corrección.'); return; }
+  if(!checks.length && !cronoCorrNuevas.length){ alert('Marca al menos una subtarea que necesite corrección, o agrega una corrección nueva.'); return; }
   if(!cronoModalActId){ alert('Error: no se identificó la actividad. Cierra y vuelve a abrir.'); return; }
+  const nuevasPendientes = cronoCorrNuevas.slice(); // copiar antes de cerrar el modal y limpiar el arreglo global
+  cronoCorrNuevas = [];
   cronoCloseSubModal();
 
   await cronoRecargarDeSupabase();
@@ -6392,6 +6519,20 @@ async function cronoGuardarCorreccion(){
       nombre: `Corrección — ${original.nombre}`,
       unidad: original.unidad, cantidad: original.cantidad, rendimiento: original.rendimiento, tipo: original.tipo||'unidades_por_dia',
       esDeCatalogo:true, catId:null, esCorreccion:true, subtareaOriginalId: original.id,
+      pendienteValidacion:false,
+      propuestaPor: esProyectista ? _miNombre : null,
+      estatus:'pendiente',
+      avanceAcum:0
+    });
+    creadas++;
+  });
+  // Correcciones nuevas capturadas a mano, sin una entrega anterior de la cual partir
+  nuevasPendientes.forEach((n,i)=>{
+    item.subtareas.push({
+      id:'st_'+Date.now()+'_nueva_'+i,
+      nombre: `Corrección — ${n.nombre}`,
+      unidad: n.unidad, cantidad: n.cantidad, rendimiento: n.rendimiento, tipo: n.tipo||'unidades_por_dia',
+      esDeCatalogo:false, catId:null, esCorreccion:true, subtareaOriginalId:null,
       pendienteValidacion:false,
       propuestaPor: esProyectista ? _miNombre : null,
       estatus:'pendiente',
