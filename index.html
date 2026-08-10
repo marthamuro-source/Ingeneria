@@ -17123,11 +17123,37 @@ const CAL_ESTATUS_MAP = {
 };
 let CAL_REVISIONES = [];
 
+// Las observaciones se guardan como arreglo [{id, texto, imagen}] — "imagen" es un data:URL
+// (captura de pantalla pegada con Ctrl+V, ya comprimida). Esto normaliza revisiones viejas
+// que se guardaron como texto plano con saltos de línea, antes de que existiera esta función.
+function calParseObservacionesRaw(raw){
+  if(raw==null) return [];
+  if(Array.isArray(raw)) return raw;
+  if(typeof raw === 'string'){
+    const trimmed = raw.trim();
+    if(!trimmed) return [];
+    if(trimmed[0]==='['){
+      try{ const parsed = JSON.parse(trimmed); if(Array.isArray(parsed)) return parsed; }catch(e){ /* no era JSON, sigue abajo */ }
+    }
+    return trimmed.split('\n').map(l=>l.trim()).filter(Boolean).map((texto,i)=>({id:'obs_legacy_'+i, texto, imagen:''}));
+  }
+  return [];
+}
+
 function calRevLoad(){
-  try{ CAL_REVISIONES = JSON.parse(localStorage.getItem(CAL_REV_KEY)||'[]'); }catch(e){ CAL_REVISIONES=[]; }
+  try{
+    CAL_REVISIONES = JSON.parse(localStorage.getItem(CAL_REV_KEY)||'[]');
+    CAL_REVISIONES.forEach(r=>{ r.observaciones = calParseObservacionesRaw(r.observaciones); });
+  }catch(e){ CAL_REVISIONES=[]; }
 }
 function calRevSaveLocal(){
-  localStorage.setItem(CAL_REV_KEY, JSON.stringify(CAL_REVISIONES));
+  try{
+    localStorage.setItem(CAL_REV_KEY, JSON.stringify(CAL_REVISIONES));
+  }catch(e){
+    // Puede llenarse la cuota de localStorage si se acumulan muchas capturas — no truena el guardado,
+    // Supabase sigue siendo la fuente de verdad real.
+    console.warn('⚠ calRevSaveLocal: no se pudo guardar el respaldo local (posible cuota de almacenamiento llena):', e);
+  }
 }
 function calRevToRow(rev){
   return {
@@ -17136,7 +17162,7 @@ function calRevToRow(rev){
     tipo_revision: rev.tipoRevision||'', dependencia: rev.dependencia||'', km_totales: rev.kmTotales||'',
     entregables: JSON.stringify(rev.entregables||[]),
     fecha_asignacion: rev.fechaAsignacion||null, fecha_revision: rev.fechaRevision||null, fecha_programada: rev.fechaProgramada||null,
-    items: JSON.stringify(rev.items||[]), observaciones: rev.observaciones||'',
+    items: JSON.stringify(rev.items||[]), observaciones: JSON.stringify(rev.observaciones||[]),
     estatus: rev.estatus||'en_progreso', resultado: rev.resultado||null,
     fecha_completado: rev.fechaCompletado||null, completado_por: rev.completadoPor||'',
     updated_at: new Date().toISOString()
@@ -17176,7 +17202,7 @@ async function calRevRecargarDeSupabase(){
         entregables: typeof r.entregables==='string' ? JSON.parse(r.entregables||'[]') : (r.entregables||[]),
         fechaAsignacion:r.fecha_asignacion||'', fechaRevision:r.fecha_revision||'', fechaProgramada:r.fecha_programada||'',
         items: typeof r.items==='string' ? JSON.parse(r.items||'[]') : (r.items||[]),
-        observaciones:r.observaciones||'', estatus:r.estatus||'en_progreso', resultado:r.resultado||null,
+        observaciones: calParseObservacionesRaw(r.observaciones), estatus:r.estatus||'en_progreso', resultado:r.resultado||null,
         fechaCompletado:r.fecha_completado||'', completadoPor:r.completado_por||'',
       }));
       calRevSaveLocal();
@@ -17198,6 +17224,79 @@ function calUltimaRevisionCompletada(actividadId){
   return revs.sort((a,b)=> b.id.localeCompare(a.id))[0];
 }
 
+// ── Historial de revisiones de calidad completadas (solo reportes finalizados) ──
+let calHistorialFiltro = 'todos';
+function calHistorialModal(){
+  calRevLoad();
+  const isAdmin = (_userRole==='admin'||_userRole==='jefe');
+  if(!isAdmin) calHistorialFiltro = _miNombre || 'todos';
+
+  const old = document.getElementById('calHistorialModalBg'); if(old) old.remove();
+  const bg = document.createElement('div');
+  bg.id = 'calHistorialModalBg';
+  bg.className = 'pa-modal-bg open';
+
+  let filtroHTML = '';
+  if(isAdmin){
+    const nombres = [...new Set(CAL_REVISIONES.filter(r=>r.estatus==='completada').map(r=>r.proyectista).filter(Boolean))].sort();
+    filtroHTML = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <span style="font-size:11px;color:var(--dim);white-space:nowrap">Ver proyectista:</span>
+      <select id="calHistFiltro" onchange="calHistorialFiltro=this.value;calHistorialRenderList()" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:12px">
+        <option value="todos" ${calHistorialFiltro==='todos'?'selected':''}>Todos</option>
+        ${nombres.map(n=>`<option value="${escapeHtml(n)}" ${calHistorialFiltro===n?'selected':''}>${escapeHtml(n)}</option>`).join('')}
+      </select>
+    </div>`;
+  }
+
+  bg.innerHTML = `<div class="pa-modal" style="max-width:680px;max-height:82vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">
+    <div class="pa-modal-title">${isAdmin?'Historial de revisiones de calidad':'Mi historial de revisiones de calidad'}</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:12px">Solo se muestran las revisiones ya finalizadas — el formato de reporte que ve el proyectista — no las que todavía están en progreso.</div>
+    ${filtroHTML}
+    <div id="calHistList" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px">
+      <button class="pa-btn pa-btn-ghost" onclick="document.getElementById('calHistorialModalBg').remove()">Cerrar</button>
+    </div>
+  </div>`;
+  bg.onclick = (e)=>{ if(e.target===bg) bg.remove(); };
+  document.body.appendChild(bg);
+  calHistorialRenderList();
+}
+
+function calHistorialRenderList(){
+  const wrap = document.getElementById('calHistList'); if(!wrap) return;
+  const isAdmin = (_userRole==='admin'||_userRole==='jefe');
+  const fmtD = d => d ? new Date(d).toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
+
+  let revs = CAL_REVISIONES.filter(r=>r.estatus==='completada');
+  if(!isAdmin){
+    revs = revs.filter(r=>samePersonMatch(r.proyectista||'', _miNombre||''));
+  } else if(calHistorialFiltro && calHistorialFiltro!=='todos'){
+    revs = revs.filter(r=>r.proyectista===calHistorialFiltro);
+  }
+  revs = revs.sort((a,b)=> (b.fechaCompletado||'').localeCompare(a.fechaCompletado||''));
+
+  if(!revs.length){
+    wrap.innerHTML = `<div style="padding:24px;text-align:center;color:var(--dim);font-size:12px">Sin reportes de calidad completados todavía.</div>`;
+    return;
+  }
+
+  wrap.innerHTML = revs.map(r=>{
+    const badge = r.resultado==='aprobado'
+      ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(61,214,140,.12);color:var(--green);font-weight:600">✅ Aprobado</span>`
+      : `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(245,166,35,.1);color:var(--amber);font-weight:600">⚠ Con deficiencias</span>`;
+    return `<div style="display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-family:var(--mono);font-size:11.5px;color:var(--accent)">${escapeHtml(r.folio||r.proyecto||'—')}</span>
+          ${badge}
+        </div>
+        <div style="font-size:10.5px;color:var(--dim);margin-top:2px">${escapeHtml(r.proyecto||'')} ${isAdmin?'· '+escapeHtml(r.proyectista||'—'):''} · Validó: ${escapeHtml(r.completadoPor||r.validador||'—')} · ${fmtD(r.fechaCompletado)}</div>
+      </div>
+      <button class="et-act-btn" onclick="calAbrirPopup('${r.id}', true)">📄 Ver reporte</button>
+    </div>`;
+  }).join('');
+}
+
 function renderSegCalidad(){
   const el = document.getElementById('segCalidadMount'); if(!el) return;
   const isAdmin = (_userRole==='admin'||_userRole==='jefe');
@@ -17213,7 +17312,10 @@ function renderSegCalidad(){
 
   let html = `<div style="margin-bottom:14px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);font-size:11px;color:var(--muted)">
     <div>✅ Aquí aparecen todas las asignaciones (Proyecto, Trabajo Operativo, Conectividad, Impresiones) que ya llegaron a estatus <strong style="color:var(--text)">"En revisión"</strong> y están listas para que ${isAdmin?'inicies la validación':'tu líder las revise'}.</div>
-    ${_userRole==='admin' ? `<button class="herr-manage-btn" style="flex-shrink:0" onclick="calCatModal()">⚙ Gestionar checklist</button>` : ''}
+    <div style="display:flex;gap:8px;flex-shrink:0">
+      <button class="herr-manage-btn" onclick="calHistorialModal()">📋 ${isAdmin?'Ver historial':'Mi historial'}</button>
+      ${_userRole==='admin' ? `<button class="herr-manage-btn" onclick="calCatModal()">⚙ Gestionar checklist</button>` : ''}
+    </div>
   </div>`;
 
   if(!items.length){
@@ -17292,7 +17394,7 @@ function calAbrirRevision(id){
       fechaRevision: repDateKey(new Date()),
       fechaProgramada: '',
       items: CAL_CATALOGO.map(c=>({catId:c.id, nombre:c.nombre, estatus:'pendiente'})),
-      observaciones: '',
+      observaciones: [],
       estatus: 'en_progreso', resultado: null,
       fechaCompletado: '', completadoPor: '',
     };
@@ -17391,10 +17493,15 @@ function calBuildPopupHTML(rev, a, readonly){
 
   const itemsHTML = calBuildItemsColumnsHTML(rev.items||[], readonly);
 
-  const obsLineas = (rev.observaciones||'').split('\n').map(l=>l.trim()).filter(Boolean);
+  const obsList = Array.isArray(rev.observaciones) ? rev.observaciones : calParseObservacionesRaw(rev.observaciones);
   const obsHTML = readonly
-    ? (obsLineas.length ? obsLineas.map(l=>`<li>${escapeHtml(l)}</li>`).join('') : '<li style="color:#9aa3b0">Sin observaciones.</li>')
+    ? (obsList.length
+        ? obsList.map(o=>`<li>${escapeHtml(o.texto||'')}${o.imagen?`<div class="calObsImgWrap"><img src="${o.imagen}" class="calObsImg"></div>`:''}</li>`).join('')
+        : '<li style="color:#9aa3b0">Sin observaciones.</li>')
     : '';
+  // Para el modo editable, la lista de filas se construye del lado del popup (ver <script> abajo)
+  // a partir de INITIAL_OBS — así "+ Agregar observación" y pegar capturas usan el mismo código.
+  const initialObsJSON = JSON.stringify(obsList).replace(/</g, '\\u003c');
 
   const footer = readonly ? `
     <button class="calBtn calBtnGhost" onclick="window.close()">Cerrar</button>
@@ -17430,8 +17537,22 @@ body{margin:0;background:#eef1f6;font-family:'Segoe UI',Arial,sans-serif;color:#
 .calItemName{width:62%;color:#1a2233}
 .calItemStatus{width:38%}
 .calObsBox{background:#f4f6fa;border:1px solid #e1e6ee;border-radius:8px;padding:14px 18px}
-.calObsBox textarea{width:100%;min-height:110px;border:1px solid #cfd8e3;border-radius:6px;padding:8px;font-family:inherit;font-size:12.5px;resize:vertical}
 .calObsBox ol{margin:0;padding-left:20px;font-size:12.5px;line-height:1.6}
+.calObsBox ol li{margin-bottom:10px}
+.calObsHint{font-size:11px;color:#5a6478;margin-bottom:10px}
+.calObsList{display:flex;flex-direction:column;gap:12px;margin-bottom:10px}
+.calObsRow{display:flex;gap:10px;background:#fff;border:1px solid #e1e6ee;border-radius:8px;padding:10px 12px}
+.calObsRowNum{flex-shrink:0;width:20px;font-weight:700;color:#1a56d0;font-size:12.5px;padding-top:7px}
+.calObsRowBody{flex:1;display:flex;flex-direction:column;gap:8px;min-width:0}
+.calObsTexto{width:100%;min-height:44px;border:1px solid #cfd8e3;border-radius:6px;padding:7px 9px;font-family:inherit;font-size:12.5px;resize:vertical}
+.calObsPasteZone{border:1.5px dashed #cfd8e3;border-radius:6px;padding:10px;cursor:pointer;transition:border-color .15s,background .15s}
+.calObsPasteZone:hover, .calObsPasteZone:focus{border-color:#1a56d0;background:#f4f8ff;outline:none}
+.calObsPasteHint{font-size:11px;color:#8a93a3}
+.calObsImgWrap{position:relative;display:inline-block;max-width:100%}
+.calObsImg{max-width:100%;max-height:260px;border-radius:6px;border:1px solid #e1e6ee;display:block;margin-top:4px}
+.calObsImgDel{position:absolute;top:10px;right:6px;background:rgba(20,30,50,.72);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:10.5px;cursor:pointer}
+.calObsRowDel{flex-shrink:0;align-self:flex-start;background:none;border:none;color:#c0392b;font-size:14px;cursor:pointer;padding:4px 6px;border-radius:5px}
+.calObsRowDel:hover{background:rgba(192,57,43,.1)}
 .calFooter{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e1e6ee;padding:12px 22px;display:flex;justify-content:flex-end;gap:10px;box-shadow:0 -2px 10px rgba(0,0,0,.05)}
 .calBtn{border:none;border-radius:7px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit}
 .calBtnGhost{background:#fff;border:1px solid #cfd8e3;color:#5a6478}
@@ -17455,7 +17576,9 @@ body{margin:0;background:#eef1f6;font-family:'Segoe UI',Arial,sans-serif;color:#
       <div class="calObsBox">
         ${readonly
           ? `<ol>${obsHTML}</ol>`
-          : `<textarea id="calObservaciones" placeholder="Escribe una observación por línea…">${(rev.observaciones||'').replace(/</g,'&lt;')}</textarea>`}
+          : `<div class="calObsHint">💡 Cada observación se numera sola. Haz clic en el recuadro punteado de cada una y presiona Ctrl+V para pegar una captura de pantalla — no necesitas subir ningún archivo.</div>
+             <div id="calObsList" class="calObsList"></div>
+             <button type="button" class="calBtn calBtnSecondary" onclick="calPopAgregarObs()">+ Agregar observación</button>`}
       </div>
     </div>
   </div>
@@ -17466,6 +17589,90 @@ body{margin:0;background:#eef1f6;font-family:'Segoe UI',Arial,sans-serif;color:#
     ${readonly ? '' : `
     document.querySelectorAll('.calItemEstatus').forEach(calPopRecolor);
 
+    function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    // ── Observaciones: filas numeradas automáticamente, cada una con su captura opcional (Ctrl+V) ──
+    function calPopBuildObsRowHTML(o){
+      return '<div class="calObsRow" data-rowid="'+o.id+'">' +
+          '<div class="calObsRowNum"></div>' +
+          '<div class="calObsRowBody">' +
+            '<textarea class="calObsTexto" placeholder="Describe la observación…">'+_esc(o.texto||'')+'</textarea>' +
+            '<div class="calObsPasteZone" tabindex="0">' +
+              (o.imagen
+                ? '<div class="calObsImgWrap"><img src="'+o.imagen+'" class="calObsImg"><button type="button" class="calObsImgDel">✕ Quitar imagen</button></div>'
+                : '<span class="calObsPasteHint">📋 Clic aquí y Ctrl+V para pegar una captura de pantalla (opcional)</span>') +
+            '</div>' +
+          '</div>' +
+          '<button type="button" class="calObsRowDel" title="Eliminar observación">✕</button>' +
+        '</div>';
+    }
+    function calPopRenumerarObs(){
+      document.querySelectorAll('#calObsList .calObsRow').forEach(function(row, i){
+        row.querySelector('.calObsRowNum').textContent = (i+1)+'.';
+      });
+    }
+    function calPopQuitarImagen(row){
+      row.dataset.imagen = '';
+      row.querySelector('.calObsPasteZone').innerHTML = '<span class="calObsPasteHint">📋 Clic aquí y Ctrl+V para pegar una captura de pantalla (opcional)</span>';
+    }
+    function calPopComprimirImagen(srcDataUrl, cb){
+      var img = new Image();
+      img.onload = function(){
+        var maxW = 1100;
+        var scale = img.width > maxW ? maxW/img.width : 1;
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width*scale));
+        canvas.height = Math.max(1, Math.round(img.height*scale));
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        try{ cb(canvas.toDataURL('image/jpeg', 0.72)); }catch(e){ cb(srcDataUrl); }
+      };
+      img.onerror = function(){ cb(srcDataUrl); };
+      img.src = srcDataUrl;
+    }
+    function calPopHandlePaste(e, row){
+      var dt = e.clipboardData || window.clipboardData;
+      if(!dt || !dt.items) return;
+      for(var i=0;i<dt.items.length;i++){
+        if(dt.items[i].type.indexOf('image')===0){
+          e.preventDefault();
+          var blob = dt.items[i].getAsFile();
+          var reader = new FileReader();
+          reader.onload = function(ev){
+            calPopComprimirImagen(ev.target.result, function(dataUrl){
+              row.dataset.imagen = dataUrl;
+              var zone = row.querySelector('.calObsPasteZone');
+              zone.innerHTML = '<div class="calObsImgWrap"><img src="'+dataUrl+'" class="calObsImg"><button type="button" class="calObsImgDel">✕ Quitar imagen</button></div>';
+              zone.querySelector('.calObsImgDel').addEventListener('click', function(ev2){ ev2.stopPropagation(); calPopQuitarImagen(row); });
+            });
+          };
+          reader.readAsDataURL(blob);
+          return;
+        }
+      }
+    }
+    function calPopAgregarObsRow(o){
+      var list = document.getElementById('calObsList');
+      var wrap = document.createElement('div');
+      wrap.innerHTML = calPopBuildObsRowHTML(o);
+      var row = wrap.firstElementChild;
+      row.dataset.imagen = o.imagen || '';
+      row.querySelector('.calObsRowDel').addEventListener('click', function(){ row.remove(); calPopRenumerarObs(); });
+      row.querySelector('.calObsPasteZone').addEventListener('paste', function(e){ calPopHandlePaste(e, row); });
+      var delImgBtn = row.querySelector('.calObsImgDel');
+      if(delImgBtn) delImgBtn.addEventListener('click', function(e){ e.stopPropagation(); calPopQuitarImagen(row); });
+      list.appendChild(row);
+      calPopRenumerarObs();
+      return row;
+    }
+    function calPopAgregarObs(){
+      var row = calPopAgregarObsRow({id:'obs_'+Date.now()+'_'+Math.random().toString(36).slice(2,5), texto:'', imagen:''});
+      row.querySelector('.calObsTexto').focus();
+    }
+    var INITIAL_OBS = ${initialObsJSON};
+    if(INITIAL_OBS.length){ INITIAL_OBS.forEach(function(o){ calPopAgregarObsRow(o); }); }
+    else { calPopAgregarObsRow({id:'obs_'+Date.now(), texto:'', imagen:''}); }
+
     function calPopRecolectar(){
       var items = [];
       document.querySelectorAll('.calItemEstatus').forEach(function(sel){
@@ -17474,6 +17681,12 @@ body{margin:0;background:#eef1f6;font-family:'Segoe UI',Arial,sans-serif;color:#
       var entregables = [];
       document.querySelectorAll('.calEntregableChk').forEach(function(chk){
         entregables.push({ nombre: chk.parentElement.textContent.trim(), aplica: chk.checked });
+      });
+      var observaciones = [];
+      document.querySelectorAll('#calObsList .calObsRow').forEach(function(row){
+        var texto = row.querySelector('.calObsTexto').value.trim();
+        var imagen = row.dataset.imagen || '';
+        if(texto || imagen) observaciones.push({ id: row.getAttribute('data-rowid'), texto: texto, imagen: imagen });
       });
       return {
         kmTotales: document.getElementById('calKm').value.trim(),
@@ -17485,7 +17698,7 @@ body{margin:0;background:#eef1f6;font-family:'Segoe UI',Arial,sans-serif;color:#
         fechaRevision: document.getElementById('calFechaRev').value,
         fechaProgramada: document.getElementById('calFechaProg').value,
         items: items,
-        observaciones: document.getElementById('calObservaciones').value
+        observaciones: observaciones
       };
     }
 
