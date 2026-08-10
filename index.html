@@ -5780,6 +5780,7 @@ function renderReporteoView(){
               <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:${stBg};color:${stColor};white-space:nowrap">${stLabel}</span>
             </td>
             <td style="padding:8px;text-align:right;white-space:nowrap">
+              ${_userRole==='admin' ? `<button class="et-act-btn" onclick="cronoEditSubtareaModal('${a.id}','${st.id}')" title="Editar subtarea" style="font-size:10px;background:rgba(74,143,212,.15);color:var(--accent);margin-right:4px">✎ Editar</button>` : ''}
               ${st.pendienteValidacion && (_userRole==='admin'||_userRole==='jefe') ? `<button class="et-act-btn" onclick="cronoValidarSubtarea('${a.id}','${st.id}')" title="Validar rendimiento" style="font-size:10px;background:rgba(245,166,35,.15);color:var(--amber)">✓ Validar</button>` : ''}
               <button class="et-act-btn del" onclick="cronoDeleteSubtarea('${a.id}','${st.id}')" title="Eliminar">✕</button>
             </td>
@@ -6602,6 +6603,150 @@ function cronoDeleteSubtarea(actId, stId){
   if(item){ item.subtareas = item.subtareas.filter(s=>s.id!==stId); cronoSaveItem(actId); }
   cronoSubTab = 'cronograma'; // Asegurar que estamos en el tab correcto
   cronoExpandedId = actId;   // Mantener la actividad expandida
+  renderReporteoView();
+}
+
+// ── Modal editar subtarea ya cargada (solo administrador) ──
+function cronoEditSubtareaModal(actId, stId){
+  if(_userRole!=='admin'){ alert('Solo un administrador puede editar esta subtarea.'); return; }
+  cronoLoad();
+  const item = CRONO_ITEMS.find(x=>x.actividadId===actId);
+  const st = item?.subtareas?.find(s=>s.id===stId);
+  if(!st) return;
+
+  const old = document.getElementById('cronoStEditModalBg');
+  if(old) old.remove();
+
+  const bg = document.createElement('div');
+  bg.id = 'cronoStEditModalBg';
+  bg.className = 'pa-modal-bg open';
+  bg.innerHTML = `<div class="pa-modal" style="max-width:460px" onclick="event.stopPropagation()">
+    <div class="pa-modal-title">Editar subtarea</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:14px">Edición de administrador. Los cambios se guardan de inmediato en el cronograma.</div>
+
+    <div style="margin-bottom:12px">
+      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Nombre de la subtarea</label>
+      <input id="cronoStEditNombre" type="text" value="${(st.nombre||'').replace(/"/g,'&quot;')}"
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Unidad</label>
+        <input id="cronoStEditUnidad" type="text" value="${(st.unidad||'').replace(/"/g,'&quot;')}"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Cantidad total</label>
+        <input id="cronoStEditCantidad" type="number" min="0.1" step="0.1" value="${st.cantidad}"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+      </div>
+    </div>
+
+    <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:6px">Tipo de rendimiento</label>
+    <div style="display:flex;gap:0;border:0.5px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:12px" id="cronoStEditTipoWrap">
+      <button id="cronoStEditBtnUnidDia" onclick="cronoStEditSetTipo('unidades_por_dia')"
+        style="flex:1;padding:6px 10px;font-size:11px;border:none;cursor:pointer;background:${st.tipo!=='dias_por_unidad'?'rgba(74,143,212,.2)':'var(--surface2)'};color:${st.tipo!=='dias_por_unidad'?'var(--accent)':'var(--dim)'};font-weight:${st.tipo!=='dias_por_unidad'?'600':'400'}">
+        📊 Unidades/día
+      </button>
+      <button id="cronoStEditBtnDiaUnid" onclick="cronoStEditSetTipo('dias_por_unidad')"
+        style="flex:1;padding:6px 10px;font-size:11px;border:none;cursor:pointer;background:${st.tipo==='dias_por_unidad'?'rgba(74,143,212,.2)':'var(--surface2)'};color:${st.tipo==='dias_por_unidad'?'var(--accent)':'var(--dim)'};font-weight:${st.tipo==='dias_por_unidad'?'600':'400'}">
+        📅 Días/unidad
+      </button>
+    </div>
+    <input type="hidden" id="cronoStEditTipo" value="${st.tipo||'unidades_por_dia'}">
+
+    <div style="margin-bottom:12px">
+      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px" id="cronoStEditRendLabel">Rendimiento (${st.tipo==='dias_por_unidad'?'días/unidad':'unidades/día'})</label>
+      <input id="cronoStEditRend" type="number" min="0.1" step="0.1" value="${st.rendimiento}"
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Avance acumulado (${st.unidad||''})</label>
+        <input id="cronoStEditAvance" type="number" min="0" step="0.1" value="${st.avanceAcum||0}"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Estatus</label>
+        <select id="cronoStEditEstatus" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px">
+          <option value="pendiente" ${(!st.estatus||st.estatus==='pendiente')?'selected':''}>Pendiente</option>
+          <option value="en_progreso" ${st.estatus==='en_progreso'?'selected':''}>En progreso</option>
+          <option value="completada" ${st.estatus==='completada'?'selected':''}>Completada</option>
+          <option value="bloqueada" ${st.estatus==='bloqueada'?'selected':''}>Bloqueada</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="pa-btn pa-btn-ghost" onclick="document.getElementById('cronoStEditModalBg').remove()">Cancelar</button>
+      <button class="pa-btn pa-btn-primary" onclick="cronoGuardarEdicionSubtarea('${actId}','${stId}')">Guardar cambios</button>
+    </div>
+  </div>`;
+  bg.onclick = (e)=>{ if(e.target===bg) bg.remove(); };
+  document.body.appendChild(bg);
+}
+
+function cronoStEditSetTipo(tipo){
+  document.getElementById('cronoStEditTipo').value = tipo;
+  const btnU = document.getElementById('cronoStEditBtnUnidDia');
+  const btnD = document.getElementById('cronoStEditBtnDiaUnid');
+  const lbl = document.getElementById('cronoStEditRendLabel');
+  if(!btnU || !btnD) return;
+  if(tipo==='unidades_por_dia'){
+    btnU.style.background='rgba(74,143,212,.2)'; btnU.style.color='var(--accent)'; btnU.style.fontWeight='600';
+    btnD.style.background='var(--surface2)'; btnD.style.color='var(--dim)'; btnD.style.fontWeight='400';
+    if(lbl) lbl.textContent='Rendimiento (unidades/día)';
+  } else {
+    btnD.style.background='rgba(74,143,212,.2)'; btnD.style.color='var(--accent)'; btnD.style.fontWeight='600';
+    btnU.style.background='var(--surface2)'; btnU.style.color='var(--dim)'; btnU.style.fontWeight='400';
+    if(lbl) lbl.textContent='Rendimiento (días/unidad)';
+  }
+}
+
+async function cronoGuardarEdicionSubtarea(actId, stId){
+  if(_userRole!=='admin'){ alert('Solo un administrador puede editar esta subtarea.'); return; }
+  cronoLoad();
+  const item = CRONO_ITEMS.find(x=>x.actividadId===actId);
+  const st = item?.subtareas?.find(s=>s.id===stId);
+  if(!st||!item) return;
+
+  const nombre = document.getElementById('cronoStEditNombre')?.value.trim();
+  const unidad = document.getElementById('cronoStEditUnidad')?.value.trim();
+  const cantidad = parseFloat(document.getElementById('cronoStEditCantidad')?.value)||0;
+  const rend = parseFloat(document.getElementById('cronoStEditRend')?.value)||0;
+  const tipo = document.getElementById('cronoStEditTipo')?.value||'unidades_por_dia';
+  const avance = parseFloat(document.getElementById('cronoStEditAvance')?.value)||0;
+  const estatus = document.getElementById('cronoStEditEstatus')?.value||'pendiente';
+  if(!nombre){ alert('Falta el nombre de la subtarea'); return; }
+  if(!unidad){ alert('Falta la unidad'); return; }
+  if(!cantidad){ alert('Falta la cantidad total'); return; }
+  if(!rend||rend<=0){ alert('Rendimiento inválido'); return; }
+
+  // Cerrar modal inmediatamente para dar feedback visual
+  document.getElementById('cronoStEditModalBg')?.remove();
+
+  // Siempre recargar de Supabase antes de modificar para no pisar datos de otros
+  await cronoRecargarDeSupabase();
+
+  const freshItem = CRONO_ITEMS.find(x=>x.actividadId===actId);
+  const freshSt = freshItem?.subtareas?.find(s=>s.id===stId);
+  if(!freshSt||!freshItem){ alert('Esta subtarea ya no existe (puede que alguien la haya eliminado). Se actualizó la vista con los datos más recientes.'); cronoSubTab='cronograma'; cronoExpandedId=actId; renderReporteoView(); return; }
+
+  freshSt.nombre = nombre;
+  freshSt.unidad = unidad;
+  freshSt.cantidad = cantidad;
+  freshSt.rendimiento = rend;
+  freshSt.tipo = tipo;
+  freshSt.avanceAcum = avance;
+  freshSt.estatus = estatus;
+  freshSt.editadoPor = _miNombre||'Admin';
+  freshSt.editadoAt = repDateKey(new Date());
+
+  cronoSaveItem(actId);
+
+  cronoSubTab = 'cronograma';
+  cronoExpandedId = actId;
   renderReporteoView();
 }
 
@@ -16807,10 +16952,258 @@ function renderSegAvance(){
 // ══════════════════════════════════════════════════════
 //  CALIDAD — revisión de actividades en estatus "En revisión"
 // ══════════════════════════════════════════════════════
+
+// ── Catálogo administrable de puntos del checklist ──
+const CAL_CAT_KEY = 'c3ntro_cal_catalogo_v1';
+const CAL_CATALOGO_DEFAULT = [
+  {id:'calc_01', nombre:'Solapa correspondiente (PLANOS)'},
+  {id:'calc_02', nombre:'Cuadro de Firmas Indicado (PLANOS)'},
+  {id:'calc_03', nombre:'Razón social correcta (PLANOS Y MTD)'},
+  {id:'calc_04', nombre:'Detalles de configuración Indicados para el proyecto (PLANOS)'},
+  {id:'calc_05', nombre:'Norte debidamente orientado (PLANOS)'},
+  {id:'calc_06', nombre:'Croquis del proyecto (PLANOS)'},
+  {id:'calc_07', nombre:'Simbología completa (PLANOS)'},
+  {id:'calc_08', nombre:'Notas Correctas (PLANOS)'},
+  {id:'calc_09', nombre:'Cuadro de coordenadas (PLANOS)'},
+  {id:'calc_10', nombre:'Cuadro de volumetría (PLANOS)'},
+  {id:'calc_11', nombre:'Memoria Técnica Descriptiva'},
+  {id:'calc_12', nombre:'Archivos adicionales'},
+  {id:'calc_13', nombre:'Cuadro de construcción (PLANOS)'},
+  {id:'calc_14', nombre:'Datos del proyecto correctos (PLANOS Y MTD)'},
+  {id:'calc_15', nombre:'Numeración de planos correcta (PLANOS)'},
+  {id:'calc_16', nombre:'Detalles de PHD (PLANOS)'},
+  {id:'calc_17', nombre:'Detalles de Adosados (PLANOS)'},
+  {id:'calc_18', nombre:'Detalles Transversales (PLANOS)'},
+  {id:'calc_19', nombre:'Detalles Especiales (PLANOS)'},
+  {id:'calc_20', nombre:'Fecha correcta (PLANOS Y MTD)'},
+  {id:'calc_21', nombre:'Excel de Volumetría'},
+  {id:'calc_22', nombre:'Planos de Señalización (PLANOS Y MDC)'},
+  {id:'calc_23', nombre:'Kmz Encarpetado para entrega'},
+];
+let CAL_CATALOGO = [];
+
+function calCatEnsureOrden(){
+  let maxOrden = CAL_CATALOGO.reduce((m,c)=>Number.isInteger(c.orden)?Math.max(m,c.orden):m, -1);
+  CAL_CATALOGO.forEach(c=>{ if(!Number.isInteger(c.orden)){ maxOrden++; c.orden=maxOrden; } });
+  CAL_CATALOGO.sort((a,b)=>a.orden-b.orden);
+}
+function calCatLoad(){
+  try{
+    const raw = localStorage.getItem(CAL_CAT_KEY);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      if(parsed.length < CAL_CATALOGO_DEFAULT.length){
+        const ids = parsed.map(c=>c.id);
+        const faltantes = CAL_CATALOGO_DEFAULT.filter(c=>!ids.includes(c.id));
+        CAL_CATALOGO = [...parsed, ...faltantes];
+        calCatEnsureOrden();
+        calCatSave();
+      } else {
+        CAL_CATALOGO = parsed;
+        calCatEnsureOrden();
+      }
+    } else {
+      CAL_CATALOGO = CAL_CATALOGO_DEFAULT.map((c,i)=>({...c, orden:i}));
+      calCatSave();
+    }
+  }catch(e){ CAL_CATALOGO = CAL_CATALOGO_DEFAULT.map((c,i)=>({...c, orden:i})); }
+}
+function calCatSave(){
+  localStorage.setItem(CAL_CAT_KEY, JSON.stringify(CAL_CATALOGO));
+  if(!_supa) return;
+  _supa.from('calidad_catalogo').upsert(CAL_CATALOGO.map(c=>({id:c.id, nombre:c.nombre, orden:c.orden})), {onConflict:'id'})
+    .then(({error})=>{
+      if(error){
+        console.error('❌ calCatSave:', error);
+        alert('Se guardó localmente, pero no se pudo guardar en Supabase, así que podría perderse al recargar o no verlo el resto del equipo.\n\nMotivo: '+(error.message||error.code||'desconocido')+'\n\nEsto normalmente pasa si la tabla "calidad_catalogo" no existe todavía en tu Supabase. Pídele a Claude que te ayude a crearla.');
+      }
+    })
+    .catch(e=>{
+      console.error('❌ calCatSave exception:', e);
+      alert('Ocurrió un error de conexión al guardar el catálogo en Supabase.');
+    });
+}
+async function calCatRecargarDeSupabase(){
+  if(!_supa) return;
+  try{
+    const {data, error} = await _supa.from('calidad_catalogo').select('*');
+    if(error){ console.warn('calCatRecargar error:', error); return; }
+    if(data && data.length){
+      CAL_CATALOGO = data.map(r=>({id:r.id, nombre:r.nombre, orden:Number.isInteger(r.orden)?r.orden:0}));
+      calCatEnsureOrden();
+      localStorage.setItem(CAL_CAT_KEY, JSON.stringify(CAL_CATALOGO));
+    }
+  }catch(e){ console.warn('calCatRecargar exception:', e); }
+}
+
+function calCatModal(){
+  if(_userRole!=='admin'){ alert('Solo un administrador puede editar el catálogo del checklist de calidad.'); return; }
+  calCatLoad();
+  const old = document.getElementById('calCatModalBg'); if(old) old.remove();
+  const bg = document.createElement('div');
+  bg.id = 'calCatModalBg';
+  bg.className = 'pa-modal-bg open';
+  bg.innerHTML = `<div class="pa-modal" style="max-width:560px;max-height:82vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">
+    <div class="pa-modal-title">Gestionar puntos del checklist de calidad</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:12px">Estos puntos aparecen en el checklist cada vez que se hace clic en "Iniciar revisión". Agrega, edita, reordena o elimina según lo que necesites validar — no afecta reportes ya generados.</div>
+    <div id="calCatList" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+    <div style="display:flex;gap:8px">
+      <input id="calCatNewNombre" type="text" placeholder="Nuevo punto… ej. Cuadro de firmas (PLANOS)" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px" onkeydown="if(event.key==='Enter')calCatAgregar()">
+      <button class="pa-btn pa-btn-primary" onclick="calCatAgregar()">+ Agregar</button>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px">
+      <button class="pa-btn pa-btn-ghost" onclick="document.getElementById('calCatModalBg').remove()">Cerrar</button>
+    </div>
+  </div>`;
+  bg.onclick = (e)=>{ if(e.target===bg) bg.remove(); };
+  document.body.appendChild(bg);
+  calCatRenderList();
+}
+function calCatRenderList(){
+  const wrap = document.getElementById('calCatList'); if(!wrap) return;
+  calCatEnsureOrden();
+  wrap.innerHTML = CAL_CATALOGO.map((c,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px">
+      <span style="flex:1;font-size:12px;color:var(--text)">${escapeHtml(c.nombre)}</span>
+      <button class="et-act-btn" onclick="calCatMover('${c.id}',-1)" title="Subir" ${i===0?'disabled style="opacity:.25;cursor:default"':''}>↑</button>
+      <button class="et-act-btn" onclick="calCatMover('${c.id}',1)" title="Bajar" ${i===CAL_CATALOGO.length-1?'disabled style="opacity:.25;cursor:default"':''}>↓</button>
+      <button class="et-act-btn" onclick="calCatEditar('${c.id}')" title="Editar">✎</button>
+      <button class="et-act-btn del" onclick="calCatEliminar('${c.id}')" title="Eliminar">✕</button>
+    </div>`).join('') || `<div style="padding:16px;text-align:center;color:var(--dim);font-size:12px">Sin puntos en el catálogo todavía.</div>`;
+}
+function calCatAgregar(){
+  const inp = document.getElementById('calCatNewNombre');
+  const nombre = inp?.value.trim();
+  if(!nombre) return;
+  calCatEnsureOrden();
+  const maxOrden = CAL_CATALOGO.reduce((m,c)=>Math.max(m,c.orden||0),-1);
+  CAL_CATALOGO.push({id:'calc_'+Date.now(), nombre, orden:maxOrden+1});
+  calCatSave();
+  inp.value='';
+  calCatRenderList();
+}
+function calCatEditar(id){
+  const c = CAL_CATALOGO.find(x=>x.id===id); if(!c) return;
+  const nuevo = prompt('Editar punto del checklist:', c.nombre);
+  if(nuevo===null) return;
+  const limpio = nuevo.trim();
+  if(!limpio){ alert('El nombre no puede quedar vacío.'); return; }
+  c.nombre = limpio;
+  calCatSave();
+  calCatRenderList();
+}
+function calCatEliminar(id){
+  if(!confirm('¿Eliminar este punto del checklist? No afecta revisiones ya guardadas, solo las nuevas.')) return;
+  CAL_CATALOGO = CAL_CATALOGO.filter(c=>c.id!==id);
+  calCatSave();
+  calCatRenderList();
+}
+function calCatMover(id, dir){
+  calCatEnsureOrden();
+  const idx = CAL_CATALOGO.findIndex(c=>c.id===id);
+  const otro = idx+dir;
+  if(idx<0||otro<0||otro>=CAL_CATALOGO.length) return;
+  const tmp = CAL_CATALOGO[idx].orden;
+  CAL_CATALOGO[idx].orden = CAL_CATALOGO[otro].orden;
+  CAL_CATALOGO[otro].orden = tmp;
+  CAL_CATALOGO.sort((a,b)=>a.orden-b.orden);
+  calCatSave();
+  calCatRenderList();
+}
+
+// ── Reportes de revisión de calidad (uno o varios por actividad) ──
+const CAL_REV_KEY = 'c3ntro_cal_revisiones_v1';
+const CAL_ENTREGABLES_DEFAULT = ['Planos en DWG y PDF','KMZ','Volumetría','MTD','Señalización','Croquis','Detalles especiales','Solicitud Especial'];
+const CAL_ESTATUS_MAP = {
+  pendiente:   {label:'Pendiente',              color:'#9aa3b0'},
+  cumple:      {label:'Cumple correctamente',   color:'#1a7f4b'},
+  deficiencia: {label:'Cumple con deficiencia', color:'#b8860b'},
+  no_cumple:   {label:'No cumple',              color:'#c0392b'},
+  no_aplica:   {label:'No aplica',              color:'#6b7280'},
+};
+let CAL_REVISIONES = [];
+
+function calRevLoad(){
+  try{ CAL_REVISIONES = JSON.parse(localStorage.getItem(CAL_REV_KEY)||'[]'); }catch(e){ CAL_REVISIONES=[]; }
+}
+function calRevSaveLocal(){
+  localStorage.setItem(CAL_REV_KEY, JSON.stringify(CAL_REVISIONES));
+}
+function calRevToRow(rev){
+  return {
+    id: rev.id, actividad_id: rev.actividadId, proyecto: rev.proyecto||'', folio: rev.folio||'',
+    tipo: rev.tipo||'', proyectista: rev.proyectista||'', validador: rev.validador||'',
+    tipo_revision: rev.tipoRevision||'', dependencia: rev.dependencia||'', km_totales: rev.kmTotales||'',
+    entregables: JSON.stringify(rev.entregables||[]),
+    fecha_asignacion: rev.fechaAsignacion||null, fecha_revision: rev.fechaRevision||null, fecha_programada: rev.fechaProgramada||null,
+    items: JSON.stringify(rev.items||[]), observaciones: rev.observaciones||'',
+    estatus: rev.estatus||'en_progreso', resultado: rev.resultado||null,
+    fecha_completado: rev.fechaCompletado||null, completado_por: rev.completadoPor||'',
+    updated_at: new Date().toISOString()
+  };
+}
+function calRevSave(rev){ // guardado silencioso (avances parciales, no bloquea la UI)
+  calRevSaveLocal();
+  supaUpsert('revisiones_calidad', calRevToRow(rev));
+}
+async function calRevSaveCritico(rev){ // guardado con alerta visible — se usa al finalizar
+  calRevSaveLocal();
+  if(!_supa) return true;
+  try{
+    const {error} = await _supa.from('revisiones_calidad').upsert(calRevToRow(rev), {onConflict:'id'});
+    if(error){
+      console.error('❌ calRevSaveCritico:', error);
+      alert('El reporte se guardó localmente en esta sesión, pero no se pudo guardar en Supabase, así que el proyectista no lo va a ver todavía y podría perderse al recargar.\n\nMotivo: '+(error.message||error.code||'desconocido')+'\n\nEsto normalmente pasa si la tabla "revisiones_calidad" no existe todavía en tu Supabase. Pídele a Claude que te ayude a crearla.');
+      return false;
+    }
+    return true;
+  }catch(e){
+    console.error('❌ calRevSaveCritico exception:', e);
+    alert('Ocurrió un error de conexión al guardar el reporte en Supabase. El proyectista podría no verlo todavía.');
+    return false;
+  }
+}
+async function calRevRecargarDeSupabase(){
+  if(!_supa) return;
+  try{
+    const {data, error} = await _supa.from('revisiones_calidad').select('*');
+    if(error){ console.warn('calRevRecargar error:', error); return; }
+    if(data){
+      CAL_REVISIONES = data.map(r=>({
+        id:r.id, actividadId:r.actividad_id, proyecto:r.proyecto||'', folio:r.folio||'', tipo:r.tipo||'',
+        proyectista:r.proyectista||'', validador:r.validador||'', tipoRevision:r.tipo_revision||'',
+        dependencia:r.dependencia||'', kmTotales:r.km_totales||'',
+        entregables: typeof r.entregables==='string' ? JSON.parse(r.entregables||'[]') : (r.entregables||[]),
+        fechaAsignacion:r.fecha_asignacion||'', fechaRevision:r.fecha_revision||'', fechaProgramada:r.fecha_programada||'',
+        items: typeof r.items==='string' ? JSON.parse(r.items||'[]') : (r.items||[]),
+        observaciones:r.observaciones||'', estatus:r.estatus||'en_progreso', resultado:r.resultado||null,
+        fechaCompletado:r.fecha_completado||'', completadoPor:r.completado_por||'',
+      }));
+      calRevSaveLocal();
+    }
+  }catch(e){ console.warn('calRevRecargar exception:', e); }
+}
+
+function calRevisionEnProgreso(actividadId){
+  return CAL_REVISIONES.find(r=>r.actividadId===actividadId && r.estatus==='en_progreso') || null;
+}
+function calUltimaRevision(actividadId){
+  const revs = CAL_REVISIONES.filter(r=>r.actividadId===actividadId);
+  if(!revs.length) return null;
+  return revs.sort((a,b)=> b.id.localeCompare(a.id))[0];
+}
+function calUltimaRevisionCompletada(actividadId){
+  const revs = CAL_REVISIONES.filter(r=>r.actividadId===actividadId && r.estatus==='completada');
+  if(!revs.length) return null;
+  return revs.sort((a,b)=> b.id.localeCompare(a.id))[0];
+}
+
 function renderSegCalidad(){
   const el = document.getElementById('segCalidadMount'); if(!el) return;
   const isAdmin = (_userRole==='admin'||_userRole==='jefe');
   const fmtD = d => d ? new Date(d+'T00:00:00').toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
+  calCatLoad();
+  calRevLoad();
 
   let items = PA_ITEMS.filter(a=>a.estatus==='En revisión');
   if(_userRole==='proyectista' && _miNombre){
@@ -16818,8 +17211,9 @@ function renderSegCalidad(){
   }
   items = [...items].sort((a,b)=>(a.fechaTermino||'9999').localeCompare(b.fechaTermino||'9999'));
 
-  let html = `<div style="margin-bottom:14px;padding:10px 14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);font-size:11px;color:var(--muted)">
-    ✅ Aquí aparecen todas las asignaciones (Proyecto, Trabajo Operativo, Conectividad, Impresiones) que ya llegaron a estatus <strong style="color:var(--text)">"En revisión"</strong> y están listas para que ${isAdmin?'inicies la validación':'tu líder las revise'}.
+  let html = `<div style="margin-bottom:14px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);font-size:11px;color:var(--muted)">
+    <div>✅ Aquí aparecen todas las asignaciones (Proyecto, Trabajo Operativo, Conectividad, Impresiones) que ya llegaron a estatus <strong style="color:var(--text)">"En revisión"</strong> y están listas para que ${isAdmin?'inicies la validación':'tu líder las revise'}.</div>
+    ${_userRole==='admin' ? `<button class="herr-manage-btn" style="flex-shrink:0" onclick="calCatModal()">⚙ Gestionar checklist</button>` : ''}
   </div>`;
 
   if(!items.length){
@@ -16834,22 +17228,39 @@ function renderSegCalidad(){
     <th>Folio / Actividad</th>
     <th>Responsable</th>
     <th>F. Término</th>
-    <th style="text-align:center;width:170px">Revisión de calidad</th>
+    <th style="text-align:center;width:190px">Revisión de calidad</th>
   </tr></thead><tbody>`;
 
   items.forEach(a=>{
     const folio = (a.folio||a.actividad||'—');
     const proy = (a.proyecto||'—');
     const tipoColor = a.tipo==='Proyecto'?'#4a8fd4':a.tipo==='Trabajo Operativo'?'#f5a623':a.tipo==='Planos de Conectividad'?'#9a6ef0':'#5ce8a6';
+
+    const draft = calRevisionEnProgreso(a.id);
+    const ultimaCompletada = calUltimaRevisionCompletada(a.id);
+    let accion;
+    if(isAdmin){
+      const btnLabel = draft ? '↻ Continuar revisión' : (ultimaCompletada ? '🔁 Nueva revisión' : '▶ Iniciar revisión');
+      accion = `<button class="et-act-btn" style="padding:5px 12px;font-size:11px;background:rgba(90,159,240,.12);border:1px solid rgba(90,159,240,.3);color:var(--accent);border-radius:6px" onclick="calAbrirRevision('${a.id}')">${btnLabel}</button>`;
+      if(ultimaCompletada && !draft){
+        accion += `<button class="et-act-btn" style="margin-left:4px" title="Ver último reporte" onclick="calVerReporte('${a.id}')">📄</button>`;
+      }
+    } else if(ultimaCompletada){
+      const badge = ultimaCompletada.resultado==='aprobado'
+        ? `<span style="font-size:10px;color:var(--green);font-weight:600">✅ Aprobado</span>`
+        : `<span style="font-size:10px;color:var(--amber);font-weight:600">⚠ Con deficiencias</span>`;
+      accion = `<div style="display:flex;flex-direction:column;align-items:center;gap:4px">${badge}<button class="et-act-btn" onclick="calVerReporte('${a.id}')">📄 Ver reporte</button></div>`;
+    } else {
+      accion = `<span style="font-size:10.5px;color:var(--dim);font-style:italic">Pendiente de revisión</span>`;
+    }
+
     html += `<tr>
       <td style="padding-left:12px"><span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${tipoColor}1a;color:${tipoColor};font-weight:500">${a.tipo||'—'}</span></td>
       <td><div style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(proy||'').replace(/"/g,'&quot;')}">${proy}</div></td>
       <td><div style="font-family:var(--mono);font-size:11px;color:var(--accent);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(folio||'').replace(/"/g,'&quot;')}">${folio}</div></td>
       <td style="font-size:11px;color:var(--muted);white-space:nowrap">${(a.responsable||'—').split(' ').slice(0,2).join(' ')}</td>
       <td style="font-size:11px;white-space:nowrap;color:var(--muted)">${fmtD(a.fechaTermino)}</td>
-      <td style="text-align:center">${isAdmin
-        ? `<button class="et-act-btn" style="padding:5px 12px;font-size:11px;background:rgba(90,159,240,.12);border:1px solid rgba(90,159,240,.3);color:var(--accent);border-radius:6px" onclick="calAbrirRevision('${a.id}')">▶ Iniciar revisión</button>`
-        : `<span style="font-size:10.5px;color:var(--dim);font-style:italic">Pendiente de revisión</span>`}</td>
+      <td style="text-align:center">${accion}</td>
     </tr>`;
   });
 
@@ -16857,10 +17268,305 @@ function renderSegCalidad(){
   el.innerHTML = html;
 }
 
+// ── Abrir el checklist (ventana nueva) ──
 function calAbrirRevision(id){
+  if(_userRole!=='admin' && _userRole!=='jefe'){ alert('Solo un administrador puede iniciar una revisión de calidad.'); return; }
   const a = PA_ITEMS.find(x=>x.id===id); if(!a) return;
-  // Paso siguiente: aquí se abrirá el formulario con las preguntas de validación de calidad.
-  alert('Siguiente paso: aquí se va a abrir el formulario con las preguntas para validar "'+(a.folio||a.actividad||'esta actividad')+'". Lo construimos en el próximo avance.');
+  calCatLoad();
+  calRevLoad();
+
+  let rev = calRevisionEnProgreso(id);
+  if(!rev){
+    const ultima = calUltimaRevision(id);
+    rev = {
+      id: 'calrev_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+      actividadId: id,
+      proyecto: a.proyecto||'', folio: a.folio||a.actividad||'', tipo: a.tipo||'',
+      proyectista: a.responsable||'',
+      validador: _miNombre||'',
+      tipoRevision: (ultima&&ultima.tipoRevision) || '',
+      dependencia: (ultima&&ultima.dependencia) || '',
+      kmTotales: (ultima&&ultima.kmTotales) || a.km || '',
+      entregables: (ultima&&ultima.entregables&&ultima.entregables.length) ? ultima.entregables.map(e=>({...e})) : CAL_ENTREGABLES_DEFAULT.map(n=>({nombre:n, aplica:true})),
+      fechaAsignacion: a.fechaAsig || '',
+      fechaRevision: repDateKey(new Date()),
+      fechaProgramada: '',
+      items: CAL_CATALOGO.map(c=>({catId:c.id, nombre:c.nombre, estatus:'pendiente'})),
+      observaciones: '',
+      estatus: 'en_progreso', resultado: null,
+      fechaCompletado: '', completadoPor: '',
+    };
+    CAL_REVISIONES.push(rev);
+    calRevSave(rev);
+  }
+
+  calAbrirPopup(rev.id, false);
+}
+
+function calVerReporte(actividadId){
+  calRevLoad();
+  const rev = calUltimaRevisionCompletada(actividadId);
+  if(!rev){ alert('Todavía no hay un reporte de calidad completado para esta actividad.'); return; }
+  calAbrirPopup(rev.id, true);
+}
+
+function calAbrirPopup(revId, readonly){
+  const rev = CAL_REVISIONES.find(r=>r.id===revId); if(!rev) return;
+  const a = PA_ITEMS.find(x=>x.id===rev.actividadId);
+  const win = window.open('', '_blank', 'width=1080,height=860,menubar=no,toolbar=no,location=no,status=no');
+  if(!win){ alert('El navegador bloqueó la ventana emergente. Permite pop-ups para este sitio e intenta de nuevo.'); return; }
+  win.document.open();
+  win.document.write(calBuildPopupHTML(rev, a, readonly));
+  win.document.close();
+}
+
+function calBuildItemsColumnsHTML(items, readonly){
+  const list = items||[];
+  const mid = Math.ceil(list.length/2);
+  const colA = list.slice(0, mid);
+  const colB = list.slice(mid);
+  const statusCell = (it) => {
+    if(readonly){
+      const cfg = CAL_ESTATUS_MAP[it.estatus] || CAL_ESTATUS_MAP.pendiente;
+      return `<span style="font-weight:700;color:${cfg.color}">${cfg.label}</span>`;
+    }
+    const cur = CAL_ESTATUS_MAP[it.estatus] || CAL_ESTATUS_MAP.pendiente;
+    return `<select data-itemid="${it.catId}" class="calItemEstatus" onchange="calPopRecolor(this)" style="width:100%;font-size:11.5px;padding:5px 6px;border-radius:5px;border:1px solid #cfd8e3;background:#fff;font-family:inherit;font-weight:600;color:${cur.color}">
+      ${Object.keys(CAL_ESTATUS_MAP).map(k=>`<option value="${k}" ${it.estatus===k?'selected':''}>${CAL_ESTATUS_MAP[k].label}</option>`).join('')}
+    </select>`;
+  };
+  const rowsHTML = (col) => col.map(it=>`<tr><td class="calItemName">${escapeHtml(it.nombre||'')}</td><td class="calItemStatus">${statusCell(it)}</td></tr>`).join('');
+  return `<table class="calChecklistTable"><tbody>${rowsHTML(colA)}</tbody></table><table class="calChecklistTable"><tbody>${rowsHTML(colB)}</tbody></table>`;
+}
+
+function calBuildPopupHTML(rev, a, readonly){
+  const fmtD = d => d ? new Date(d+'T00:00:00').toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
+  const tipoRevisionOpts = ['Ap Permiso (Nuevo)','Ap Permiso (Actualización)','Revisión Interna','Entrega Final','Otra'];
+  const tipoRevisionOptsFull = (rev.tipoRevision && !tipoRevisionOpts.includes(rev.tipoRevision)) ? [...tipoRevisionOpts, rev.tipoRevision] : tipoRevisionOpts;
+
+  const resultBanner = (readonly && rev.resultado) ? (
+    rev.resultado==='aprobado'
+      ? `<div class="calBanner calBannerOk">✅ Revisión aprobada — sin deficiencias · completada el ${fmtD((rev.fechaCompletado||'').slice(0,10))} por ${escapeHtml(rev.completadoPor||rev.validador||'')}</div>`
+      : `<div class="calBanner calBannerWarn">⚠️ Revisión con deficiencias — el folio permanece "En revisión" hasta corregir · completada el ${fmtD((rev.fechaCompletado||'').slice(0,10))} por ${escapeHtml(rev.completadoPor||rev.validador||'')}</div>`
+  ) : '';
+
+  const headerLeft = readonly ? `
+    <div class="calKV"><span>Proyecto</span><b>${escapeHtml(rev.proyecto||'—')}</b></div>
+    <div class="calKV"><span>Folio</span><b>${escapeHtml(rev.folio||'—')}</b></div>
+    <div class="calKV"><span>Km totales</span><b>${escapeHtml(rev.kmTotales||'—')}</b></div>
+    <div class="calKV"><span>Proyectista</span><b>${escapeHtml(rev.proyectista||'—')}</b></div>
+    <div class="calKV"><span>Validador</span><b>${escapeHtml(rev.validador||'—')}</b></div>
+    <div class="calKV"><span>Tipo de revisión</span><b>${escapeHtml(rev.tipoRevision||'—')}</b></div>
+  ` : `
+    <div class="calKV"><span>Proyecto</span><b>${escapeHtml(rev.proyecto||'—')}</b></div>
+    <div class="calKV"><span>Folio</span><b>${escapeHtml(rev.folio||'—')}</b></div>
+    <div class="calKV"><span>Km totales</span><input id="calKm" type="text" value="${escapeHtml(rev.kmTotales||'')}"></div>
+    <div class="calKV"><span>Proyectista</span><b>${escapeHtml(rev.proyectista||'—')}</b></div>
+    <div class="calKV"><span>Validador</span><input id="calValidador" type="text" value="${escapeHtml(rev.validador||'')}"></div>
+    <div class="calKV"><span>Tipo de revisión</span>
+      <select id="calTipoRevision">
+        ${tipoRevisionOptsFull.map(o=>`<option ${rev.tipoRevision===o?'selected':''}>${escapeHtml(o)}</option>`).join('')}
+      </select>
+    </div>
+  `;
+
+  const entregables = (rev.entregables && rev.entregables.length) ? rev.entregables : CAL_ENTREGABLES_DEFAULT.map(n=>({nombre:n, aplica:true}));
+  const entregablesHTML = entregables.map((e) => readonly
+    ? `<li>${escapeHtml(e.nombre)} — <b style="color:${e.aplica?'#1a56d0':'#8a93a3'}">${e.aplica?'Aplica':'No aplica'}</b></li>`
+    : `<li><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" class="calEntregableChk" ${e.aplica?'checked':''}> ${escapeHtml(e.nombre)}</label></li>`
+  ).join('');
+
+  const headerRight = `
+    <div style="font-weight:700;font-size:12.5px;color:#1a56d0;margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em">Alcance del proyecto</div>
+    <div class="calKV" style="margin-bottom:8px"><span>Dependencia</span>${readonly ? `<b>${escapeHtml(rev.dependencia||'—')}</b>` : `<input id="calDependencia" type="text" value="${escapeHtml(rev.dependencia||'')}" placeholder="Ej. SICT CUOTA">`}</div>
+    <div style="font-size:11.5px;color:#5a6478;margin-bottom:4px">Entregables:</div>
+    <ul class="calEntregablesList">${entregablesHTML}</ul>
+  `;
+
+  const fechasRow = `
+    <div class="calKV"><span>📅 Asignación</span>${readonly?`<b>${fmtD(rev.fechaAsignacion)}</b>`:`<input id="calFechaAsig" type="date" value="${rev.fechaAsignacion||''}">`}</div>
+    <div class="calKV"><span>📅 Revisión</span>${readonly?`<b>${fmtD(rev.fechaRevision)}</b>`:`<input id="calFechaRev" type="date" value="${rev.fechaRevision||''}">`}</div>
+    <div class="calKV"><span>📅 Programada</span>${readonly?`<b>${fmtD(rev.fechaProgramada)}</b>`:`<input id="calFechaProg" type="date" value="${rev.fechaProgramada||''}">`}</div>
+  `;
+
+  const itemsHTML = calBuildItemsColumnsHTML(rev.items||[], readonly);
+
+  const obsLineas = (rev.observaciones||'').split('\n').map(l=>l.trim()).filter(Boolean);
+  const obsHTML = readonly
+    ? (obsLineas.length ? obsLineas.map(l=>`<li>${escapeHtml(l)}</li>`).join('') : '<li style="color:#9aa3b0">Sin observaciones.</li>')
+    : '';
+
+  const footer = readonly ? `
+    <button class="calBtn calBtnGhost" onclick="window.close()">Cerrar</button>
+    <button class="calBtn calBtnPrimary" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>
+  ` : `
+    <button class="calBtn calBtnGhost" onclick="window.close()">Cerrar sin guardar</button>
+    <button class="calBtn calBtnSecondary" onclick="calPopGuardarAvance()">💾 Guardar avance</button>
+    <button class="calBtn calBtnPrimary" onclick="calPopFinalizar()">✅ Finalizar revisión y generar reporte</button>
+  `;
+
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>${readonly?'Reporte':'Checklist'} de calidad — ${escapeHtml(rev.folio||rev.proyecto||'')}</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#eef1f6;font-family:'Segoe UI',Arial,sans-serif;color:#1a2233;padding:28px 28px 90px}
+.calCard{max-width:980px;margin:0 auto;background:#fff;border-radius:12px;box-shadow:0 2px 18px rgba(20,40,80,.1);overflow:hidden;border:1px solid #e1e6ee}
+.calBar{background:linear-gradient(90deg,#1a56d0,#2f7fd6);color:#fff;padding:14px 22px;font-size:16px;font-weight:700;letter-spacing:.02em}
+.calBanner{padding:10px 22px;font-size:12.5px;font-weight:600}
+.calBannerOk{background:#e8f8ef;color:#1a7f4b;border-bottom:1px solid #cdeedd}
+.calBannerWarn{background:#fff4e5;color:#8a5300;border-bottom:1px solid #ffe1b3}
+.calBody{padding:20px 22px}
+.calHeaderGrid{display:grid;grid-template-columns:1.1fr 1fr;gap:24px;margin-bottom:18px}
+.calKV{display:grid;grid-template-columns:120px 1fr;align-items:center;gap:8px;font-size:12.5px;margin-bottom:8px}
+.calKV span{color:#5a6478}
+.calKV b{color:#1a2233}
+.calKV input, .calKV select{width:100%;padding:5px 8px;border:1px solid #cfd8e3;border-radius:6px;font-size:12.5px;font-family:inherit;color:#1a2233;background:#fbfcfe}
+.calEntregablesList{list-style:none;padding:0;margin:0;font-size:12px;display:flex;flex-direction:column;gap:5px}
+.calFechasRow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;background:#f4f6fa;border:1px solid #e1e6ee;border-radius:8px;padding:12px 16px;margin-bottom:18px}
+.calSectionTitle{background:linear-gradient(90deg,#1a56d0,#2f7fd6);color:#fff;font-weight:700;font-size:13px;text-align:center;padding:8px;border-radius:6px;margin-bottom:12px;letter-spacing:.02em}
+.calChecklistCols{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+.calChecklistTable{width:100%;border-collapse:collapse;font-size:12px}
+.calChecklistTable td{border:1px solid #e1e6ee;padding:7px 9px;vertical-align:middle}
+.calItemName{width:62%;color:#1a2233}
+.calItemStatus{width:38%}
+.calObsBox{background:#f4f6fa;border:1px solid #e1e6ee;border-radius:8px;padding:14px 18px}
+.calObsBox textarea{width:100%;min-height:110px;border:1px solid #cfd8e3;border-radius:6px;padding:8px;font-family:inherit;font-size:12.5px;resize:vertical}
+.calObsBox ol{margin:0;padding-left:20px;font-size:12.5px;line-height:1.6}
+.calFooter{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e1e6ee;padding:12px 22px;display:flex;justify-content:flex-end;gap:10px;box-shadow:0 -2px 10px rgba(0,0,0,.05)}
+.calBtn{border:none;border-radius:7px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit}
+.calBtnGhost{background:#fff;border:1px solid #cfd8e3;color:#5a6478}
+.calBtnSecondary{background:#eef1f6;color:#1a56d0;border:1px solid #cfd8e3}
+.calBtnPrimary{background:#1a56d0;color:#fff}
+@media print{ .calFooter{display:none} body{background:#fff;padding:0} .calCard{box-shadow:none;border:none} }
+</style></head>
+<body>
+  <div class="calCard">
+    <div class="calBar">${readonly?'📄 Reporte de Revisión de Calidad':'✅ Checklist de Validación'}</div>
+    ${resultBanner}
+    <div class="calBody">
+      <div class="calHeaderGrid">
+        <div>${headerLeft}</div>
+        <div>${headerRight}</div>
+      </div>
+      <div class="calFechasRow">${fechasRow}</div>
+      <div class="calSectionTitle">Checklist Básico</div>
+      <div class="calChecklistCols">${itemsHTML}</div>
+      <div class="calSectionTitle">Lista de observaciones</div>
+      <div class="calObsBox">
+        ${readonly
+          ? `<ol>${obsHTML}</ol>`
+          : `<textarea id="calObservaciones" placeholder="Escribe una observación por línea…">${(rev.observaciones||'').replace(/</g,'&lt;')}</textarea>`}
+      </div>
+    </div>
+  </div>
+  <div class="calFooter">${footer}</div>
+  <scr${''}ipt>
+    var CAL_ESTATUS_COLORS = {pendiente:'#9aa3b0',cumple:'#1a7f4b',deficiencia:'#b8860b',no_cumple:'#c0392b',no_aplica:'#6b7280'};
+    function calPopRecolor(sel){ sel.style.color = CAL_ESTATUS_COLORS[sel.value] || '#1a2233'; }
+    ${readonly ? '' : `
+    document.querySelectorAll('.calItemEstatus').forEach(calPopRecolor);
+
+    function calPopRecolectar(){
+      var items = [];
+      document.querySelectorAll('.calItemEstatus').forEach(function(sel){
+        items.push({ catId: sel.getAttribute('data-itemid'), nombre: sel.closest('tr').querySelector('.calItemName').textContent, estatus: sel.value });
+      });
+      var entregables = [];
+      document.querySelectorAll('.calEntregableChk').forEach(function(chk){
+        entregables.push({ nombre: chk.parentElement.textContent.trim(), aplica: chk.checked });
+      });
+      return {
+        kmTotales: document.getElementById('calKm').value.trim(),
+        validador: document.getElementById('calValidador').value.trim(),
+        tipoRevision: document.getElementById('calTipoRevision').value,
+        dependencia: document.getElementById('calDependencia').value.trim(),
+        entregables: entregables,
+        fechaAsignacion: document.getElementById('calFechaAsig').value,
+        fechaRevision: document.getElementById('calFechaRev').value,
+        fechaProgramada: document.getElementById('calFechaProg').value,
+        items: items,
+        observaciones: document.getElementById('calObservaciones').value
+      };
+    }
+
+    function calPopGuardarAvance(){
+      if(!window.opener || window.opener.closed){ alert('Se cerró la ventana principal del dashboard. Vuelve a abrir el checklist desde ahí.'); return; }
+      window.opener.calGuardarAvance('${rev.id}', calPopRecolectar());
+      alert('Avance guardado ✅');
+    }
+
+    function calPopFinalizar(){
+      var payload = calPopRecolectar();
+      if(!payload.validador){ alert('Falta indicar quién es el validador.'); return; }
+      var pendientes = payload.items.filter(function(it){ return it.estatus==='pendiente'; });
+      if(pendientes.length){
+        alert('Todavía hay '+pendientes.length+' punto(s) sin evaluar:\\n\\n- '+pendientes.map(function(it){return it.nombre;}).join('\\n- ')+'\\n\\nEvalúa todos los puntos antes de finalizar.');
+        return;
+      }
+      if(!confirm('¿Finalizar la revisión y generar el reporte? El proyectista podrá verlo y ya no se podrán editar las respuestas.')) return;
+      if(!window.opener || window.opener.closed){ alert('Se cerró la ventana principal del dashboard. Vuelve a abrir el checklist desde ahí.'); return; }
+      window.opener.calFinalizarRevision('${rev.id}', payload);
+      window.close();
+    }
+    `}
+  <${''}/script>
+</body></html>`;
+}
+
+function calAplicarPayload(rev, payload){
+  if(!payload) return;
+  if(payload.kmTotales !== undefined) rev.kmTotales = payload.kmTotales;
+  if(payload.validador) rev.validador = payload.validador;
+  if(payload.tipoRevision) rev.tipoRevision = payload.tipoRevision;
+  if(payload.dependencia !== undefined) rev.dependencia = payload.dependencia;
+  if(payload.entregables) rev.entregables = payload.entregables;
+  if(payload.fechaAsignacion) rev.fechaAsignacion = payload.fechaAsignacion;
+  if(payload.fechaRevision) rev.fechaRevision = payload.fechaRevision;
+  if(payload.fechaProgramada !== undefined) rev.fechaProgramada = payload.fechaProgramada;
+  if(payload.items) rev.items = payload.items;
+  if(payload.observaciones !== undefined) rev.observaciones = payload.observaciones;
+}
+
+function calGuardarAvance(revId, payload){
+  calRevLoad();
+  const rev = CAL_REVISIONES.find(r=>r.id===revId);
+  if(!rev) return;
+  calAplicarPayload(rev, payload);
+  calRevSave(rev);
+}
+
+async function calFinalizarRevision(revId, payload){
+  calRevLoad();
+  const rev = CAL_REVISIONES.find(r=>r.id===revId);
+  if(!rev) return;
+  calAplicarPayload(rev, payload);
+
+  const hayProblemas = (rev.items||[]).some(it=>it.estatus==='deficiencia'||it.estatus==='no_cumple');
+  rev.resultado = hayProblemas ? 'con_deficiencias' : 'aprobado';
+  rev.estatus = 'completada';
+  rev.fechaCompletado = new Date().toISOString();
+  rev.completadoPor = _miNombre || rev.validador || 'Admin';
+
+  await calRevSaveCritico(rev);
+
+  const a = PA_ITEMS.find(x=>x.id===rev.actividadId);
+  if(a){
+    if(!hayProblemas){
+      a.estatus = 'Terminado';
+      if(typeof paSave==='function') paSave(a);
+    }
+    if(a.responsable && typeof supaSyncNotifProy==='function'){
+      const n = {
+        id: 'np_cal_'+Date.now(),
+        icon: hayProblemas ? '⚠️' : '✅',
+        title: hayProblemas ? 'Revisión de calidad: hay deficiencias' : 'Revisión de calidad aprobada',
+        msg: `"${a.folio||a.actividad||''}" — ${hayProblemas?'se encontraron puntos con deficiencia o que no cumplen, revisa el reporte para corregir.':'quedó aprobada sin observaciones pendientes.'}`,
+        time: new Date().toISOString(), tipo:'calidad'
+      };
+      supaSyncNotifProy(a.responsable, n);
+    }
+  }
+  if(segActiveTab==='calidad' && typeof renderSegCalidad==='function') renderSegCalidad();
 }
 
 // ══════════════════════════════════════════════════════
@@ -17559,12 +18265,18 @@ async function segRefrescarAsignacion(){
   await paRefreshFromSupabase();
   if(segActiveTab==='avance') renderSegAvance(); // repintar con datos frescos
 }
+async function segRefrescarCalidad(){
+  renderSegCalidad(); // pintar de inmediato con lo que ya haya en memoria/localStorage
+  await calCatRecargarDeSupabase();
+  await calRevRecargarDeSupabase();
+  if(segActiveTab==='calidad') renderSegCalidad(); // repintar con datos frescos
+}
 function segMount(tab){
   const mountMap = {
     udemy:    { target:'segUdemyMount',    source:'v-udemy',    render:()=>{ if(typeof renderUdemy==='function') renderUdemy(); } },
     reporteo: { target:'segReporteoMount', source:'v-reporteo', render:()=>{ if(typeof renderReporteoView==='function') renderReporteoView(); } },
     avance:   { target:'segAvanceMount',   source:null,         render:()=>{ segRefrescarAsignacion(); } },
-    calidad:  { target:'segCalidadMount',  source:null,         render:()=>{ renderSegCalidad(); } },
+    calidad:  { target:'segCalidadMount',  source:null,         render:()=>{ segRefrescarCalidad(); } },
     notas:    { target:'segNotasMount',    source:null,         render:()=>{ renderSegNotas(); } },
   };
   const cfg = mountMap[tab];
