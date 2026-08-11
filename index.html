@@ -5887,6 +5887,9 @@ function cronoToggle(actId){
 // ── Modal agregar subtarea ──
 let cronoModalActId = null;
 let cronoCorrNuevas = []; // correcciones nuevas capturadas a mano (sin entrega anterior) dentro del panel de corrección dinámica
+let cronoCorrNvTab = 'paq'; // pestaña activa dentro de "agregar corrección nueva": 'paq' | 'suel' | 'pers'
+let cronoCorrNvSelPaqId = ''; // paquete del catálogo seleccionado (pestaña Paquetes)
+let cronoCorrNvSelCatId = ''; // elemento suelto del catálogo seleccionado (pestaña Sueltas)
 // ── Subtarea simplificada para actividades de Trabajo Operativo ──
 // Solo pide descripción + tiempo de entrega en días; el avance se reporta como % acumulado, no unidades.
 function cronoAddSubtareaOperativaModal(actId){
@@ -6022,44 +6025,62 @@ function cronoAddSubtareaModal(actId){
         <button type="button" id="cronoCorrNuevaAddBtn" class="pa-btn pa-btn-ghost" style="font-size:11px;padding:6px 12px" onclick="cronoCorrNuevaFormToggle()">+ Agregar corrección nueva</button>
 
         <div id="cronoCorrNuevaForm" style="display:none;margin-top:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
-          <div style="margin-bottom:10px">
-            <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Nombre de la corrección</label>
-            <input id="cronoCorrNvNombre" type="text" placeholder="Ej. Ajuste de coordenadas faltantes"
-              style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
-            <div style="font-size:10px;color:var(--dim);margin-top:3px">Se va a guardar como "Corrección — [este nombre]"</div>
+          <div style="display:flex;gap:14px;margin-bottom:10px;border-bottom:1px solid var(--border)">
+            <div id="cronoCorrNvTabPaq" onclick="cronoCorrNvSetTab('paq')" style="padding:6px 2px;font-size:11.5px;color:var(--accent);border-bottom:2px solid var(--accent);cursor:pointer;font-weight:600">📦 Paquetes</div>
+            <div id="cronoCorrNvTabSuel" onclick="cronoCorrNvSetTab('suel')" style="padding:6px 2px;font-size:11.5px;color:var(--dim);border-bottom:2px solid transparent;cursor:pointer">Sueltas</div>
+            <div id="cronoCorrNvTabPers" onclick="cronoCorrNvSetTab('pers')" style="padding:6px 2px;font-size:11.5px;color:var(--dim);border-bottom:2px solid transparent;cursor:pointer">Personalizada</div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-            <div>
-              <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Unidad</label>
-              <input id="cronoCorrNvUnidad" type="text" placeholder="km, cortes, AP..."
-                style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
-            </div>
-            <div>
-              <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Cantidad total</label>
-              <input id="cronoCorrNvCantidad" type="number" min="0.1" step="0.1" placeholder="0"
-                style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
-            </div>
-          </div>
-          <div style="margin-bottom:10px">
-            <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:6px">Tipo de rendimiento</label>
-            <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden" id="cronoCorrNvTipoWrap">
-              <button type="button" id="btnCorrNvTipoUnidDia" onclick="cronoCorrNuevaSetTipo('unidades_por_dia')"
-                class="crono-tipo-btn crono-tipo-on" style="flex:1;padding:6px 10px;font-size:11px;border:none;cursor:pointer;transition:all .15s">
-                📊 Unidades/día
-              </button>
-              <button type="button" id="btnCorrNvTipoDiaUnid" onclick="cronoCorrNuevaSetTipo('dias_por_unidad')"
-                class="crono-tipo-btn" style="flex:1;padding:6px 10px;font-size:11px;border:none;cursor:pointer;transition:all .15s">
-                📅 Días/unidad
-              </button>
-            </div>
-            <input type="hidden" id="cronoCorrNvTipo" value="unidades_por_dia">
-          </div>
-          <div style="margin-bottom:12px">
-            <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px" id="cronoCorrNvRendLabel">Rendimiento (unidades/día)</label>
-            <input id="cronoCorrNvRend" type="number" min="0.1" step="0.1" placeholder="0"
+
+          <div id="cronoCorrNvListPaq" style="max-height:150px;overflow-y:auto;margin-bottom:10px"></div>
+          <div id="cronoCorrNvListSuel" style="display:none;max-height:150px;overflow-y:auto;margin-bottom:10px"></div>
+
+          <div id="cronoCorrNvCantWrap" style="margin-bottom:10px">
+            <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px" id="cronoCorrNvCantLabel">Cantidad total</label>
+            <input id="cronoCorrNvCantidad2" type="number" min="0.1" step="0.1" placeholder="0"
               style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
           </div>
-          <div style="display:flex;gap:8px;justify-content:flex-end">
+
+          <div id="cronoCorrNvPersForm" style="display:none">
+            <div style="margin-bottom:10px">
+              <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Nombre de la corrección</label>
+              <input id="cronoCorrNvNombre" type="text" placeholder="Ej. Ajuste de coordenadas faltantes"
+                style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+              <div style="font-size:10px;color:var(--dim);margin-top:3px">Se va a guardar como "Corrección — [este nombre]"</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+              <div>
+                <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Unidad</label>
+                <input id="cronoCorrNvUnidad" type="text" placeholder="km, cortes, AP..."
+                  style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+              </div>
+              <div>
+                <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Cantidad total</label>
+                <input id="cronoCorrNvCantidad" type="number" min="0.1" step="0.1" placeholder="0"
+                  style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+              </div>
+            </div>
+            <div style="margin-bottom:10px">
+              <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:6px">Tipo de rendimiento</label>
+              <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden" id="cronoCorrNvTipoWrap">
+                <button type="button" id="btnCorrNvTipoUnidDia" onclick="cronoCorrNuevaSetTipo('unidades_por_dia')"
+                  class="crono-tipo-btn crono-tipo-on" style="flex:1;padding:6px 10px;font-size:11px;border:none;cursor:pointer;transition:all .15s">
+                  📊 Unidades/día
+                </button>
+                <button type="button" id="btnCorrNvTipoDiaUnid" onclick="cronoCorrNuevaSetTipo('dias_por_unidad')"
+                  class="crono-tipo-btn" style="flex:1;padding:6px 10px;font-size:11px;border:none;cursor:pointer;transition:all .15s">
+                  📅 Días/unidad
+                </button>
+              </div>
+              <input type="hidden" id="cronoCorrNvTipo" value="unidades_por_dia">
+            </div>
+            <div style="margin-bottom:4px">
+              <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px" id="cronoCorrNvRendLabel">Rendimiento (unidades/día)</label>
+              <input id="cronoCorrNvRend" type="number" min="0.1" step="0.1" placeholder="0"
+                style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+            </div>
+          </div>
+
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
             <button type="button" class="pa-btn pa-btn-ghost" onclick="cronoCorrNuevaFormToggle()">Cancelar</button>
             <button type="button" class="pa-btn pa-btn-primary" onclick="cronoCorrNuevaAgregar()">Agregar a la lista</button>
           </div>
@@ -6240,12 +6261,77 @@ function cronoCorrNuevaFormToggle(){
     const unidadInp = document.getElementById('cronoCorrNvUnidad');
     const cantInp = document.getElementById('cronoCorrNvCantidad');
     const rendInp = document.getElementById('cronoCorrNvRend');
+    const cant2Inp = document.getElementById('cronoCorrNvCantidad2');
     if(nombreInp) nombreInp.value = '';
     if(unidadInp) unidadInp.value = '';
     if(cantInp) cantInp.value = '';
     if(rendInp) rendInp.value = '';
+    if(cant2Inp) cant2Inp.value = '';
     cronoCorrNuevaSetTipo('unidades_por_dia');
+    cronoCorrNvSelPaqId = '';
+    cronoCorrNvSelCatId = '';
+    cronoCorrNvSetTab('paq');
   }
+}
+
+function cronoCorrNvSetTab(tab){
+  cronoCorrNvTab = tab;
+  const tabs = {paq:'cronoCorrNvTabPaq', suel:'cronoCorrNvTabSuel', pers:'cronoCorrNvTabPers'};
+  Object.keys(tabs).forEach(k=>{
+    const el = document.getElementById(tabs[k]);
+    if(!el) return;
+    if(k===tab){ el.style.color='var(--accent)'; el.style.borderBottomColor='var(--accent)'; el.style.fontWeight='600'; }
+    else { el.style.color='var(--dim)'; el.style.borderBottomColor='transparent'; el.style.fontWeight='400'; }
+  });
+  const listPaq = document.getElementById('cronoCorrNvListPaq');
+  const listSuel = document.getElementById('cronoCorrNvListSuel');
+  const persForm = document.getElementById('cronoCorrNvPersForm');
+  const cantWrap = document.getElementById('cronoCorrNvCantWrap');
+  if(listPaq) listPaq.style.display = tab==='paq' ? 'block' : 'none';
+  if(listSuel) listSuel.style.display = tab==='suel' ? 'block' : 'none';
+  if(persForm) persForm.style.display = tab==='pers' ? 'block' : 'none';
+  if(cantWrap) cantWrap.style.display = (tab==='paq'||tab==='suel') ? 'block' : 'none';
+  const cantLbl = document.getElementById('cronoCorrNvCantLabel');
+  if(cantLbl && tab!=='pers') cantLbl.textContent = 'Cantidad total';
+  cronoCorrNvRenderListas();
+}
+
+function cronoCorrNvRenderListas(){
+  const listPaq = document.getElementById('cronoCorrNvListPaq');
+  const listSuel = document.getElementById('cronoCorrNvListSuel');
+  if(listPaq){
+    const paquetes = (CRONO_PAQUETES||[]).filter(p=>!p.dinamico);
+    listPaq.innerHTML = paquetes.length ? paquetes.map(p=>`
+      <div onclick="cronoCorrNvPickPaq('${p.id}')" style="padding:8px 10px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;background:${cronoCorrNvSelPaqId===p.id?'rgba(90,159,240,.12)':'var(--surface)'};border:1px solid ${cronoCorrNvSelPaqId===p.id?'var(--accent)':'var(--border)'}">
+        <span style="font-size:12px;color:var(--text)">${escapeHtml(p.nombre)}</span>
+        <span style="font-size:10.5px;color:var(--dim)">${p.rendimiento} ${escapeHtml(p.unidad)}/día · ${(p.entregables||[]).length} entregables</span>
+      </div>`).join('') : `<div style="font-size:11px;color:var(--dim);padding:8px 0">Sin paquetes en el catálogo todavía.</div>`;
+  }
+  if(listSuel){
+    listSuel.innerHTML = (CRONO_CATALOGO||[]).length ? CRONO_CATALOGO.map(c=>`
+      <div onclick="cronoCorrNvPickSuel('${c.id}')" style="padding:8px 10px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;background:${cronoCorrNvSelCatId===c.id?'rgba(90,159,240,.12)':'var(--surface)'};border:1px solid ${cronoCorrNvSelCatId===c.id?'var(--accent)':'var(--border)'}">
+        <span style="font-size:12px;color:var(--text)">${escapeHtml(c.nombre)}</span>
+        <span style="font-size:10.5px;color:var(--dim)">${escapeHtml(c.unidad)} · ${c.rendimiento}/día</span>
+      </div>`).join('') : `<div style="font-size:11px;color:var(--dim);padding:8px 0">Sin elementos en el catálogo todavía.</div>`;
+  }
+}
+
+function cronoCorrNvPickPaq(id){
+  cronoCorrNvSelPaqId = id;
+  cronoCorrNvSelCatId = '';
+  const paq = CRONO_PAQUETES.find(p=>p.id===id);
+  const lbl = document.getElementById('cronoCorrNvCantLabel');
+  if(lbl && paq) lbl.textContent = `Cantidad total (${paq.unidad})`;
+  cronoCorrNvRenderListas();
+}
+
+function cronoCorrNvPickSuel(id){
+  cronoCorrNvSelCatId = id;
+  cronoCorrNvSelPaqId = '';
+  const cat = CRONO_CATALOGO.find(c=>c.id===id);
+  const lbl = document.getElementById('cronoCorrNvCantLabel');
+  if(lbl && cat) lbl.textContent = `Cantidad total (${cat.unidad})`;
+  cronoCorrNvRenderListas();
 }
 
 function cronoCorrNuevaSetTipo(tipo){
@@ -6266,16 +6352,34 @@ function cronoCorrNuevaSetTipo(tipo){
 }
 
 function cronoCorrNuevaAgregar(){
-  const nombre = document.getElementById('cronoCorrNvNombre')?.value.trim();
-  const unidad = document.getElementById('cronoCorrNvUnidad')?.value.trim();
-  const cantidad = parseFloat(document.getElementById('cronoCorrNvCantidad')?.value)||0;
-  const rendimiento = parseFloat(document.getElementById('cronoCorrNvRend')?.value)||0;
-  const tipo = document.getElementById('cronoCorrNvTipo')?.value || 'unidades_por_dia';
-  if(!nombre){ alert('Falta el nombre de la corrección'); return; }
-  if(!unidad){ alert('Falta la unidad'); return; }
-  if(!cantidad){ alert('Falta la cantidad total'); return; }
-  if(!rendimiento){ alert('Falta el rendimiento'); return; }
-  cronoCorrNuevas.push({nombre, unidad, cantidad, rendimiento, tipo});
+  if(cronoCorrNvTab === 'pers'){
+    const nombre = document.getElementById('cronoCorrNvNombre')?.value.trim();
+    const unidad = document.getElementById('cronoCorrNvUnidad')?.value.trim();
+    const cantidad = parseFloat(document.getElementById('cronoCorrNvCantidad')?.value)||0;
+    const rendimiento = parseFloat(document.getElementById('cronoCorrNvRend')?.value)||0;
+    const tipo = document.getElementById('cronoCorrNvTipo')?.value || 'unidades_por_dia';
+    if(!nombre){ alert('Falta el nombre de la corrección'); return; }
+    if(!unidad){ alert('Falta la unidad'); return; }
+    if(!cantidad){ alert('Falta la cantidad total'); return; }
+    if(!rendimiento){ alert('Falta el rendimiento'); return; }
+    cronoCorrNuevas.push({nombre, unidad, cantidad, rendimiento, tipo});
+  } else if(cronoCorrNvTab === 'suel'){
+    if(!cronoCorrNvSelCatId){ alert('Selecciona un elemento del catálogo de sueltas.'); return; }
+    const cat = CRONO_CATALOGO.find(c=>c.id===cronoCorrNvSelCatId);
+    if(!cat){ alert('No se encontró el elemento seleccionado.'); return; }
+    const cantidad = parseFloat(document.getElementById('cronoCorrNvCantidad2')?.value)||0;
+    if(!cantidad){ alert('Falta la cantidad total'); return; }
+    cronoCorrNuevas.push({nombre: cat.nombre, unidad: cat.unidad, cantidad, rendimiento: cat.rendimiento, tipo: cat.tipo||'unidades_por_dia'});
+  } else if(cronoCorrNvTab === 'paq'){
+    if(!cronoCorrNvSelPaqId){ alert('Selecciona un paquete del catálogo.'); return; }
+    const paq = CRONO_PAQUETES.find(p=>p.id===cronoCorrNvSelPaqId);
+    if(!paq){ alert('No se encontró el paquete seleccionado.'); return; }
+    const cantidad = parseFloat(document.getElementById('cronoCorrNvCantidad2')?.value)||0;
+    if(!cantidad){ alert('Falta la cantidad total'); return; }
+    (paq.entregables||[]).forEach(entregable=>{
+      cronoCorrNuevas.push({nombre: `${paq.nombre} — ${entregable}`, unidad: paq.unidad, cantidad, rendimiento: paq.rendimiento, tipo: paq.tipo||'unidades_por_dia'});
+    });
+  }
   cronoCorrNuevasRender();
   cronoCorrNuevaFormToggle(); // cierra el formulario tras agregarla a la lista
 }
