@@ -5405,18 +5405,46 @@ function cronoSaveItem(actividadId){
   else cronoSave();
 }
 
-// ── Calcular días según tipo de rendimiento ──
+// ── Calcular días (fraccionarios, SIN redondear) según tipo de rendimiento ──
+// Importante: NO se redondea hacia arriba. Una subtarea de 0.5 km con rendimiento 10 km/día
+// tarda 0.05 días (una fracción de jornada), no un día completo — así la siguiente subtarea
+// puede empezar el mismo día en vez de "perder" un día completo por cada subtarea chica.
+// El redondeo/consumo de jornadas completas se maneja aparte, en cronoAvanzarCursorDia.
 function cronoDiasParaSubtarea(st){
   const tipo = st.tipo || 'unidades_por_dia';
   const cant = parseFloat(st.cantidad)||1;
   const rend = parseFloat(st.rendimiento)||1;
   if(tipo === 'dias_por_unidad'){
     // Ej: 2 días/cruce × 3 cruces = 6 días
-    return Math.ceil(cant * rend);
+    return cant * rend;
   } else {
     // Ej: 6 km/día, tengo 18 km → 3 días
-    return Math.ceil(cant / rend);
+    return cant / rend;
   }
+}
+
+// ── Avanza un cursor de fechas consumiendo "capacidad de jornada" fraccionaria ──
+// cursor: fecha (YYYY-MM-DD) del día hábil en el que estamos parados.
+// usado: fracción de ESE día ya ocupada por subtareas anteriores (0 = día libre, 1 = día lleno).
+// diasNecesarios: cuánto (en jornadas, puede ser fracción) necesita la subtarea actual.
+// Devuelve {inicio, fin, cursor, usado} — inicio/fin son las fechas a mostrar para ESTA subtarea,
+// y cursor/usado ya quedan listos para la siguiente llamada (encadenado).
+function cronoAvanzarCursorDia(cursor, usado, diasNecesarios){
+  const EPS = 1e-9;
+  const dias = Math.max(0, diasNecesarios||0);
+  const total = usado + dias; // jornadas acumuladas incluyendo lo ya ocupado en el día "cursor"
+  if(total < 1 - EPS){
+    // Ni sumando esta subtarea se completa un día de trabajo: se resuelve el mismo día "cursor",
+    // sin mover el calendario (así varias subtareas chicas pueden compartir el mismo día).
+    return { inicio: cursor, fin: cursor, cursor, usado: total };
+  }
+  // Se completa (o se supera) al menos un día de trabajo acumulado: el calendario avanza tantos
+  // días hábiles completos como se hayan cubierto, y lo que sobre queda "usado" en el día de llegada.
+  // Nota: para subtareas de 1 día exacto esto da el mismo resultado de siempre (ej. Lunes → Martes).
+  const diasCompletosAAvanzar = Math.floor(total + EPS);
+  const nuevoCursor = cronoAddWorkdays(cursor, diasCompletosAAvanzar);
+  const restante = total - diasCompletosAAvanzar;
+  return { inicio: cursor, fin: nuevoCursor, cursor: nuevoCursor, usado: Math.max(0, restante) };
 }
 
 // ── Rendimiento diario esperado de una subtarea (unidades/día, sin importar el tipo capturado) ──
@@ -5474,6 +5502,7 @@ function cronoFmtShort(str){
 function cronoCalcPronostico(subtareas, fechaInicio){
   if(!subtareas||!subtareas.length||!fechaInicio) return null;
   let cursor = fechaInicio;
+  let usado = 0; // fracción del día "cursor" ya ocupada
   // Solo incluir subtareas validadas (pendienteValidacion=true las excluye)
   const validas = subtareas.filter(st=>!st.pendienteValidacion);
   // Las subtareas que vienen de un mismo "paquete" corren en PARALELO: todas empiezan
@@ -5485,10 +5514,12 @@ function cronoCalcPronostico(subtareas, fechaInicio){
       const delGrupo = validas.filter(s=>s.paqueteId===st.paqueteId);
       const diasMax = Math.max(...delGrupo.map(s=>cronoDiasParaSubtarea(s)));
       delGrupo.forEach(s=>procesados.add(s.id));
-      cursor = cronoAddWorkdays(cursor, diasMax);
+      const r = cronoAvanzarCursorDia(cursor, usado, diasMax);
+      cursor = r.cursor; usado = r.usado;
     } else {
       const dias = cronoDiasParaSubtarea(st);
-      cursor = cronoAddWorkdays(cursor, dias);
+      const r = cronoAvanzarCursorDia(cursor, usado, dias);
+      cursor = r.cursor; usado = r.usado;
       procesados.add(st.id);
     }
   });
@@ -5766,6 +5797,7 @@ function renderReporteoView(){
           </tr></thead><tbody>`;
 
         let cursor = a.fechaAsig||crono.fechaInicio;
+        let usado = 0; // fracción del día "cursor" ya ocupada por subtareas anteriores
         const _paqCache = {}; // paqueteId -> {inicio, fin} ya calculado (para que corran en paralelo)
         subtareas.forEach((st,si)=>{
           const dias = cronoDiasParaSubtarea(st);
@@ -5776,16 +5808,18 @@ function renderReporteoView(){
               const delGrupo = subtareas.filter(s=>s.paqueteId===st.paqueteId);
               const diasMax = Math.max(...delGrupo.map(s=>cronoDiasParaSubtarea(s)));
               const inicioGrupo = cursor;
-              const finGrupo = cronoAddWorkdays(cursor, diasMax);
+              const r = cronoAvanzarCursorDia(cursor, usado, diasMax);
+              const finGrupo = r.fin;
               _paqCache[st.paqueteId] = {inicio:inicioGrupo, fin:finGrupo};
-              cursor = finGrupo; // el cursor global avanza UNA sola vez por todo el grupo (paralelo)
+              cursor = r.cursor; usado = r.usado; // el cursor global avanza UNA sola vez por todo el grupo (paralelo)
             }
             stInicio = _paqCache[st.paqueteId].inicio;
             stFin = _paqCache[st.paqueteId].fin;
           } else {
-            stInicio = cursor;
-            stFin = cronoAddWorkdays(cursor, dias);
-            cursor = stFin;
+            const r = cronoAvanzarCursorDia(cursor, usado, dias);
+            stInicio = r.inicio;
+            stFin = r.fin;
+            cursor = r.cursor; usado = r.usado;
           }
           const fechaFin = stFin;
           const stColor = st.pendienteValidacion?'var(--amber)':st.estatus==='completada'?'var(--green)':st.estatus==='en_progreso'?'var(--accent)':'var(--dim)';
@@ -5796,7 +5830,7 @@ function renderReporteoView(){
           html += `<tr id="subrow-${st.id}" style="border-bottom:0.5px solid var(--border)">
             <td style="padding:8px 8px"><div style="font-weight:500;color:var(--text)">${st.nombre}</div><div style="font-size:10px;color:var(--dim)">${st.unidad}${st.paqueteId?' · en paralelo':''}</div></td>
             <td style="padding:8px;text-align:center;color:var(--text)">${st.cantidad} <span style="color:var(--dim);font-size:10.5px">${st.unidad}</span></td>
-            <td style="padding:8px;text-align:center;color:var(--dim)" title="${(st.cantidad||1)/(st.rendimiento||1) < 1 ? 'Menos de una jornada' : ''}">${dias}d</td>
+            <td style="padding:8px;text-align:center;color:var(--dim)" title="${dias < 1 ? 'Menos de una jornada — puede compartir el día con otras subtareas' : ''}">${Number(dias.toFixed(2))}d</td>
             <td style="padding:8px;font-size:11px;color:var(--dim)">${cronoFmtShort(stInicio)}→${cronoFmtShort(fechaFin)}</td>
             <td style="padding:8px;text-align:center">
               <div style="font-size:11px;font-weight:500;color:${stColor}">${avanceSt}/${st.cantidad}</div>
