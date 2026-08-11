@@ -5430,11 +5430,20 @@ function cronoRendimientoDiarioEsperado(st){
 
 // ── ¿La cantidad reportada hoy quedó por debajo del rendimiento diario esperado? ──
 // No aplica a subtareas por porcentaje/operativas: ahí "cantidad" es el acumulado total, no lo avanzado ese día.
+// Tampoco aplica si con este reporte la subtarea se completa (llega a su cantidad total): si ya no queda
+// trabajo pendiente, no tiene sentido exigir que ese último reporte sostenga el ritmo diario esperado
+// (ej. si solo quedaban 0.095 km por hacer, reportar exactamente eso "completa" aunque sea menos que el
+// rendimiento diario normal de la subtarea).
+// IMPORTANTE: st.avanceAcum debe reflejar el acumulado ANTES de sumar cantidadHoy — llamar esta función
+// antes de actualizar st.avanceAcum en el punto de guardado.
 function cronoEvaluarRendimientoReporte(st, cantidadHoy){
   const esPct = st.unidad==='%' || st.esOperativo;
   const esperado = esPct ? null : cronoRendimientoDiarioEsperado(st);
   const cant = parseFloat(cantidadHoy)||0;
-  const bajo = !esPct && esperado!=null && cant>0 && cant < esperado;
+  const acumPrevio = parseFloat(st.avanceAcum)||0;
+  const total = parseFloat(st.cantidad)||0;
+  const completa = !esPct && total>0 && (acumPrevio + cant) >= total;
+  const bajo = !esPct && !completa && esperado!=null && cant>0 && cant < esperado;
   return { bajo, esperado };
 }
 
@@ -7073,6 +7082,10 @@ function cronoGuardarReporte(){
   const st = item?.subtareas?.find(s=>s.id===cronoReportStId);
   if(!st||!item) return;
 
+  // ¿Este reporte quedó por debajo del rendimiento diario esperado de la subtarea?
+  // (se evalúa contra el acumulado ANTES de sumar este reporte, así detecta si con esto se completa la subtarea)
+  const { bajo, esperado } = cronoEvaluarRendimientoReporte(st, cantidad);
+
   // Actualizar acumulado y estatus (topado al total de la subtarea, no tiene sentido pasarse)
   const nuevoAcum = (st.avanceAcum||0) + cantidad;
   if(st.cantidad && nuevoAcum > st.cantidad){
@@ -7080,9 +7093,6 @@ function cronoGuardarReporte(){
   }
   st.avanceAcum = st.cantidad ? Math.min(nuevoAcum, st.cantidad) : nuevoAcum;
   st.estatus = estatus;
-
-  // ¿Este reporte quedó por debajo del rendimiento diario esperado de la subtarea?
-  const { bajo, esperado } = cronoEvaluarRendimientoReporte(st, cantidad);
   if(bajo){
     alert(`⚠️ Reportaste ${cantidad} ${st.unidad}, por debajo del rendimiento esperado (${esperado} ${st.unidad}/día) para "${st.nombre}".\n\nSe va a guardar de todas formas, con esta marca para que quede registro.`);
   }
@@ -8990,6 +9000,10 @@ async function calProyGuardarReporteHoy(){
     const st = item?.subtareas?.find(s=>s.id===entry.stData.st.id);
     if(!st||!item) continue;
 
+    // Recalcular contra la subtarea recién recargada (por si su rendimiento cambió desde que se agregó a la lista)
+    // Se evalúa contra el acumulado ANTES de sumar este reporte, así detecta si con esto se completa la subtarea.
+    const { bajo, esperado } = cronoEvaluarRendimientoReporte(st, entry.cantidad);
+
     const esPct = st.unidad==='%' || st.esOperativo;
     if(esPct){
       st.avanceAcum = Math.max(0, Math.min(100, entry.cantidad)); // valor absoluto reportado, tope 0-100
@@ -8998,9 +9012,6 @@ async function calProyGuardarReporteHoy(){
       st.avanceAcum = st.cantidad ? Math.min(nuevoAcum, st.cantidad) : nuevoAcum;
     }
     st.estatus = entry.estatus;
-
-    // Recalcular contra la subtarea recién recargada (por si su rendimiento cambió desde que se agregó a la lista)
-    const { bajo, esperado } = cronoEvaluarRendimientoReporte(st, entry.cantidad);
 
     if(!item.reportes) item.reportes=[];
     item.reportes.push({
@@ -17104,6 +17115,9 @@ function avanceSetField(id, field, value){
 
 // Inline edit estatus — usa modal flotante para evitar conflictos con innerHTML
 function avanceInlineStatus(id, cur, td){
+  // Los proyectistas no pueden cambiar el estatus manualmente
+  if(_userRole==='proyectista') return;
+
   // Remover dropdown previo si existe
   const prev = document.getElementById('avanceStatusDropdown');
   if(prev) prev.remove();
@@ -17254,7 +17268,11 @@ function renderSegAvance(){
     html+=`<td><div style="font-family:var(--mono);font-size:11px;color:var(--accent)">${folio}</div>${isOp?`<div class="avance-nota-st" style="color:var(--muted)">${(a.actividad||'').slice(0,30)}</div>`:''}</td>`;
     if(!isOp) html+=`<td style="text-align:right;font-size:11px;color:var(--muted)">${a.km||'—'}</td>`;
     html+=`<td style="font-size:11px;white-space:nowrap;color:var(--muted)">${fmtD(a.fechaTermino)}</td>`;
-    html+=`<td style="cursor:pointer" onclick="avanceInlineStatus('${a.id}','${estAct}',this)" title="Clic para actualizar estatus"><span class="badge ${sc.cls}">${estAct}</span></td>`;
+    if(_userRole==='proyectista'){
+      html+=`<td><span class="badge ${sc.cls}" title="Solo un administrador o jefe puede cambiar el estatus">${estAct}</span></td>`;
+    }else{
+      html+=`<td style="cursor:pointer" onclick="avanceInlineStatus('${a.id}','${estAct}',this)" title="Clic para actualizar estatus"><span class="badge ${sc.cls}">${estAct}</span></td>`;
+    }
     html+=`<td style="cursor:pointer;min-width:120px" onclick="avanceInlineNota('${a.id}','${nota.replace(/'/g,"\'")}',this)" title="Clic para agregar nota de avance">${notaDisplay}</td>`;
     if(!isOp && !isImp) html+=`<td style="text-align:right;cursor:pointer" onclick="avanceInlineKm('${a.id}','${kmAct}',this)" title="Clic para actualizar km"><span style="font-size:11px;font-family:var(--mono);color:${kmAct?'var(--text)':'var(--dim)'}">${kmAct||'+ km'}</span></td>`;
     html+=`<td style="text-align:center;width:32px">${a.enlace?`<a href="${a.enlace}" target="_blank" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none" title="Abrir enlace"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></a>`:'—'}</td>`;
