@@ -2185,12 +2185,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
     </div>
     <div class="content" style="padding-top:0">
       <div class="dash-subtabs" style="margin-bottom:20px">
-        <div class="dash-subtab on" id="segTab-reporteo" onclick="segSetTab('reporteo')">📅 Reporteo</div>
+        <div class="dash-subtab" id="segTab-pendientes" onclick="segSetTab('pendientes')" style="display:none">📋 Mis pendientes</div>
+        <div class="dash-subtab" id="segTab-reporteo" onclick="segSetTab('reporteo')">📅 Reporteo</div>
         <div class="dash-subtab"   id="segTab-avance"   onclick="segSetTab('avance')">📊 Asignación</div>
         <div class="dash-subtab"   id="segTab-calidad"  onclick="segSetTab('calidad')">✅ Calidad</div>
         <div class="dash-subtab"   id="segTab-udemy"    onclick="segSetTab('udemy')">🎓 Udemy</div>
         <div class="dash-subtab"   id="segTab-notas"    onclick="segSetTab('notas')">📌 Notas</div>
       </div>
+      <div id="segView-pendientes" style="display:none"><div id="segPendientesMount"></div></div>
       <div id="segView-reporteo"><div id="segReporteoMount"></div></div>
       <div id="segView-udemy"   style="display:none"><div id="segUdemyMount"></div></div>
       <div id="segView-avance"  style="display:none"><div id="segAvanceMount"></div></div>
@@ -9330,7 +9332,7 @@ function renderCronoCalendario(){
 
   // Celdas vacías al inicio
   for(let i=0;i<startDow;i++){
-    html += `<div style="min-height:72px;border-radius:8px"></div>`;
+    html += `<div style="min-height:72px;border-radius:8px;border:0.5px solid transparent"></div>`;
   }
 
   // Días del mes
@@ -9346,12 +9348,18 @@ function renderCronoCalendario(){
     // Justificaciones activas este día (para cualquier persona)
     const justHoy = PA_MEMBERS.filter(m=>justGet(fecha,m));
 
+    // Nota: el fondo/borde "normal" usa var(--surface2)/var(--border) (no blancos fijos con alpha bajo)
+    // para que la cuadrícula se siga viendo tanto en tema oscuro como en tema claro.
+    const bgNormal = esFinSem ? 'var(--surface)' : 'var(--surface2)';
+    const bgCelda = esSel?'rgba(74,143,212,.15)':esHoy?'rgba(74,143,212,.06)':bgNormal;
+    const borderCelda = esSel?'rgba(74,143,212,.5)':esHoy?'rgba(74,143,212,.25)':'var(--border)';
+
     html += `<div onclick="calSelDia('${fecha}')"
       style="min-height:72px;border-radius:8px;padding:6px;cursor:pointer;transition:background .15s;
-        background:${esSel?'rgba(74,143,212,.15)':esHoy?'rgba(74,143,212,.06)':esFinSem?'rgba(255,255,255,.01)':'rgba(255,255,255,.02)'};
-        border:0.5px solid ${esSel?'rgba(74,143,212,.5)':esHoy?'rgba(74,143,212,.25)':'rgba(255,255,255,.05)'}"
+        background:${bgCelda};
+        border:0.5px solid ${borderCelda}"
       onmouseover="this.style.background='rgba(74,143,212,.08)'"
-      onmouseout="this.style.background='${esSel?'rgba(74,143,212,.15)':esHoy?'rgba(74,143,212,.06)':esFinSem?'rgba(255,255,255,.01)':'rgba(255,255,255,.02)'}'">
+      onmouseout="this.style.background='${bgCelda}'">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <div style="font-size:11px;font-weight:${esHoy?'700':'500'};color:${esHoy?'var(--accent)':esFinSem?'var(--dim)':'var(--text)'}">${d}</div>
         ${justHoy.length?`<span title="${justHoy.length} justificación${justHoy.length>1?'es':''} este día" style="font-size:9px;color:#c084fc">🔖${justHoy.length}</span>`:''}
@@ -9365,7 +9373,7 @@ function renderCronoCalendario(){
           ${quienes.length>3?`<div style="font-size:9px;color:var(--dim);display:flex;align-items:center">+${quienes.length-3}</div>`:''}
         </div>
         <div style="font-size:9px;color:var(--dim)">${reps.length} reporte${reps.length!==1?'s':''}</div>
-      ` : `<div style="font-size:9px;color:rgba(255,255,255,.1);margin-top:4px">—</div>`}
+      ` : `<div style="font-size:9px;color:var(--dim);opacity:.5;margin-top:4px">—</div>`}
     </div>`;
   }
 
@@ -9417,7 +9425,7 @@ function renderCronoCalendario(){
 
     if(requiereReporte && sinReportar.length){
       const sinJustificar = sinReportar.filter(m=>!justGet(calDiaSeleccionado,m));
-      html += `<div style="margin-top:12px;padding-top:12px;border-top:0.5px solid rgba(255,255,255,.08)">
+      html += `<div style="margin-top:12px;padding-top:12px;border-top:0.5px solid var(--border)">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <div style="font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.04em">Sin reportar (${sinReportar.length})</div>
           ${puedeJustificar && sinJustificar.length>1?`<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--dim);cursor:pointer">
@@ -18828,12 +18836,21 @@ async function supaSyncAvanceField(actividad_id, proyectista, campos){
 }
 
 // ══ PANEL DE SEGUIMIENTO ══
-let segActiveTab = 'reporteo';
+let segActiveTab = null; // se decide la primera vez según el rol (ver renderSeguimiento)
 const _segMounted = {};
-function renderSeguimiento(){ segSetTab(segActiveTab); }
+function renderSeguimiento(){
+  // Mostrar/ocultar la pestaña "Mis pendientes" — solo aplica al rol proyectista
+  const tabPend = document.getElementById('segTab-pendientes');
+  if(tabPend) tabPend.style.display = (_userRole==='proyectista') ? '' : 'none';
+
+  // Primera vez que se abre el panel en esta sesión: elegir pestaña de aterrizaje según el rol
+  if(!segActiveTab) segActiveTab = (_userRole==='proyectista') ? 'pendientes' : 'reporteo';
+
+  segSetTab(segActiveTab);
+}
 function segSetTab(tab){
   segActiveTab = tab;
-  ['reporteo','udemy','avance','calidad','notas'].forEach(t=>{
+  ['pendientes','reporteo','udemy','avance','calidad','notas'].forEach(t=>{
     const el = document.getElementById('segTab-'+t);
     if(el) el.classList.toggle('on', t===tab);
     const v = document.getElementById('segView-'+t);
@@ -18875,6 +18892,7 @@ async function segRefrescarCalidad(){
 }
 function segMount(tab){
   const mountMap = {
+    pendientes:{ target:'segPendientesMount', source:null,       render:()=>{ renderSegPendientes(); } },
     udemy:    { target:'segUdemyMount',    source:'v-udemy',    render:()=>{ if(typeof renderUdemy==='function') renderUdemy(); } },
     reporteo: { target:'segReporteoMount', source:'v-reporteo', render:()=>{ if(typeof renderReporteoView==='function') renderReporteoView(); } },
     avance:   { target:'segAvanceMount',   source:null,         render:()=>{ segRefrescarAsignacion(); } },
@@ -18893,6 +18911,160 @@ function segMount(tab){
     }
   }
   cfg.render();
+}
+
+// ── "Mis pendientes" (solo proyectista) — resumen visual de qué falta hacer ──
+function renderSegPendientes(){
+  const el = document.getElementById('segPendientesMount');
+  if(!el) return;
+
+  if(_userRole !== 'proyectista' || !_miNombre){
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--dim);font-size:12px">Esta vista es solo para el rol de proyectista.</div>';
+    return;
+  }
+
+  const hoyStr = repDateKey(new Date());
+  // Mismo criterio de "mis actividades" que usa la pestaña Asignación, para que los números coincidan.
+  const mias = PA_ITEMS.filter(a=>a.responsable===_miNombre);
+  const pendientes = mias.filter(a=>a.estatus!=='Terminado');
+
+  // Desglose por estatus
+  const estados = ['Sin iniciar','En progreso','En pausa','En revisión'];
+  const counts = {}; estados.forEach(e=>counts[e]=0);
+  pendientes.forEach(a=>{
+    const e = a.estatus||'Sin iniciar';
+    counts[e] = (counts[e]||0) + 1;
+  });
+
+  // Ordenadas por fecha límite más próxima primero; sin fecha van al final
+  const conFecha = pendientes.filter(a=>a.fechaTermino).sort((a,b)=>String(a.fechaTermino).localeCompare(String(b.fechaTermino)));
+  const sinFecha = pendientes.filter(a=>!a.fechaTermino);
+  const ordenadas = [...conFecha, ...sinFecha];
+  const vencidas = conFecha.filter(a=>a.fechaTermino < hoyStr).length;
+
+  // Cursos de Udemy que tiene actualmente "en progreso" (catálogo asignado + cursos propios)
+  const cursosEnCurso = [];
+  try{
+    const cats = udGetEffectiveCats();
+    Object.values(cats).flat().forEach(c=>{
+      if(typeof udGetStatus==='function' && udGetStatus(_miNombre, c.name)==='inprogress') cursosEnCurso.push(c.name);
+    });
+  }catch(e){}
+  try{
+    (UD_MIS_EXTRA||[]).forEach(c=>{
+      if(typeof udMiGetStatus==='function' && udMiGetStatus(c.name)==='inprogress' && !cursosEnCurso.includes(c.name)) cursosEnCurso.push(c.name);
+    });
+  }catch(e){}
+
+  const dotColorMap = {'Sin iniciar':'#7a8098','En progreso':'#4a8fd4','En pausa':'#f5a623','En revisión':'#f5a623'};
+
+  let html = `<div style="background:rgba(255,255,255,.03);border:0.5px solid var(--border);border-radius:12px;padding:16px;margin-top:8px">`;
+
+  // Stat cards
+  html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px">
+    <div style="background:var(--surface2);border:0.5px solid var(--border);border-radius:10px;padding:14px">
+      <div style="font-size:26px;font-weight:700;color:var(--text)">${pendientes.length}</div>
+      <div style="font-size:11px;color:var(--dim);margin-top:2px">Asignaciones pendientes</div>
+    </div>
+    <div style="background:var(--surface2);border:0.5px solid ${vencidas?'rgba(255,92,92,.35)':'var(--border)'};border-radius:10px;padding:14px">
+      <div style="font-size:26px;font-weight:700;color:${vencidas?'var(--red)':'var(--green)'}">${vencidas}</div>
+      <div style="font-size:11px;color:var(--dim);margin-top:2px">Con fecha límite vencida</div>
+    </div>
+    <div style="background:var(--surface2);border:0.5px solid var(--border);border-radius:10px;padding:14px">
+      <div style="font-size:26px;font-weight:700;color:var(--teal)">${cursosEnCurso.length}</div>
+      <div style="font-size:11px;color:var(--dim);margin-top:2px">Curso${cursosEnCurso.length!==1?'s':''} de Udemy en curso</div>
+    </div>
+  </div>`;
+
+  // Gráfico (por estatus) + lista de pendientes con fecha límite
+  html += `<div style="display:grid;grid-template-columns:200px 1fr;gap:20px;align-items:start">
+    <div style="text-align:center">
+      <div style="font-size:11px;color:var(--dim);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Por estatus</div>
+      <div style="position:relative;height:150px"><canvas id="segPendDonut"></canvas></div>
+      <div style="margin-top:10px;display:flex;flex-direction:column;gap:5px;text-align:left">
+        ${estados.map(e=>{
+          const cfg = (typeof PA_STATUS_CFG!=='undefined' && PA_STATUS_CFG[e]) ? PA_STATUS_CFG[e] : {dot:'var(--dim)'};
+          return `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)">
+            <span style="width:8px;height:8px;border-radius:50%;background:${cfg.dot};display:inline-block;flex-shrink:0"></span>
+            <span style="flex:1">${e}</span><span style="font-weight:600;color:var(--text)">${counts[e]||0}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+    <div>
+      <div style="font-size:11px;color:var(--dim);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Qué tengo que hacer</div>`;
+
+  if(!ordenadas.length){
+    html += `<div style="padding:24px;text-align:center;color:var(--dim);font-size:12px;border:0.5px dashed var(--border);border-radius:8px">🎉 No tienes asignaciones pendientes.</div>`;
+  } else {
+    html += `<div style="display:flex;flex-direction:column;gap:6px;max-height:360px;overflow-y:auto;padding-right:4px">`;
+    html += ordenadas.map(a=>{
+      const cfg = (typeof PA_STATUS_CFG!=='undefined' && PA_STATUS_CFG[a.estatus]) ? PA_STATUS_CFG[a.estatus] : {cls:'bgr',dot:'var(--dim)'};
+      let fechaTxt = 'Sin fecha límite', fechaColor = 'var(--dim)';
+      if(a.fechaTermino){
+        if(a.fechaTermino < hoyStr){
+          const atraso = Math.max(1, paWorkdays(a.fechaTermino, hoyStr) - 1);
+          fechaTxt = `Venció hace ${atraso}d hábil${atraso!==1?'es':''}`; fechaColor = 'var(--red)';
+        } else if(a.fechaTermino === hoyStr){
+          fechaTxt = 'Vence hoy'; fechaColor = 'var(--amber)';
+        } else {
+          const faltan = Math.max(0, (paWorkdays(hoyStr, a.fechaTermino)||1) - 1);
+          fechaTxt = `${faltan} día${faltan!==1?'s':''} hábil${faltan!==1?'es':''}`; fechaColor = faltan<=2 ? 'var(--amber)' : 'var(--dim)';
+        }
+      }
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;background:var(--surface2);border:0.5px solid var(--border);border-radius:8px">
+        <span style="width:8px;height:8px;border-radius:50%;background:${cfg.dot};flex-shrink:0"></span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.folio||a.actividad||'—'}</div>
+          <div style="font-size:10px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.proyecto||''}</div>
+        </div>
+        <span class="badge ${cfg.cls}" style="font-size:9px;flex-shrink:0;white-space:nowrap">${a.estatus||'Sin iniciar'}</span>
+        <div style="font-size:11px;color:${fechaColor};font-weight:500;white-space:nowrap;flex-shrink:0;min-width:100px;text-align:right">${fechaTxt}</div>
+      </div>`;
+    }).join('');
+    html += `</div>`;
+  }
+  html += `</div></div>`; // cierra lista + grid
+
+  // Curso(s) de Udemy en curso
+  html += `<div style="margin-top:18px;padding-top:16px;border-top:0.5px solid var(--border)">
+    <div style="font-size:11px;color:var(--dim);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.04em">🎓 Curso(s) en curso</div>`;
+  if(!cursosEnCurso.length){
+    html += `<div style="font-size:12px;color:var(--dim)">No tienes ningún curso de Udemy en progreso en este momento.</div>`;
+  } else {
+    html += `<div style="display:flex;flex-wrap:wrap;gap:8px">
+      ${cursosEnCurso.map(c=>`<span style="font-size:11px;padding:5px 12px;border-radius:20px;background:rgba(45,212,191,.12);color:var(--teal);font-weight:500">↗ ${c}</span>`).join('')}
+    </div>`;
+  }
+  html += `</div></div>`;
+
+  el.innerHTML = html;
+
+  // Donut de Chart.js — colores literales porque canvas no resuelve variables CSS
+  if(ci.segPendDonut){ ci.segPendDonut.destroy(); delete ci.segPendDonut; }
+  const canvas = document.getElementById('segPendDonut');
+  if(canvas && typeof Chart!=='undefined'){
+    const data = estados.map(e=>counts[e]||0);
+    const hayDatos = data.some(v=>v>0);
+    ci.segPendDonut = new Chart(canvas, {
+      type:'doughnut',
+      data:{
+        labels: estados,
+        datasets:[{
+          data: hayDatos ? data : [1],
+          backgroundColor: hayDatos ? estados.map(e=>dotColorMap[e]) : ['#3a4356'],
+          borderWidth: 0
+        }]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false, cutout:'68%',
+        plugins:{
+          legend:{ display:false },
+          tooltip:{ enabled: hayDatos, callbacks:{ label:(ctx)=>` ${ctx.label}: ${ctx.parsed}` } }
+        }
+      }
+    });
+  }
 }
 
 // ══ HOME OFFICE EDITOR ══
