@@ -5498,6 +5498,28 @@ function cronoFmtShort(str){
   return `${d.getDate()}/${d.getMonth()+1}`;
 }
 
+// ── Jornada laboral usada para convertir días fraccionarios a horas/minutos ──
+// Lun-Jue 9h (9am-7pm menos 1h comida) + Vie 6h (9am-3pm) = 42h/5 días = 8.4h/día promedio.
+const CRONO_HORAS_JORNADA = 8.4;
+
+// ── Formatea una cantidad de días (puede ser fraccionaria) como "Xd Xh Xmin" ──
+// Ej: 6.83 días -> "6d 6h 58min", 0.5 días -> "4h 12min", 0.12 días -> "1h"
+function cronoFmtDiasHoras(dias){
+  const d0 = Math.max(0, parseFloat(dias)||0);
+  if(d0<=0) return '0min';
+  const minPorDia = Math.round(CRONO_HORAS_JORNADA*60);
+  let totalMin = Math.round(d0 * minPorDia);
+  let dias_ = Math.floor(totalMin/minPorDia);
+  let restanteMin = totalMin - dias_*minPorDia;
+  let h = Math.floor(restanteMin/60);
+  let m = restanteMin%60;
+  const partes = [];
+  if(dias_>0) partes.push(`${dias_}d`);
+  if(h>0) partes.push(`${h}h`);
+  if(m>0) partes.push(`${m}min`);
+  return partes.length ? partes.join(' ') : '0min';
+}
+
 // ── Calcular pronóstico de toda la actividad (suma de subtareas en cadena) ──
 function cronoCalcPronostico(subtareas, fechaInicio){
   if(!subtareas||!subtareas.length||!fechaInicio) return null;
@@ -5830,7 +5852,7 @@ function renderReporteoView(){
           html += `<tr id="subrow-${st.id}" style="border-bottom:0.5px solid var(--border)">
             <td style="padding:8px 8px"><div style="font-weight:500;color:var(--text)">${st.nombre}</div><div style="font-size:10px;color:var(--dim)">${st.unidad}${st.paqueteId?' · en paralelo':''}</div></td>
             <td style="padding:8px;text-align:center;color:var(--text)">${st.cantidad} <span style="color:var(--dim);font-size:10.5px">${st.unidad}</span></td>
-            <td style="padding:8px;text-align:center;color:var(--dim)" title="${dias < 1 ? 'Menos de una jornada — puede compartir el día con otras subtareas' : ''}">${Number(dias.toFixed(2))}d</td>
+            <td style="padding:8px;text-align:center;color:var(--dim)" title="${dias < 1 ? 'Menos de una jornada — puede compartir el día con otras subtareas' : ''}">${cronoFmtDiasHoras(dias)}</td>
             <td style="padding:8px;font-size:11px;color:var(--dim)">${cronoFmtShort(stInicio)}→${cronoFmtShort(fechaFin)}</td>
             <td style="padding:8px;text-align:center">
               <div style="font-size:11px;font-weight:500;color:${stColor}">${avanceSt}/${st.cantidad}</div>
@@ -6569,29 +6591,14 @@ function cronoDiasUpdate(){
   const rend = parseFloat(document.getElementById('cronoStRend')?.value)||0;
   const tipo = document.getElementById('cronoStTipo')?.value||'unidades_por_dia';
   const el = document.getElementById('cronoDiasEstimados');
-  const HORAS_JORNADA = 8.4; // Promedio real: Lun-Jue 9h (9am-7pm menos 1h comida) + Vie 6h (9am-3pm) = 42h/5 días
   if(el && cant>0 && rend>0){
     let dias;
     if(tipo==='dias_por_unidad'){
       dias = cant * rend;
-      if(dias < 1){
-        const horas = Math.round(dias * HORAS_JORNADA * 10)/10;
-        el.textContent = `→ ${cant} ${document.getElementById('cronoStUnidad')?.value||'unidades'} × ${rend} días/unidad = ${dias.toFixed(2)} días (≈ ${horas} hora${horas!==1?'s':''})`;
-      } else {
-        const diasCeil = Math.ceil(dias);
-        el.textContent = `→ ${cant} ${document.getElementById('cronoStUnidad')?.value||'unidades'} × ${rend} días/unidad = ${diasCeil} día${diasCeil!==1?'s hábiles':''}`;
-      }
+      el.textContent = `→ ${cant} ${document.getElementById('cronoStUnidad')?.value||'unidades'} × ${rend} días/unidad = ${cronoFmtDiasHoras(dias)}`;
     } else {
       dias = cant/rend;
-      if(dias < 1){
-        const horas = Math.round(dias * HORAS_JORNADA * 10)/10;
-        el.textContent = `→ ${cant} ÷ ${rend} = ${dias.toFixed(2)} días (≈ ${horas} hora${horas!==1?'s':''})`;
-      } else {
-        const diasCeil = Math.ceil(dias);
-        el.textContent = dias%1===0
-          ? `→ ${cant} ÷ ${rend} = ${diasCeil} día${diasCeil!==1?'s hábiles':'hábil'}`
-          : `→ ${cant} ÷ ${rend} = ${dias.toFixed(2)} días (≈ ${diasCeil} día${diasCeil!==1?'s hábiles':'hábil'})`;
-      }
+      el.textContent = `→ ${cant} ÷ ${rend} = ${cronoFmtDiasHoras(dias)}`;
     }
     el.style.color = 'var(--accent)';
   } else if(el){ el.textContent=''; }
