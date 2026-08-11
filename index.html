@@ -5419,6 +5419,25 @@ function cronoDiasParaSubtarea(st){
   }
 }
 
+// ── Rendimiento diario esperado de una subtarea (unidades/día, sin importar el tipo capturado) ──
+function cronoRendimientoDiarioEsperado(st){
+  if(!st || !st.rendimiento) return null;
+  const rend = parseFloat(st.rendimiento)||0;
+  if(rend<=0) return null;
+  if(st.tipo === 'dias_por_unidad') return 1/rend; // ej: 2 días/cruce → 0.5 cruces/día esperados
+  return rend; // unidades_por_dia
+}
+
+// ── ¿La cantidad reportada hoy quedó por debajo del rendimiento diario esperado? ──
+// No aplica a subtareas por porcentaje/operativas: ahí "cantidad" es el acumulado total, no lo avanzado ese día.
+function cronoEvaluarRendimientoReporte(st, cantidadHoy){
+  const esPct = st.unidad==='%' || st.esOperativo;
+  const esperado = esPct ? null : cronoRendimientoDiarioEsperado(st);
+  const cant = parseFloat(cantidadHoy)||0;
+  const bajo = !esPct && esperado!=null && cant>0 && cant < esperado;
+  return { bajo, esperado };
+}
+
 // ── Calcular fecha pronóstico sumando días hábiles ──
 function cronoAddWorkdays(fechaStr, dias){
   let d = new Date(fechaStr + 'T00:00:00');
@@ -5811,11 +5830,11 @@ function renderReporteoView(){
         html += `<div style="font-size:11px;font-weight:500;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Reportes del equipo</div>
         <div style="max-height:200px;overflow-y:auto">`;
         [...reportes].reverse().slice(0,10).forEach(r=>{
-          html += `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)">
+          html += `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);${r.bajoRendimiento?'background:rgba(245,166,35,.06)':''}">
             <span style="font-size:11px;color:var(--dim);white-space:nowrap;min-width:50px">${r.fecha||'—'}</span>
             <span style="font-size:11px;font-weight:500;color:var(--accent);min-width:65px">${(r.quien||'').split(' ')[0]}</span>
-            <span style="font-size:12px;color:var(--text);flex:1">${r.subtareaNombre||''} — ${r.nota||''}</span>
-            ${r.cantidad?`<span style="font-size:11px;font-weight:500;color:var(--dim);white-space:nowrap">+${r.cantidad} ${r.unidad||''}</span>`:''}
+            <span style="font-size:12px;color:var(--text);flex:1">${r.subtareaNombre||''} — ${r.nota||''}${r.bajoRendimiento?` <span title="Por debajo del rendimiento esperado (${r.rendimientoEsperado} ${r.unidad}/día)" style="font-size:10px;padding:1px 7px;border-radius:10px;background:rgba(245,166,35,.15);color:var(--amber);font-weight:600;margin-left:4px">⚠ Bajo rendimiento</span>`:''}</span>
+            ${r.cantidad?`<span style="font-size:11px;font-weight:500;color:${r.bajoRendimiento?'var(--amber)':'var(--dim)'};white-space:nowrap">+${r.cantidad} ${r.unidad||''}</span>`:''}
           </div>`;
         });
         html += `</div>`;
@@ -7062,6 +7081,12 @@ function cronoGuardarReporte(){
   st.avanceAcum = st.cantidad ? Math.min(nuevoAcum, st.cantidad) : nuevoAcum;
   st.estatus = estatus;
 
+  // ¿Este reporte quedó por debajo del rendimiento diario esperado de la subtarea?
+  const { bajo, esperado } = cronoEvaluarRendimientoReporte(st, cantidad);
+  if(bajo){
+    alert(`⚠️ Reportaste ${cantidad} ${st.unidad}, por debajo del rendimiento esperado (${esperado} ${st.unidad}/día) para "${st.nombre}".\n\nSe va a guardar de todas formas, con esta marca para que quede registro.`);
+  }
+
   // Guardar reporte en historial
   if(!item.reportes) item.reportes=[];
   item.reportes.push({
@@ -7071,14 +7096,19 @@ function cronoGuardarReporte(){
     subtareaId: st.id,
     subtareaNombre: st.nombre,
     unidad: st.unidad,
-    cantidad, nota, estatus
+    cantidad, nota, estatus,
+    bajoRendimiento: bajo, rendimientoEsperado: esperado
   });
 
   cronoSave();
 
-  // Notificar a Raquel si es proyectista
+  // Notificar a Raquel/admin — variante distinta si vino por debajo del rendimiento
   if(_userRole==='proyectista' && _miNombre && typeof notifAdd==='function'){
-    notifAdd('📋', `${_miNombre.split(' ')[0]} reportó avance`, `${st.nombre}: +${cantidad} ${st.unidad} — ${nota.slice(0,40)}`, 'avance', false);
+    if(bajo){
+      notifAdd('⚠️', `${_miNombre.split(' ')[0]} reportó bajo rendimiento`, `${st.nombre}: ${cantidad} ${st.unidad} (esperado ${esperado} ${st.unidad}/día) — ${nota.slice(0,30)}`, 'avance', false);
+    } else {
+      notifAdd('📋', `${_miNombre.split(' ')[0]} reportó avance`, `${st.nombre}: +${cantidad} ${st.unidad} — ${nota.slice(0,40)}`, 'avance', false);
+    }
   }
 
   // Si con este reporte la actividad llegó al 100% de sus subtareas, pasarla a "En revisión"
@@ -8744,6 +8774,7 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
           <div style="flex:1">
             ${contexto?`<div style="font-size:10px;color:var(--muted);margin-bottom:1px">${contexto}</div>`:''}
             <span style="color:var(--accent)">${r.subtareaNombre||'—'}</span> · +${r.cantidad||0} ${r.unidad||''} · ${r.nota||''}
+            ${r.bajoRendimiento?`<div style="margin-top:2px"><span title="Se esperaban ${r.rendimientoEsperado} ${r.unidad}/día" style="font-size:10px;padding:1px 7px;border-radius:10px;background:rgba(245,166,35,.15);color:var(--amber);font-weight:600">⚠ Bajo rendimiento (esperado ${r.rendimientoEsperado} ${r.unidad}/día)</span></div>`:''}
           </div>
           <button onclick="calProyEliminarReporte('${r.id||''}',this)" title="Eliminar reporte"
             style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:13px;padding:2px 6px;border-radius:4px;flex-shrink:0"
@@ -8786,9 +8817,10 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
     html+=`<div style="margin-bottom:12px">
       <div style="font-size:11px;color:var(--accent);font-weight:600;margin-bottom:6px">📝 Por guardar (${pendientes.length})</div>
       ${pendientes.map((p,pi)=>`
-        <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text);padding:6px 8px;margin-bottom:4px;background:rgba(74,143,212,.06);border:0.5px solid rgba(74,143,212,.2);border-radius:6px">
+        <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text);padding:6px 8px;margin-bottom:4px;background:${p.bajoRendimiento?'rgba(245,166,35,.08)':'rgba(74,143,212,.06)'};border:0.5px solid ${p.bajoRendimiento?'rgba(245,166,35,.3)':'rgba(74,143,212,.2)'};border-radius:6px">
           <div style="flex:1">
             <span style="color:var(--accent)">${p.stData.st.nombre}</span> · +${p.cantidad} ${p.stData.st.unidad} · ${p.estatus.replace('_',' ')}${p.nota?' · '+p.nota:''}
+            ${p.bajoRendimiento?`<div style="margin-top:2px"><span title="Se esperaban ${p.rendimientoEsperado} ${p.stData.st.unidad}/día" style="font-size:10px;padding:1px 7px;border-radius:10px;background:rgba(245,166,35,.15);color:var(--amber);font-weight:600">⚠ Bajo rendimiento (esperado ${p.rendimientoEsperado} ${p.stData.st.unidad}/día)</span></div>`:''}
           </div>
           <button onclick="calProyQuitarPendiente(${pi})" title="Quitar de la lista"
             style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:13px;padding:2px 6px;border-radius:4px;flex-shrink:0"
@@ -8811,7 +8843,7 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
       <div>
         <label id="calProyCantLabel" style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Cantidad avanzada hoy</label>
         <div style="display:flex;gap:6px;align-items:center">
-          <input id="calProyCant" type="number" min="0" step="0.1" placeholder="0"
+          <input id="calProyCant" type="number" min="0" step="0.1" placeholder="0" oninput="calProyCantCheckRendimiento()"
             style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
           <span id="calProyUnidad" style="font-size:11px;color:var(--dim);white-space:nowrap">—</span>
         </div>
@@ -8852,7 +8884,26 @@ function calProyLeerFormActual(){
   const estatus = document.getElementById('calProyEstatus')?.value||'en_progreso';
   const nota = document.getElementById('calProyNota')?.value.trim()||'';
   if(!nota && !cantidad) return null;
-  return { stData: subtareas[idx], cantidad, estatus, nota };
+  const { bajo, esperado } = cronoEvaluarRendimientoReporte(subtareas[idx].st, cantidad);
+  return { stData: subtareas[idx], cantidad, estatus, nota, bajoRendimiento: bajo, rendimientoEsperado: esperado };
+}
+
+// ── Aviso en vivo mientras captura la cantidad: ¿va por debajo del rendimiento esperado? ──
+function calProyCantCheckRendimiento(){
+  const subtareas = window._calProySubtareas||[];
+  const sel = document.getElementById('calProyStSel');
+  const idx = parseInt(sel?.value);
+  const infoEl = document.getElementById('calProyStInfo');
+  if(isNaN(idx)||idx<0||!subtareas[idx]||!infoEl) return;
+  const st = subtareas[idx].st;
+  const cantidad = parseFloat(document.getElementById('calProyCant')?.value)||0;
+  const { bajo, esperado } = cronoEvaluarRendimientoReporte(st, cantidad);
+  if(bajo){
+    infoEl.innerHTML = `⚠️ <span style="color:var(--amber)">Vas por debajo del rendimiento esperado: reportaste ${cantidad} ${st.unidad}, se esperaban ${esperado} ${st.unidad}/día. Se guardará con esta marca.</span>`;
+  } else {
+    const esPct = st.unidad==='%' || st.esOperativo;
+    infoEl.textContent = esPct ? `Llevas reportado: ${st.avanceAcum||0}%` : `Acumulado: ${st.avanceAcum||0}/${st.cantidad} ${st.unidad}`;
+  }
 }
 function calProyLimpiarFormActual(){
   const sel = document.getElementById('calProyStSel'); if(sel) sel.value='';
@@ -8873,6 +8924,9 @@ function calProyAgregarPendiente(){
     if(entry.cantidad > restante){
       if(!confirm(`"${st.nombre}" tiene ${st.cantidad} ${st.unidad} en total y ya llevas ${yaAcumulado} ${st.unidad}. Solo quedan ${Math.max(restante,0)} ${st.unidad} disponibles, pero estás reportando ${entry.cantidad}.\n\n¿Seguro que quieres continuar? Se ajustará al máximo disponible al guardar.`)) return;
     }
+  }
+  if(entry.bajoRendimiento){
+    alert(`⚠️ "${st.nombre}": reportaste ${entry.cantidad} ${st.unidad}, por debajo del rendimiento esperado (${entry.rendimientoEsperado} ${st.unidad}/día).\n\nSe va a agregar de todas formas, con esta marca para que quede registro.`);
   }
   if(!Array.isArray(window._calProyPendientes)) window._calProyPendientes=[];
   window._calProyPendientes.push(entry);
@@ -8920,6 +8974,13 @@ async function calProyGuardarReporteHoy(){
 
   if(!pendientes.length){ alert('Selecciona al menos una subtarea y agrega una cantidad o nota.'); return; }
 
+  // Aviso combinado de rendimiento bajo antes de guardar (ya se avisó al agregar cada una, pero aquí se confirma junto)
+  const bajos = pendientes.filter(p=>p.bajoRendimiento);
+  if(bajos.length){
+    const detalle = bajos.map(p=>`• ${p.stData.st.nombre}: ${p.cantidad} ${p.stData.st.unidad} (esperado ${p.rendimientoEsperado} ${p.stData.st.unidad}/día)`).join('\n');
+    alert(`⚠️ ${bajos.length} subtarea${bajos.length!==1?'s':''} por debajo del rendimiento esperado:\n\n${detalle}\n\nSe va a guardar de todas formas, con esta marca para que quede registro.`);
+  }
+
   // Recargar de Supabase antes de guardar para no pisar datos
   await cronoRecargarDeSupabase();
 
@@ -8937,6 +8998,10 @@ async function calProyGuardarReporteHoy(){
       st.avanceAcum = st.cantidad ? Math.min(nuevoAcum, st.cantidad) : nuevoAcum;
     }
     st.estatus = entry.estatus;
+
+    // Recalcular contra la subtarea recién recargada (por si su rendimiento cambió desde que se agregó a la lista)
+    const { bajo, esperado } = cronoEvaluarRendimientoReporte(st, entry.cantidad);
+
     if(!item.reportes) item.reportes=[];
     item.reportes.push({
       id:'rep_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
@@ -8945,14 +9010,20 @@ async function calProyGuardarReporteHoy(){
       subtareaId: st.id,
       subtareaNombre: st.nombre,
       unidad: st.unidad,
-      cantidad: entry.cantidad, nota: entry.nota, estatus: entry.estatus
+      cantidad: entry.cantidad, nota: entry.nota, estatus: entry.estatus,
+      bajoRendimiento: bajo, rendimientoEsperado: esperado
     });
     itemsAfectados.add(item.actividadId);
 
-    // Notificar a Raquel por cada subtarea reportada
+    // Notificar a Raquel/admin por cada subtarea reportada — variante distinta si vino por debajo del rendimiento
     if(typeof notifAdd==='function'){
-      notifAdd('📋',`${(_miNombre||'').split(' ')[0]} reportó avance`,
-        `${st.nombre}: +${entry.cantidad} ${st.unidad}${entry.nota?' — '+entry.nota.slice(0,35):''}`, 'avance', false);
+      if(bajo){
+        notifAdd('⚠️', `${(_miNombre||'').split(' ')[0]} reportó bajo rendimiento`,
+          `${st.nombre}: ${entry.cantidad} ${st.unidad} (esperado ${esperado} ${st.unidad}/día)${entry.nota?' — '+entry.nota.slice(0,30):''}`, 'avance', false);
+      } else {
+        notifAdd('📋',`${(_miNombre||'').split(' ')[0]} reportó avance`,
+          `${st.nombre}: +${entry.cantidad} ${st.unidad}${entry.nota?' — '+entry.nota.slice(0,35):''}`, 'avance', false);
+      }
     }
   }
   itemsAfectados.forEach(id=>cronoSaveItem(id));
