@@ -740,6 +740,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 @keyframes vac-chip-pulse{0%,100%{box-shadow:0 0 8px rgba(61,214,140,.2);}50%{box-shadow:0 0 16px rgba(61,214,140,.45);}}
 .pa-alert-vac{border-color:rgba(61,214,140,.45);color:#3dd68c;background:rgba(61,214,140,.07);animation:vac-chip-pulse 2.4s ease-in-out infinite;}
 .pa-alert-vac .dot{background:#3dd68c;}
+/* Tema claro: los tonos pastel de arriba están pensados para fondo oscuro y casi no se ven
+   sobre blanco — se usan versiones más oscuras/saturadas del mismo color para que se lean bien. */
+[data-theme="light"] .pa-alert-red{color:#c62828;background:rgba(220,38,38,.09);border-color:rgba(220,38,38,.4);}
+[data-theme="light"] .pa-alert-amber{color:#a15c00;background:rgba(217,119,6,.1);border-color:rgba(217,119,6,.45);}
+[data-theme="light"] .pa-alert-notas{color:#8a6d00;background:rgba(184,134,11,.12);border-color:rgba(184,134,11,.45);}
+[data-theme="light"] .pa-alert-vac{color:#0f7a3d;background:rgba(22,163,74,.1);border-color:rgba(22,163,74,.4);}
 /* ── Modal detalle proyectista ── */
 .pdm-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:3000;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px);}
 .pdm-bg.open{display:flex;}
@@ -879,6 +885,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .notas-pending-grid{position:relative;}
 /* Fondo corcho */
 .notas-board{background:repeating-linear-gradient(0deg,transparent,transparent 28px,rgba(120,80,30,.04) 28px,rgba(120,80,30,.04) 29px),repeating-linear-gradient(90deg,transparent,transparent 28px,rgba(120,80,30,.04) 28px,rgba(120,80,30,.04) 29px),linear-gradient(135deg,#1a1200,#110d00)!important;border-radius:8px;}
+/* Tema claro: corcho color madera/tan claro en vez del casi-negro pensado para tema oscuro */
+[data-theme="light"] .notas-board,
+[data-theme="light"] .proy-notas-board{background:repeating-linear-gradient(0deg,transparent,transparent 28px,rgba(90,60,20,.08) 28px,rgba(90,60,20,.08) 29px),repeating-linear-gradient(90deg,transparent,transparent 28px,rgba(90,60,20,.08) 28px,rgba(90,60,20,.08) 29px),linear-gradient(135deg,#e3c89a,#d1ab78)!important;}
 /* Chincheta SVG via ::before */
 .postit{position:relative;border-radius:3px;padding:22px 14px 36px;min-height:120px;display:flex;flex-direction:column;box-shadow:0 3px 10px rgba(0,0,0,.35),0 1px 2px rgba(0,0,0,.2);transform:rotate(var(--tilt,0deg));transition:transform .15s;font-family:var(--font);}
 .postit::before{content:'';position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ff6b6b,#c0392b);box-shadow:0 2px 6px rgba(0,0,0,.5),0 0 0 2px rgba(0,0,0,.2),inset 0 1px 2px rgba(255,255,255,.3);z-index:10;}
@@ -11884,6 +11893,54 @@ let paSortDir = -1; // -1 = desc (newest first), 1 = asc
 let paHighlightResp = null; // responsable to highlight
 let paTipoChartInst = null;
 
+// ── Actividades en riesgo de NO entregarse a tiempo, según lo que se reporta en el cronograma ──
+// No es lo mismo que "vencida" (esa ya pasó su fecha). Aquí se compara, para actividades que AÚN
+// tienen tiempo, cuánto llevan reportado de avance real contra cuánto debería llevarse según el
+// tiempo (días hábiles) que ya transcurrió entre la fecha de asignación y la fecha límite.
+// Ej: si ya pasó el 70% del tiempo disponible pero solo llevan reportado 30% de avance real,
+// se marca en riesgo — aunque técnicamente todavía no esté vencida.
+const PA_RIESGO_TOLERANCIA = 0.20; // 20 puntos porcentuales de rezago para considerarse "en riesgo"
+function paCalcularEnRiesgo(){
+  if(typeof cronoLoad==='function') cronoLoad();
+  const hoyStr = repDateKey(new Date());
+  const enRiesgo = [];
+  if(typeof CRONO_ITEMS==='undefined' || !CRONO_ITEMS.length) return enRiesgo;
+
+  PA_ITEMS.forEach(a=>{
+    if(a.estatus==='Terminado' || !a.fechaTermino || !a.fechaAsig) return;
+    if(a.fechaTermino < hoyStr) return; // ya vencida — esa es otra alerta distinta
+
+    const crono = CRONO_ITEMS.find(it=>it.actividadId===a.id);
+    if(!crono || !crono.subtareas || !crono.subtareas.length) return;
+    const validas = crono.subtareas.filter(st=>!st.pendienteValidacion);
+    if(!validas.length) return;
+
+    let totalCant=0, totalAvance=0;
+    validas.forEach(st=>{
+      const esPct = st.unidad==='%' || st.esOperativo;
+      const cant = esPct ? 100 : (parseFloat(st.cantidad)||0);
+      if(cant<=0) return;
+      const avanceRaw = parseFloat(st.avanceAcum)||0;
+      const avance = esPct ? Math.min(100,avanceRaw) : Math.min(avanceRaw, cant);
+      totalCant += cant; totalAvance += avance;
+    });
+    if(totalCant<=0) return;
+    const pctReal = totalAvance/totalCant;
+
+    const totalDiasHabiles = paWorkdays(a.fechaAsig, a.fechaTermino);
+    const diasTranscurridos = paWorkdays(a.fechaAsig, hoyStr);
+    if(!totalDiasHabiles || totalDiasHabiles<=0) return;
+    const pctEsperado = Math.min(1, diasTranscurridos/totalDiasHabiles);
+
+    // Solo evaluamos una vez que ya pasó una porción razonable del tiempo (evita falsos positivos
+    // el mismo día que se asigna) y el rezago frente a lo esperado supera la tolerancia.
+    if(pctEsperado >= 0.15 && (pctEsperado - pctReal) >= PA_RIESGO_TOLERANCIA){
+      enRiesgo.push({...a, pctReal:Math.round(pctReal*100), pctEsperado:Math.round(pctEsperado*100)});
+    }
+  });
+  return enRiesgo;
+}
+
 // ── Red flags discretas ──
 function paRenderAlerts(){
   const bar = document.getElementById('paAlertsBar');
@@ -11919,9 +11976,13 @@ function paRenderAlerts(){
   // 6. En revisión — depende de algo externo/interno, alerta siempre que existan
   const enRevision = PA_ITEMS.filter(a => a.estatus==='En revisión');
 
+  // 6.5 En riesgo de no entregarse a tiempo, según el avance real reportado vs. el tiempo transcurrido
+  const enRiesgo = paCalcularEnRiesgo();
+
   const chips = [];
   if(sinResp.length) chips.push({type:'red', icon:'👤', label:`${sinResp.length} sin responsable`, action:`paAlertFilter('sinResp')`});
   if(vencidas.length) chips.push({type:'red', icon:'⏰', label:`${vencidas.length} vencida${vencidas.length!==1?'s':''}`, action:`paAlertFilter('vencidas')`});
+  if(enRiesgo.length) chips.push({type:'red', icon:'🚩', label:`${enRiesgo.length} en riesgo de retraso`, action:`paAlertFilter('enRiesgo')`});
   if(sobrecargados.length) chips.push({type:'amber', icon:'⚖️', label:`${sobrecargados.length} con sobrecarga`, action:`paAlertFilter('sobrecarga')`});
   if(sinFecha.length) chips.push({type:'amber', icon:'📅', label:`${sinFecha.length} sin fecha término`, action:`paAlertFilter('sinFecha')`});
   if(estancadas.length) chips.push({type:'amber', icon:'⏳', label:`${estancadas.length} estancada${estancadas.length!==1?'s':''} 3+ días`, action:`paAlertFilter('estancadas')`});
@@ -12007,6 +12068,15 @@ function paAlertFilter(kind){
       return `• ${a.actividad||'(sin nombre)'} ${a.folio?'['+a.folio+']':''} — ${a.responsable||'sin responsable'}${dias!==null?` (${dias}d desde asignación)`:''}`;
     });
     alert(`${title} (${items.length}):\n\n` + lines.join('\n') + (items.length>15?`\n\n…y ${items.length-15} más`:'') + `\n\nSugerencia: dar seguimiento interno o con el área externa correspondiente.`);
+    return;
+  } else if(kind==='enRiesgo'){
+    const enRiesgo = paCalcularEnRiesgo();
+    title = '🚩 En riesgo de no entregarse a tiempo';
+    if(!enRiesgo.length){ alert('Sin registros.'); return; }
+    const lines = enRiesgo.slice(0,15).map(a =>
+      `• ${a.actividad||a.folio||'(sin nombre)'} ${a.folio?'['+a.folio+']':''} — ${a.responsable||'sin responsable'} · lleva ${a.pctReal}% de avance, debería llevar ~${a.pctEsperado}% según el tiempo transcurrido (vence ${cronoFmtDate?cronoFmtDate(a.fechaTermino):a.fechaTermino})`
+    );
+    alert(`${title} (${enRiesgo.length}):\n\n` + lines.join('\n') + (enRiesgo.length>15?`\n\n…y ${enRiesgo.length-15} más`:'') + `\n\nSe calcula comparando el avance real reportado en el cronograma contra cuánto debería llevarse según los días hábiles ya transcurridos desde que se asignó.`);
     return;
   }
 
