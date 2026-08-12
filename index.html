@@ -5751,7 +5751,8 @@ function renderReporteoView(){
           </div>`).join('')}
       </div>`;
     }
-    html += `<div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+    html += `<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px">
+      ${_userRole==='admin' ? `<button class="pa-btn pa-btn-ghost" onclick="cronoRecalcularTodoElHistorial()" style="font-size:12px" title="Vuelve a evaluar 'bajo rendimiento' en todos los reportes guardados, contra el rendimiento/cantidad/unidad que tiene ahora cada subtarea">🔄 Recalcular rendimiento</button>` : ''}
       <button class="pa-btn pa-btn-ghost" onclick="cronoCatalogoModal()" style="font-size:12px">⚙️ Gestionar catálogo</button>
     </div>`;
   }
@@ -7116,6 +7117,44 @@ function cronoRecalcularReportesSubtarea(item, st){
     const nuevoAcum = runningAcum + cant;
     runningAcum = st.cantidad ? Math.min(nuevoAcum, st.cantidad) : nuevoAcum;
   });
+}
+
+// ── Recalcula "bajo rendimiento" en TODO el cronograma (todas las actividades y subtareas), contra
+// el rendimiento/cantidad/unidad que tiene ACTUALMENTE configurada cada subtarea. Se usa cuando hay
+// reportes viejos guardados con un estándar que ya cambió (ej. se editó la subtarea después de que
+// varios proyectistas ya habían reportado avance contra el estándar anterior) — a diferencia del
+// recálculo automático al editar una subtarea, esto cubre TODAS de una sola vez sin tener que abrir
+// el modal de "Editar" una por una.
+async function cronoRecalcularTodoElHistorial(){
+  if(_userRole!=='admin'){ alert('Solo un administrador puede hacer esto.'); return; }
+  if(!confirm('Esto vuelve a evaluar "bajo rendimiento" en TODOS los reportes guardados de TODAS las actividades, usando el rendimiento/cantidad/unidad que tiene configurada cada subtarea AHORA MISMO.\n\nÚtil si has editado subtareas (rendimiento, cantidad o unidad) después de que ya tenían reportes guardados con el estándar anterior.\n\n¿Continuar?')) return;
+
+  await cronoRecargarDeSupabase();
+
+  let totalReportes = 0;
+  const itemsAfectados = [];
+  CRONO_ITEMS.forEach(item=>{
+    if(!item.subtareas || !item.subtareas.length || !item.reportes || !item.reportes.length) return;
+    let tocado = false;
+    item.subtareas.forEach(st=>{
+      const propios = item.reportes.filter(r=>r.subtareaId===st.id);
+      if(!propios.length) return;
+      totalReportes += propios.length;
+      const antes = JSON.stringify(propios.map(r=>({b:r.bajoRendimiento, u:r.unidad, e:r.rendimientoEsperado})));
+      cronoRecalcularReportesSubtarea(item, st);
+      const despues = JSON.stringify(propios.map(r=>({b:r.bajoRendimiento, u:r.unidad, e:r.rendimientoEsperado})));
+      if(antes !== despues) tocado = true;
+    });
+    if(tocado) itemsAfectados.push(item);
+  });
+
+  cronoSave(); // guarda todo localmente
+  if(itemsAfectados.length){
+    cronoSave(itemsAfectados); // y sincroniza a Supabase solo las actividades que de verdad cambiaron
+  }
+
+  alert(`✅ Listo.\n\nSe revisaron ${totalReportes} reporte${totalReportes!==1?'s':''} en total.\n${itemsAfectados.length} actividad${itemsAfectados.length!==1?'es':''} tenía${itemsAfectados.length!==1?'n':''} reportes con la marca desactualizada, y ya se corrigieron.`);
+  renderReporteoView();
 }
 
 // ── Modal reporte diario ──
