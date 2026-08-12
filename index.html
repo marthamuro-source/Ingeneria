@@ -95,10 +95,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .herr-mgr-row .hm-info{flex:1;min-width:0;}
 .herr-mgr-row .hm-title{font-size:12px;font-weight:600;color:var(--text);}
 .herr-mgr-row .hm-desc{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.herr-mgr-row.hidden-role{opacity:.5;}
+.herr-mgr-vis{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:4px 7px;border-radius:6px;flex-shrink:0;}
+.herr-mgr-vis:hover{background:var(--surface);color:var(--text);}
+.herr-mgr-vis.off{color:var(--red);}
+.herr-mgr-edit{background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;padding:4px 7px;border-radius:6px;flex-shrink:0;}
+.herr-mgr-edit:hover{background:rgba(74,143,212,.12);}
+.herr-mgr-row.editing{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;}
 .herr-mgr-del{background:none;border:none;color:#ff8a8a;cursor:pointer;font-size:16px;padding:4px 8px;border-radius:6px;flex-shrink:0;}
 .herr-mgr-del:hover{background:rgba(255,92,92,.12);}
 .herr-mgr-add{border-top:1px solid var(--border);padding-top:14px;}
-.herr-mgr-add-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;}
+.herr-mgr-add-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
+.herr-mgr-cancel-edit{background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:10px;padding:3px 9px;border-radius:6px;text-transform:none;letter-spacing:0;font-weight:600;}
+.herr-mgr-cancel-edit:hover{color:var(--text);border-color:var(--dim);}
 
 /* ── Calculadora de Rendimientos ── */
 .rend-calc{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;margin-top:20px;}
@@ -316,7 +325,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 /* ── Modal editor de Home Office ── */
 .ho-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);z-index:900;display:none;align-items:center;justify-content:center;}
 .ho-modal-bg.open{display:flex;}
-.ho-modal{background:#070d1a;border:1px solid rgba(0,229,255,.3);border-radius:16px;padding:28px;width:540px;max-width:95vw;max-height:88vh;overflow-y:auto;box-shadow:0 0 40px rgba(0,229,255,.15),0 24px 60px rgba(0,0,0,.5);}
+.ho-modal{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:28px;width:540px;max-width:95vw;max-height:88vh;overflow-y:auto;box-shadow:0 0 40px rgba(0,229,255,.15),0 24px 60px rgba(0,0,0,.5);}
 .ho-modal-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;}
 .ho-modal-sub{font-size:11px;color:var(--muted);margin-bottom:20px;}
 .ho-day-section{margin-bottom:16px;border:1px solid var(--border);border-radius:10px;overflow:hidden;}
@@ -440,7 +449,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .eval-legend-foot{font-size:10.5px;color:var(--dim);border-top:1px solid var(--border);padding-top:10px;line-height:1.6;}
 .ud-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);z-index:900;display:none;align-items:center;justify-content:center;}
 .ud-modal-bg.open{display:flex;}
-.ud-modal{background:#070d1a;border:1px solid rgba(74,143,212,.3);border-radius:16px;padding:28px;width:640px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:0 0 40px rgba(74,143,212,.12),0 24px 60px rgba(0,0,0,.5);}
+.ud-modal{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:28px;width:640px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:0 0 40px rgba(74,143,212,.12),0 24px 60px rgba(0,0,0,.5);}
 .ud-modal-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:18px;}
 .ud-cat-section{margin-bottom:18px;}
 .ud-cat-head{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--accent);margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid var(--border);}
@@ -555,7 +564,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 /* Modal Servicio */
 .srv-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);z-index:900;display:none;align-items:center;justify-content:center;}
 .srv-modal-bg.open{display:flex;}
-.srv-modal{background:#070d1a;border:1px solid rgba(74,143,212,.3);border-radius:16px;padding:28px;width:600px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:0 0 40px rgba(74,143,212,.12),0 24px 60px rgba(0,0,0,.5);}
+.srv-modal{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:28px;width:600px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:0 0 40px rgba(74,143,212,.12),0 24px 60px rgba(0,0,0,.5);}
 .srv-modal-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:18px;display:flex;align-items:center;gap:8px;}
 .srv-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .srv-form-full{grid-column:1/-1;}
@@ -1674,7 +1683,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
         <div id="herrMgrList" class="herr-mgr-list"></div>
 
         <div class="herr-mgr-add">
-          <div class="herr-mgr-add-title">+ Agregar nuevo acceso</div>
+          <div class="herr-mgr-add-title"><span id="herrFormTitle">+ Agregar nuevo acceso</span> <button class="herr-mgr-cancel-edit" id="herrCancelEditBtn" style="display:none" onclick="herrCancelEdit()">Cancelar edición</button></div>
           <div class="pa-row2">
             <div class="pa-field">
               <label>Ícono (emoji)</label>
@@ -1698,7 +1707,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       </div>
       <div class="pa-modal-ft">
         <button class="pa-modal-close" style="font-size:13px;padding:8px 16px;border:1px solid var(--border);border-radius:8px" onclick="herrCloseManager()">Cerrar</button>
-        <button class="herr-manage-btn" onclick="herrAddCard()">+ Agregar acceso</button>
+        <button class="herr-manage-btn" id="herrSubmitBtn" onclick="herrSubmitCard()">+ Agregar acceso</button>
       </div>
     </div>
   </div>
@@ -11237,34 +11246,90 @@ function refresh(){
 
 // ─── HERRAMIENTAS DE TRABAJO: accesos editables ────────────────────────────
 const HERR_DEFAULT = [
-  {icon:'📜', title:'Normas y/o Información Oficial', desc:'Reglamentos, normativas y documentos oficiales de referencia', url:'https://drive.google.com/drive/folders/1KyQqu0aeviikyRnlR25BEKBQf9YhK2of'},
-  {icon:'📐', title:'Machotes Solapas y Memorias', desc:'Plantillas para planos, solapas y memorias de cálculo', url:'https://drive.google.com/drive/folders/1loRllXW_pLwwrXRdgaZ5wyOdO94Av9Xr'},
-  {icon:'📝', title:'Notas', desc:'Apuntes y notas de trabajo del equipo', url:'https://drive.google.com/drive/folders/1mAb3Bswyd0eZ4VUMf-h_NRsxMG91EBEq'},
-  {icon:'📚', title:'Material de apoyo', desc:'Recursos y referencias generales de consulta', url:'https://drive.google.com/drive/folders/1dWOtQbWlzIQUc6qLl2fMNICIQ6C24jWw'},
-  {icon:'📋', title:'Fichas Técnicas y/o Folletos', desc:'Especificaciones técnicas y folletos de materiales/equipos', url:'https://drive.google.com/drive/folders/1fk1A3WaGeEP0zMYECExgvyrpQF6rRsjh'},
-  {icon:'📖', title:'Manuales Internos y/o Oficiales', desc:'Manuales de procedimientos internos y oficiales', url:'https://drive.google.com/drive/folders/1mXohBHNOgg4hZeT8fEGNOgXuj3LZ5-V3'}
+  {id:'herr_normas', icon:'📜', title:'Normas y/o Información Oficial', desc:'Reglamentos, normativas y documentos oficiales de referencia', url:'https://drive.google.com/drive/folders/1KyQqu0aeviikyRnlR25BEKBQf9YhK2of', visible:true},
+  {id:'herr_machotes', icon:'📐', title:'Machotes Solapas y Memorias', desc:'Plantillas para planos, solapas y memorias de cálculo', url:'https://drive.google.com/drive/folders/1loRllXW_pLwwrXRdgaZ5wyOdO94Av9Xr', visible:true},
+  {id:'herr_notas', icon:'📝', title:'Notas', desc:'Apuntes y notas de trabajo del equipo', url:'https://drive.google.com/drive/folders/1mAb3Bswyd0eZ4VUMf-h_NRsxMG91EBEq', visible:true},
+  {id:'herr_material', icon:'📚', title:'Material de apoyo', desc:'Recursos y referencias generales de consulta', url:'https://drive.google.com/drive/folders/1dWOtQbWlzIQUc6qLl2fMNICIQ6C24jWw', visible:true},
+  {id:'herr_fichas', icon:'📋', title:'Fichas Técnicas y/o Folletos', desc:'Especificaciones técnicas y folletos de materiales/equipos', url:'https://drive.google.com/drive/folders/1fk1A3WaGeEP0zMYECExgvyrpQF6rRsjh', visible:true},
+  {id:'herr_manuales', icon:'📖', title:'Manuales Internos y/o Oficiales', desc:'Manuales de procedimientos internos y oficiales', url:'https://drive.google.com/drive/folders/1mXohBHNOgg4hZeT8fEGNOgXuj3LZ5-V3', visible:true}
 ];
-const HERR_LS_KEY = 'herrCards_v1';
+const HERR_LS_KEY = 'herrCards_v2'; // v2: ahora cada tarjeta tiene id estable + visible (por rol)
+let HERR_CARDS = null; // fuente de verdad en memoria; null = todavía no cargado
+let herrEditingId = null; // id de la tarjeta que se está editando en el modal, o null si es "agregar nueva"
 
-function herrGetCards(){
+// Fuente de verdad real: Supabase (tabla herr_cards) — así los accesos y su visibilidad
+// aplican para todo el equipo, no solo para el navegador de quien los edita.
+function herrDefaultsFresh(){
+  return HERR_DEFAULT.map(c=>({...c}));
+}
+async function herrLoadCards(){
+  // Caché local primero, para pintar rápido mientras llega Supabase
   try{
     const raw = localStorage.getItem(HERR_LS_KEY);
-    if(!raw) return HERR_DEFAULT.slice();
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : HERR_DEFAULT.slice();
-  }catch(e){ return HERR_DEFAULT.slice(); }
+    if(raw){ const parsed = JSON.parse(raw); if(Array.isArray(parsed) && parsed.length) HERR_CARDS = parsed; }
+  }catch(e){}
+  if(!HERR_CARDS) HERR_CARDS = herrDefaultsFresh();
+
+  if(!_supa) return;
+  try{
+    const { data, error } = await _supa.from('herr_cards').select('*').order('orden', {ascending:true});
+    if(error){ console.warn('herrLoadCards Supabase error (¿falta la tabla herr_cards?):', error); return; }
+    if(data && data.length){
+      HERR_CARDS = data.map(r=>({ id:r.id, icon:r.icon||'🔗', title:r.title||'', desc:r.desc||'', url:r.url||'', visible: r.visible!==false, orden: r.orden||0 }));
+      try{ localStorage.setItem(HERR_LS_KEY, JSON.stringify(HERR_CARDS)); }catch(e){}
+    } else {
+      // Tabla existe pero está vacía — primera vez que corre esta versión: sembrar con los defaults
+      // para que admin y equipo vean algo, y que quede en Supabase para todos desde ya.
+      const defaults = herrDefaultsFresh();
+      HERR_CARDS = defaults;
+      try{ localStorage.setItem(HERR_LS_KEY, JSON.stringify(HERR_CARDS)); }catch(e){}
+      defaults.forEach((c,i)=>{
+        _supa.from('herr_cards').upsert({ id:c.id, icon:c.icon, title:c.title, desc:c.desc, url:c.url, visible:true, orden:i, updated_at:new Date().toISOString() }, {onConflict:'id'})
+          .then(({error})=>{ if(error) console.error('❌ herr seed error:', error); });
+      });
+    }
+  }catch(e){ console.warn('herrLoadCards exception:', e); }
 }
-function herrSaveCards(list){
-  try{ localStorage.setItem(HERR_LS_KEY, JSON.stringify(list)); }catch(e){ console.warn('herrSaveCards error', e); }
+function herrGetCards(){
+  if(!HERR_CARDS) HERR_CARDS = herrDefaultsFresh();
+  return HERR_CARDS;
+}
+function herrPersistLocal(){
+  try{ localStorage.setItem(HERR_LS_KEY, JSON.stringify(HERR_CARDS)); }catch(e){}
+}
+async function herrSaveCardToSupabase(card){
+  if(!_supa) return;
+  try{
+    const { error } = await _supa.from('herr_cards').upsert({
+      id:card.id, icon:card.icon, title:card.title, desc:card.desc, url:card.url,
+      visible: card.visible!==false, orden: card.orden||0, updated_at:new Date().toISOString()
+    }, {onConflict:'id'});
+    if(error){
+      console.error('❌ herrSaveCardToSupabase:', error);
+      alert('Se guardó localmente, pero no se pudo guardar en Supabase, así que no se aplicará para el resto del equipo.\n\nMotivo: '+(error.message||error.code||'desconocido')+'\n\nEsto normalmente pasa si la tabla "herr_cards" no existe todavía en tu Supabase. Pídele a Claude que te ayude a crearla.');
+    }
+  }catch(e){ console.error('❌ herrSaveCardToSupabase excepción:', e); }
+}
+async function herrDeleteCardFromSupabase(id){
+  if(!_supa) return;
+  try{
+    const { error } = await _supa.from('herr_cards').delete().eq('id', id);
+    if(error) console.error('❌ herrDeleteCardFromSupabase:', error);
+  }catch(e){ console.error('❌ herrDeleteCardFromSupabase excepción:', e); }
 }
 function herrEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 function herrRenderGrid(){
   const mount = document.getElementById('herrGridMount');
   if(!mount) return;
-  const cards = herrGetCards();
+  let cards = herrGetCards();
+  // Los proyectistas solo ven los accesos que el admin dejó visibles para su rol
+  if(_userRole === 'proyectista') cards = cards.filter(c => c.visible !== false);
   if(!cards.length){
-    mount.innerHTML = '<div class="herr-note" style="grid-column:1/-1">No tienes accesos configurados todavía. Usa "⚙️ Editar accesos" para agregar el primero.</div>';
+    const msg = _userRole==='proyectista'
+      ? 'No hay accesos disponibles por ahora.'
+      : 'No tienes accesos configurados todavía. Usa "⚙️ Editar accesos" para agregar el primero.';
+    mount.innerHTML = '<div class="herr-note" style="grid-column:1/-1">'+msg+'</div>';
     return;
   }
   mount.innerHTML = cards.map(c => (
@@ -11285,33 +11350,77 @@ function herrRenderMgrList(){
     list.innerHTML = '<div class="herr-note">Sin accesos configurados.</div>';
     return;
   }
-  list.innerHTML = cards.map((c,i) => (
-    '<div class="herr-mgr-row">'
+  list.innerHTML = cards.map((c) => {
+    const visible = c.visible !== false;
+    return '<div class="herr-mgr-row'+(!visible?' hidden-role':'')+(herrEditingId===c.id?' editing':'')+'" data-herr-id="'+herrEsc(c.id)+'">'
     + '<span class="hm-icon">'+herrEsc(c.icon||'🔗')+'</span>'
     + '<div class="hm-info"><div class="hm-title">'+herrEsc(c.title)+'</div><div class="hm-desc">'+herrEsc(c.desc)+'</div></div>'
-    + '<button class="herr-mgr-del" title="Quitar este acceso" onclick="herrDeleteCard('+i+')">✕</button>'
-    + '</div>'
-  )).join('');
+    + '<button class="herr-mgr-vis'+(!visible?' off':'')+'" title="'+(visible?'Visible para proyectistas — clic para ocultar':'Oculto para proyectistas — clic para mostrar')+'" onclick="herrToggleVisible(\''+c.id+'\')">'+(visible?'👁️':'🙈')+'</button>'
+    + '<button class="herr-mgr-edit" title="Editar este acceso" onclick="herrStartEdit(\''+c.id+'\')">✎</button>'
+    + '<button class="herr-mgr-del" title="Quitar este acceso" onclick="herrDeleteCard(\''+c.id+'\')">✕</button>'
+    + '</div>';
+  }).join('');
 }
 
 function herrOpenManager(){
+  herrCancelEdit();
   herrRenderMgrList();
   const err = document.getElementById('herrMgrError');
   if(err){ err.style.display='none'; err.textContent=''; }
   document.getElementById('herrMgrBg').classList.add('open');
 }
 function herrCloseManager(){
+  herrCancelEdit();
   document.getElementById('herrMgrBg').classList.remove('open');
 }
-function herrDeleteCard(idx){
+function herrToggleVisible(id){
   const cards = herrGetCards();
-  if(!confirm('¿Quitar "'+cards[idx].title+'" de Herramientas de trabajo?')) return;
-  cards.splice(idx,1);
-  herrSaveCards(cards);
+  const card = cards.find(c=>c.id===id);
+  if(!card) return;
+  card.visible = card.visible===false ? true : false;
+  herrPersistLocal();
+  herrSaveCardToSupabase(card);
   herrRenderMgrList();
   herrRenderGrid();
 }
-function herrAddCard(){
+function herrDeleteCard(id){
+  const cards = herrGetCards();
+  const idx = cards.findIndex(c=>c.id===id);
+  if(idx<0) return;
+  if(!confirm('¿Quitar "'+cards[idx].title+'" de Herramientas de trabajo?')) return;
+  cards.splice(idx,1);
+  herrPersistLocal();
+  herrDeleteCardFromSupabase(id);
+  if(herrEditingId===id) herrCancelEdit();
+  herrRenderMgrList();
+  herrRenderGrid();
+}
+function herrStartEdit(id){
+  const card = herrGetCards().find(c=>c.id===id);
+  if(!card) return;
+  herrEditingId = id;
+  document.getElementById('herrNewIcon').value = card.icon||'';
+  document.getElementById('herrNewTitle').value = card.title||'';
+  document.getElementById('herrNewDesc').value = card.desc||'';
+  document.getElementById('herrNewUrl').value = card.url||'';
+  document.getElementById('herrFormTitle').textContent = '✎ Editar acceso';
+  document.getElementById('herrCancelEditBtn').style.display = '';
+  document.getElementById('herrSubmitBtn').textContent = '💾 Guardar cambios';
+  const err = document.getElementById('herrMgrError');
+  if(err){ err.style.display='none'; err.textContent=''; }
+  herrRenderMgrList();
+}
+function herrCancelEdit(){
+  herrEditingId = null;
+  const icon=document.getElementById('herrNewIcon'), title=document.getElementById('herrNewTitle'),
+        desc=document.getElementById('herrNewDesc'), url=document.getElementById('herrNewUrl');
+  if(icon) icon.value=''; if(title) title.value=''; if(desc) desc.value=''; if(url) url.value='';
+  const ft=document.getElementById('herrFormTitle'); if(ft) ft.textContent='+ Agregar nuevo acceso';
+  const cb=document.getElementById('herrCancelEditBtn'); if(cb) cb.style.display='none';
+  const sb=document.getElementById('herrSubmitBtn'); if(sb) sb.textContent='+ Agregar acceso';
+  herrRenderMgrList();
+}
+function herrSubmitCard(){
   const icon = document.getElementById('herrNewIcon').value.trim() || '🔗';
   const title = document.getElementById('herrNewTitle').value.trim();
   const desc = document.getElementById('herrNewDesc').value.trim();
@@ -11329,12 +11438,22 @@ function herrAddCard(){
   }
   err.style.display='none';
   const cards = herrGetCards();
-  cards.push({icon, title, desc, url});
-  herrSaveCards(cards);
-  document.getElementById('herrNewIcon').value='';
-  document.getElementById('herrNewTitle').value='';
-  document.getElementById('herrNewDesc').value='';
-  document.getElementById('herrNewUrl').value='';
+
+  if(herrEditingId){
+    const card = cards.find(c=>c.id===herrEditingId);
+    if(card){
+      card.icon = icon; card.title = title; card.desc = desc; card.url = url;
+      herrPersistLocal();
+      herrSaveCardToSupabase(card);
+    }
+  } else {
+    const card = {id:'herr_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), icon, title, desc, url, visible:true, orden: cards.length};
+    cards.push(card);
+    herrPersistLocal();
+    herrSaveCardToSupabase(card);
+  }
+
+  herrCancelEdit(); // limpia el formulario y vuelve a modo "agregar"
   herrRenderMgrList();
   herrRenderGrid();
 }
@@ -16377,6 +16496,7 @@ function enterDashboard(){
     hoLoadSchedule(),
     loadProyNotifs(),
     typeof dashLoadVisibility==='function' ? dashLoadVisibility() : Promise.resolve(),
+    typeof herrLoadCards==='function' ? herrLoadCards() : Promise.resolve(),
     typeof evalLoadPesos==='function' ? evalLoadPesos() : Promise.resolve(),
     typeof justLoad==='function' ? justLoad() : Promise.resolve(),
     typeof supaLoadAll==='function' ? supaLoadAll() : Promise.resolve(),
@@ -16412,6 +16532,7 @@ function enterDashboard(){
     if(curView==='ausencias' || curView==='equipo') goView(curView);
     if(curView==='udemy' || curView==='seguimiento') renderUdemy && renderUdemy();
     if(typeof dashApplyVisibility==='function') dashApplyVisibility();
+    if(curView==='herramientas' && typeof herrRenderGrid==='function') herrRenderGrid();
     if(curView==='evaluaciones' && typeof renderEvaluaciones==='function') renderEvaluaciones();
   }).catch(e=>console.warn('enterDashboard supabase load error',e));
 
