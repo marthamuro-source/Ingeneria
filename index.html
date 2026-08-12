@@ -16287,7 +16287,7 @@ function enterDashboard(){
 
   // Ir a vista correcta ANTES del splash
   var startView = (_userRole === 'proyectista') ? 'seguimiento' : 'panel';
-  if(_userRole === 'proyectista' && typeof segActiveTab !== 'undefined') segActiveTab = 'avance';
+  if(_userRole === 'proyectista' && typeof segActiveTab !== 'undefined') segActiveTab = 'pendientes';
   if(typeof _origGoView === 'function') _origGoView(startView);
   else if(typeof goView === 'function') goView(startView);
 
