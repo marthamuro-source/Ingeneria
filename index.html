@@ -7068,11 +7068,54 @@ async function cronoGuardarEdicionSubtarea(actId, stId){
   freshSt.editadoPor = _miNombre||'Admin';
   freshSt.editadoAt = repDateKey(new Date());
 
+  // Re-evaluar TODO el historial de reportes de esta subtarea contra el rendimiento/cantidad/unidad
+  // que acaba de quedar — así la marca de "bajo rendimiento" es consistente sin importar cuándo se
+  // reportó cada avance, en vez de quedar congelada con el estándar que aplicaba ese día.
+  cronoRecalcularReportesSubtarea(freshItem, freshSt);
+
   cronoSaveItem(actId);
 
   cronoSubTab = 'cronograma';
   cronoExpandedId = actId;
   renderReporteoView();
+}
+
+// ── Recalcula bajoRendimiento/rendimientoEsperado/unidad en TODO el historial de reportes de una
+// subtarea, usando su configuración ACTUAL. Se llama cada vez que un admin edita el rendimiento,
+// la cantidad total o la unidad de una subtarea, para que el historial completo quede evaluado
+// contra el mismo estándar — sin esto, cada reporte se queda marcado (o no) según el rendimiento
+// que estuviera vigente el día en que se guardó, lo cual se ve inconsistente al revisar el
+// historial más adelante (ej. dos reportes de "+4" donde solo uno aparece como bajo rendimiento).
+function cronoRecalcularReportesSubtarea(item, st){
+  if(!item || !item.reportes || !item.reportes.length || !st) return;
+  const reportes = item.reportes.filter(r=>r.subtareaId===st.id);
+  if(!reportes.length) return;
+
+  const esPct = st.unidad==='%' || st.esOperativo;
+
+  // Orden cronológico — por fecha y, como respaldo, por el id (incluye el timestamp de creación)
+  reportes.sort((a,b)=>{
+    const fa=a.fecha||'', fb=b.fecha||'';
+    if(fa!==fb) return fa.localeCompare(fb);
+    return String(a.id||'').localeCompare(String(b.id||''));
+  });
+
+  let runningAcum = 0;
+  reportes.forEach(r=>{
+    const cant = parseFloat(r.cantidad)||0;
+    r.unidad = st.unidad; // corrige también reportes viejos con una unidad ya renombrada
+    if(esPct){
+      r.bajoRendimiento = false;
+      r.rendimientoEsperado = null;
+      runningAcum = Math.max(0, Math.min(100, cant));
+      return;
+    }
+    const { bajo, esperado } = cronoEvaluarRendimientoReporte({...st, avanceAcum: runningAcum}, cant);
+    r.bajoRendimiento = bajo;
+    r.rendimientoEsperado = esperado;
+    const nuevoAcum = runningAcum + cant;
+    runningAcum = st.cantidad ? Math.min(nuevoAcum, st.cantidad) : nuevoAcum;
+  });
 }
 
 // ── Modal reporte diario ──
