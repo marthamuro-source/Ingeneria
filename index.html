@@ -5256,7 +5256,16 @@ let CRONO_ITEMS = []; // actividades con cronograma
 // ── Justificaciones de días no reportados (solo admin/jefe puede crear, visible para todos) ──
 let JUSTIFICACIONES = {}; // key `${fecha}|${persona}` -> {motivo, justificadoPor, creado}
 function justKey(fecha, persona){ return fecha+'|'+persona; }
-function justGet(fecha, persona){ return JUSTIFICACIONES[justKey(fecha,persona)] || null; }
+function justGet(fecha, persona){
+  const manual = JUSTIFICACIONES[justKey(fecha,persona)];
+  if(manual) return manual;
+  // Si ese día la persona está de vacaciones, se considera justificada automáticamente —
+  // no se le debe pedir reporte ni marcarla como "sin reportar"/"sin justificar" en ningún lado.
+  if(typeof VACACIONES!=='undefined' && VACACIONES[persona] && VACACIONES[persona].has(fecha)){
+    return { motivo: 'Día vacacional', justificadoPor: 'Sistema', creado: '', esVacacion: true };
+  }
+  return null;
+}
 async function justLoad(){
   if(!_supa) return;
   try{
@@ -5862,7 +5871,7 @@ function renderReporteoView(){
             <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Subtarea</th>
             <th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Cantidad</th>
             <th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Días est.</th>
-            <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Pronóstico</th>
+            <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Pronóstico <span style="cursor:help;text-transform:none;letter-spacing:0;font-weight:400" title="El pronóstico ya considera que el viernes es una jornada más corta (6h efectivas) que lunes-jueves (9h efectivas) — por eso el trabajo agendado en viernes avanza más lento que un día normal.">ⓘ</span></th>
             <th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Avance</th>
             <th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Estatus</th>
             <th style="width:80px"></th>
@@ -5930,6 +5939,7 @@ function renderReporteoView(){
               📅 Pronóstico de entrega: ${cronoFmtDate(pron)} ${diasR!==null?'· '+diasR+' días hábiles restantes':''}
             </span>
             ${a.fechaTermino?`<span style="font-size:11px;color:var(--dim)">Fecha límite: ${cronoFmtDate(a.fechaTermino)}</span>`:''}
+            <span style="font-size:10px;color:var(--dim);display:flex;align-items:center;gap:4px" title="Lunes a jueves se cuentan como jornada completa (9h efectivas) y el viernes como 6/9 de jornada (6h efectivas) — el cálculo ya reparte el trabajo con menos avance esperado para el viernes.">🕐 Ya considera jornada reducida de viernes (6h vs 9h)</span>
           </div>`;
         }
       } else {
@@ -8858,11 +8868,11 @@ function renderCronoCalProyectista(){
 
     html+=`<div onclick="${clickFn}" style="min-height:64px;border-radius:8px;padding:6px;border:0.5px solid ${border};background:${bg};cursor:${cursor};transition:background .15s"
       ${esHoy?`onmouseover="this.style.background='rgba(74,143,212,.2)'" onmouseout="this.style.background='${bg}'"`:''}
-      ${justif?`title="🔖 Justificado: ${justif.motivo}"`:''}>
+      ${justif?`title="${justif.esVacacion?'🏖️ De vacaciones':'🔖 Justificado: '+justif.motivo}"`:''}>
       <div style="font-size:11px;font-weight:${esHoy?'700':'500'};color:${esHoy?'var(--accent)':esFinSem||esFuturo?'var(--dim)':'var(--text)'}">${d}</div>
       ${esHoy?`<div style="font-size:9px;color:var(--accent);margin-top:3px;font-weight:600">${yaReporto?'✓ Reportado':'→ Reportar'}</div>`:''}
       ${!esHoy && yaReporto?`<div style="font-size:9px;color:var(--green);margin-top:3px">✓ ${reps.length} rep.</div>`:''}
-      ${!esHoy && !yaReporto && justif?`<div style="font-size:9px;color:#c084fc;margin-top:3px">🔖 Justificado</div>`:''}
+      ${!esHoy && !yaReporto && justif?`<div style="font-size:9px;color:#c084fc;margin-top:3px">${justif.esVacacion?'🏖️ Vacaciones':'🔖 Justificado'}</div>`:''}
       ${!esHoy && !yaReporto && !justif && !esFinSem && !esFuturo?`<div style="font-size:9px;color:rgba(255,92,92,.5);margin-top:3px">Sin reporte</div>`:''}
     </div>`;
   }
@@ -9389,7 +9399,9 @@ function calDiaGenerarPDF(fecha){
   <div class="sec">Sin reportar / justificaciones</div>
   ${sinReportar.length ? sinReportar.map(m=>{
     const j = justGet(fecha, m);
-    if(j) return `<div class="just">🔖 <b>${m.split(' ').slice(0,2).join(' ')}</b> — Justificado: ${j.motivo} (por ${(j.justificadoPor||'').split(' ')[0]})</div>`;
+    if(j) return j.esVacacion
+      ? `<div class="just">🏖️ <b>${m.split(' ').slice(0,2).join(' ')}</b> — De vacaciones ese día, no requiere reporte.</div>`
+      : `<div class="just">🔖 <b>${m.split(' ').slice(0,2).join(' ')}</b> — Justificado: ${j.motivo} (por ${(j.justificadoPor||'').split(' ')[0]})</div>`;
     return `<div class="flag">🚩 <b>${m.split(' ').slice(0,2).join(' ')}</b> — sin reportar, sin justificar</div>`;
   }).join('') : `<div style="font-size:11px;color:#1a7f4b">✅ Todo el equipo reportó ese día.</div>`}
   <div class="pbt"><button onclick="window.print()">Exportar PDF / Imprimir</button></div>
@@ -9578,8 +9590,8 @@ function renderCronoCalendario(){
           const mid = m.replace(/[^a-zA-Z0-9]/g,'');
           if(j){
             return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:5px;background:rgba(192,132,252,.08);border:0.5px solid rgba(192,132,252,.25);border-radius:8px">
-              <span style="font-size:11.5px;color:var(--text);flex:1">${m.split(' ').slice(0,2).join(' ')} — <span style="color:#c084fc">🔖 Justificado:</span> ${j.motivo}<span style="color:var(--dim)"> (por ${j.justificadoPor.split(' ')[0]})</span></span>
-              ${puedeJustificar?`<button onclick="calJustQuitar('${calDiaSeleccionado}','${m.replace(/'/g,"\\'")}')" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:12px;flex-shrink:0" title="Quitar justificación">✕</button>`:''}
+              <span style="font-size:11.5px;color:var(--text);flex:1">${m.split(' ').slice(0,2).join(' ')} — <span style="color:#c084fc">${j.esVacacion?'🏖️':'🔖'} ${j.esVacacion?'De vacaciones':'Justificado:'}</span> ${j.esVacacion?'':j.motivo}<span style="color:var(--dim)"> ${j.esVacacion?'(automático, no requiere reporte)':'(por '+j.justificadoPor.split(' ')[0]+')'}</span></span>
+              ${puedeJustificar && !j.esVacacion?`<button onclick="calJustQuitar('${calDiaSeleccionado}','${m.replace(/'/g,"\\'")}')" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:12px;flex-shrink:0" title="Quitar justificación">✕</button>`:''}
             </div>`;
           } else if(puedeJustificar){
             return `<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;margin-bottom:5px;background:rgba(255,92,92,.05);border:0.5px solid rgba(255,92,92,.18);border-radius:8px">
