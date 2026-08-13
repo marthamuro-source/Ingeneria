@@ -11271,51 +11271,68 @@ async function herrMigrateLegacyV1(){
     const raw = localStorage.getItem('herrCards_v1');
     if(!raw) return;
     const legacy = JSON.parse(raw);
-    if(!Array.isArray(legacy) || !legacy.length) return;
+    if(!Array.isArray(legacy) || !legacy.length){ localStorage.removeItem('herrCards_v1'); return; }
     const current = herrGetCards();
-    let added = false;
-    legacy.forEach(item=>{
-      if(!item || !item.title || !item.url) return;
+    let addedLocally = false;
+    let allSynced = true;
+    for(const item of legacy){
+      if(!item || !item.title || !item.url) continue;
       const yaExiste = current.some(c => c.title===item.title && c.url===item.url);
-      if(!yaExiste){
-        const card = {id:'herr_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), icon:item.icon||'🔗', title:item.title, desc:item.desc||'', url:item.url, visible:true, orden:current.length};
-        current.push(card);
-        herrSaveCardToSupabase(card);
-        added = true;
-        console.log('♻️ Acceso recuperado de la versión anterior:', item.title);
-      }
-    });
-    if(added){
+      if(yaExiste) continue;
+      const card = {id:'herr_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), icon:item.icon||'🔗', title:item.title, desc:item.desc||'', url:item.url, visible:true, orden:current.length};
+      current.push(card);
+      addedLocally = true;
+      const ok = await herrSaveCardToSupabase(card, {silent:true});
+      if(!ok) allSynced = false;
+      console.log((ok ? '♻️ Acceso recuperado y sincronizado' : '⚠️ Acceso recuperado localmente pero SIN sincronizar todavía (se reintentará)')+': '+item.title);
+    }
+    if(addedLocally){
       herrPersistLocal();
       if(typeof herrRenderGrid==='function') herrRenderGrid();
       if(typeof herrRenderMgrList==='function') herrRenderMgrList();
     }
-    localStorage.removeItem('herrCards_v1'); // ya migrado (o no había nada nuevo) — no repetir
+    // Solo borramos el respaldo viejo cuando TODO quedó confirmado en Supabase. Si algo falló
+    // (p.ej. no había permisos todavía), lo dejamos para reintentar en la próxima carga —
+    // es preferible repetir este chequeo barato que perder accesos que el admin ya había creado.
+    if(allSynced) localStorage.removeItem('herrCards_v1');
   }catch(e){ console.warn('herrMigrateLegacyV1 error:', e); }
 }
 async function herrLoadCards(){
   // Caché local primero, para pintar rápido mientras llega Supabase
+  let localCache = null;
   try{
     const raw = localStorage.getItem(HERR_LS_KEY);
-    if(raw){ const parsed = JSON.parse(raw); if(Array.isArray(parsed) && parsed.length) HERR_CARDS = parsed; }
+    if(raw){ const parsed = JSON.parse(raw); if(Array.isArray(parsed) && parsed.length) localCache = parsed; }
   }catch(e){}
-  if(!HERR_CARDS) HERR_CARDS = herrDefaultsFresh();
+  HERR_CARDS = localCache ? localCache.slice() : herrDefaultsFresh();
 
   if(!_supa){ await herrMigrateLegacyV1(); return; }
   try{
     const { data, error } = await _supa.from('herr_cards').select('*').order('orden', {ascending:true});
-    if(error){ console.warn('herrLoadCards Supabase error (¿falta la tabla herr_cards?):', error); await herrMigrateLegacyV1(); return; }
+    if(error){ console.warn('herrLoadCards Supabase error (¿falta la tabla herr_cards, o permisos?):', error); await herrMigrateLegacyV1(); return; }
     if(data && data.length){
-      HERR_CARDS = data.map(r=>({ id:r.id, icon:r.icon||'🔗', title:r.title||'', desc:r.desc||'', url:r.url||'', visible: r.visible!==false, orden: r.orden||0 }));
+      const fromSupa = data.map(r=>({ id:r.id, icon:r.icon||'🔗', title:r.title||'', desc:r.desc||'', url:r.url||'', visible: r.visible!==false, orden: r.orden||0 }));
+      // No descartar tarjetas que ya existan en la caché local pero que Supabase todavía no
+      // devuelva — eso pasa cuando se crearon mientras Supabase fallaba (p.ej. permisos) y
+      // aún no lograron sincronizarse. En vez de perderlas, las conservamos y reintentamos subirlas.
+      const supaIds = new Set(fromSupa.map(c=>c.id));
+      const localOnly = (localCache||[]).filter(c => c && c.id && c.title && c.url && !supaIds.has(c.id));
+      HERR_CARDS = [...fromSupa, ...localOnly];
+      if(localOnly.length){
+        console.log('⬆️ Reintentando sincronizar '+localOnly.length+' acceso(s) que no estaban en Supabase todavía…');
+        localOnly.forEach(c=>{ herrSaveCardToSupabase(c, {silent:true}); });
+      }
       try{ localStorage.setItem(HERR_LS_KEY, JSON.stringify(HERR_CARDS)); }catch(e){}
     } else {
       // Tabla existe pero está vacía — primera vez que corre esta versión: sembrar con los defaults
-      // para que admin y equipo vean algo, y que quede en Supabase para todos desde ya.
+      // (más cualquier acceso que ya hubiera en la caché local y no fuera un default) para que
+      // admin y equipo vean algo, y que quede en Supabase para todos desde ya.
       const defaults = herrDefaultsFresh();
-      HERR_CARDS = defaults;
+      const localOnly = (localCache||[]).filter(c => c && c.title && c.url && !defaults.some(d=>d.title===c.title && d.url===c.url));
+      HERR_CARDS = [...defaults, ...localOnly.map(c=>({...c, id: c.id || ('herr_'+Date.now()+'_'+Math.random().toString(36).slice(2,7))}))];
       try{ localStorage.setItem(HERR_LS_KEY, JSON.stringify(HERR_CARDS)); }catch(e){}
-      defaults.forEach((c,i)=>{
-        _supa.from('herr_cards').upsert({ id:c.id, icon:c.icon, title:c.title, desc:c.desc, url:c.url, visible:true, orden:i, updated_at:new Date().toISOString() }, {onConflict:'id'})
+      HERR_CARDS.forEach((c,i)=>{
+        _supa.from('herr_cards').upsert({ id:c.id, icon:c.icon, title:c.title, desc:c.desc, url:c.url, visible:c.visible!==false, orden:i, updated_at:new Date().toISOString() }, {onConflict:'id'})
           .then(({error})=>{ if(error) console.error('❌ herr seed error:', error); });
       });
     }
@@ -11329,8 +11346,9 @@ function herrGetCards(){
 function herrPersistLocal(){
   try{ localStorage.setItem(HERR_LS_KEY, JSON.stringify(HERR_CARDS)); }catch(e){}
 }
-async function herrSaveCardToSupabase(card){
-  if(!_supa) return;
+async function herrSaveCardToSupabase(card, opts){
+  const silent = opts && opts.silent;
+  if(!_supa) return false;
   try{
     const { error } = await _supa.from('herr_cards').upsert({
       id:card.id, icon:card.icon, title:card.title, desc:card.desc, url:card.url,
@@ -11338,9 +11356,11 @@ async function herrSaveCardToSupabase(card){
     }, {onConflict:'id'});
     if(error){
       console.error('❌ herrSaveCardToSupabase:', error);
-      alert('Se guardó localmente, pero no se pudo guardar en Supabase, así que no se aplicará para el resto del equipo.\n\nMotivo: '+(error.message||error.code||'desconocido')+'\n\nEsto normalmente pasa si la tabla "herr_cards" no existe todavía en tu Supabase. Pídele a Claude que te ayude a crearla.');
+      if(!silent) alert('Se guardó localmente, pero no se pudo guardar en Supabase, así que no se aplicará para el resto del equipo.\n\nMotivo: '+(error.message||error.code||'desconocido')+'\n\nEsto normalmente pasa si la tabla "herr_cards" no existe todavía en tu Supabase, o si le faltan permisos. Pídele a Claude que te ayude.');
+      return false;
     }
-  }catch(e){ console.error('❌ herrSaveCardToSupabase excepción:', e); }
+    return true;
+  }catch(e){ console.error('❌ herrSaveCardToSupabase excepción:', e); return false; }
 }
 async function herrDeleteCardFromSupabase(id){
   if(!_supa) return;
