@@ -7269,7 +7269,7 @@ function cronoGuardarReporte(){
   if(pa){
     const avanceTotal = cronoAvance(item.subtareas||[]);
     if(avanceTotal===100 && pa.estatus!=='En revisión' && pa.estatus!=='Terminado'){
-      pa.estatus = 'En revisión';
+      if(typeof paAplicarEstatus==='function') paAplicarEstatus(pa,'En revisión'); else pa.estatus = 'En revisión';
       if(typeof paSave==='function') paSave(pa);
       if(_userRole==='proyectista' && typeof notifAdd==='function'){
         notifAdd('🏁', `${(_miNombre||'').split(' ')[0]} terminó de reportar una actividad`,
@@ -9190,7 +9190,7 @@ async function calProyGuardarReporteHoy(){
     if(!item || !pa) return;
     const avanceTotal = cronoAvance(item.subtareas||[]);
     if(avanceTotal===100 && pa.estatus!=='En revisión' && pa.estatus!=='Terminado'){
-      pa.estatus = 'En revisión';
+      if(typeof paAplicarEstatus==='function') paAplicarEstatus(pa,'En revisión'); else pa.estatus = 'En revisión';
       if(typeof paSave==='function') paSave(pa);
       if(typeof notifAdd==='function'){
         notifAdd('🏁', `${(_miNombre||'').split(' ')[0]} terminó de reportar una actividad`,
@@ -12007,9 +12007,13 @@ function paRenderTipo(tipo){
       :(_userRole !== 'proyectista' ? `<span style="color:var(--dim);font-size:11px;cursor:pointer" onclick="paInlineEnlace('${a.id}','')" title="Agregar enlace">+</span>` : '');
     const respTd = `<td><div class="chip"><div class="mav" style="background:${bg};color:${c}">${ini(a.responsable)}</div>${nombreCorto(a.responsable)}</div></td>`;
     var _puedoEditar = (_userRole !== 'proyectista') || (_miNombre && a.responsable === _miNombre);
+    const _dp = paDiasEnPausa(a);
+    const pausaBadge = a.estatus==='En pausa'
+      ? ` <span style="font-size:9px;color:var(--amber);font-weight:600;white-space:nowrap" title="Días hábiles que lleva en pausa">⏸${_dp}d</span>`
+      : (_dp>0 ? ` <span style="font-size:9px;color:var(--dim);white-space:nowrap" title="Total de días hábiles que estuvo en pausa (histórico)">⏸${_dp}d hist.</span>` : '');
     const estatusTd = _puedoEditar
-      ? `<td style="cursor:pointer" onclick="paInlineStatus('${a.id}','${a.estatus||''}',this)" title="Clic para editar estatus"><span class="badge ${sc.cls}">${a.estatus}</span></td>`
-      : `<td><span class="badge ${sc.cls}">${a.estatus}</span></td>`;
+      ? `<td style="cursor:pointer" onclick="paInlineStatus('${a.id}','${a.estatus||''}',this)" title="Clic para editar estatus"><span class="badge ${sc.cls}">${a.estatus}</span>${pausaBadge}</td>`
+      : `<td><span class="badge ${sc.cls}">${a.estatus}</span>${pausaBadge}</td>`;
     const notasTd = _puedoEditar
       ? `<td style="cursor:pointer;min-width:100px" onclick="paInlineNotas('${a.id}','${notasVal}',this)" title="Clic para editar la nota">${notasDisplay}</td>`
       : `<td style="min-width:100px">${notasDisplay}</td>`;
@@ -13632,6 +13636,37 @@ function paDaysColor(est, real){
   return 'var(--red)';
 }
 
+// ── Conteo de días en pausa (hábiles) ──
+// a.pausaInicio: fecha (YYYY-MM-DD) en que entró a "En pausa" la vez actual (null si no está pausada)
+// a.diasEnPausaAcum: total de días hábiles acumulados de pausas anteriores ya cerradas
+function paPausaElapsed(desde, hasta){
+  if(!desde) return 0;
+  const d = paWorkdays(desde, hasta);
+  return d===null ? 0 : Math.max(0, d - 1);
+}
+
+function paAplicarEstatus(a, newEstatus){
+  if(!a || a.estatus === newEstatus) return;
+  const hoy = new Date().toISOString().slice(0,10);
+  if(a.estatus === 'En pausa' && a.pausaInicio){
+    a.diasEnPausaAcum = (a.diasEnPausaAcum||0) + paPausaElapsed(a.pausaInicio, hoy);
+    a.pausaInicio = null;
+  }
+  if(newEstatus === 'En pausa'){
+    a.pausaInicio = hoy;
+  }
+  a.estatus = newEstatus;
+}
+
+function paDiasEnPausa(a){
+  if(!a) return 0;
+  let dias = a.diasEnPausaAcum||0;
+  if(a.estatus==='En pausa' && a.pausaInicio){
+    dias += paPausaElapsed(a.pausaInicio, new Date().toISOString().slice(0,10));
+  }
+  return dias;
+}
+
 // ── Inline edit helpers ──
 function paInlineDate(id, field, currentVal, td){
   if(!td||td.querySelector('input')) return;
@@ -13652,7 +13687,7 @@ function paInlineStatus(id, currentVal, td){
     const o=document.createElement('option'); o.value=o.textContent=s; if(s===currentVal) o.selected=true; sel.appendChild(o);
   });
   td.innerHTML=''; td.appendChild(sel); sel.focus();
-  function save(){ const v=sel.value; const a=PA_ITEMS.find(x=>x.id===id); if(a){a.estatus=v;paSave(a);} renderPanel(); }
+  function save(){ const v=sel.value; const a=PA_ITEMS.find(x=>x.id===id); if(a){paAplicarEstatus(a,v);paSave(a);} renderPanel(); }
   sel.addEventListener('change', save);
   sel.addEventListener('blur', ()=>setTimeout(save,150));
 }
@@ -13871,9 +13906,20 @@ function paGuardar(){
 
   if(paModalEditId){
     const idx = PA_ITEMS.findIndex(x=>x.id===paModalEditId);
-    if(idx>-1){ data.createdAt = PA_ITEMS[idx].createdAt; PA_ITEMS[idx]=data; }
+    if(idx>-1){
+      const prev = PA_ITEMS[idx];
+      data.createdAt = prev.createdAt;
+      data.pausaInicio = prev.pausaInicio || null;
+      data.diasEnPausaAcum = prev.diasEnPausaAcum || 0;
+      const nuevoEstatus = data.estatus;
+      data.estatus = prev.estatus; // para que paAplicarEstatus detecte la transición real de estatus
+      paAplicarEstatus(data, nuevoEstatus);
+      PA_ITEMS[idx]=data;
+    }
   } else {
     data.createdAt = data.updatedAt;
+    data.pausaInicio = data.estatus === 'En pausa' ? new Date().toISOString().slice(0,10) : null;
+    data.diasEnPausaAcum = 0;
     PA_ITEMS.unshift(data);
       if(data.responsable && typeof notifNuevaActividad==='function'){
         notifNuevaActividad(data.responsable, data.folio||'', data.proyecto||data.actividad||'');
@@ -14265,6 +14311,7 @@ function pdmOpen(name){
             ${['Sin iniciar','En progreso','En pausa','En revisión','Terminado'].map(s=>`<option${s===a.estatus?' selected':''}>${s}</option>`).join('')}
           </select>
           <button class="pdm-edit-btn" onclick="pdmGoEdit('${a.id}','${a.tipo||'Proyecto'}')">✎ Editar completo</button>
+          ${(()=>{ const dp = paDiasEnPausa(a); if(a.estatus==='En pausa'){ return `<span style="font-size:10px;color:var(--amber);font-weight:600;white-space:nowrap" title="Días hábiles que lleva en pausa">⏸ ${dp}d en pausa</span>`; } if(dp>0){ return `<span style="font-size:10px;color:var(--dim);white-space:nowrap" title="Total de días hábiles que estuvo en pausa (histórico)">⏸ ${dp}d pausados (hist.)</span>`; } return ''; })()}
         </div>
       </div>
       <div class="pdm-act-right">
@@ -14303,7 +14350,7 @@ function pdmClickBg(e){
 function pdmUpdateStatus(id, newEstatus){
   const a = PA_ITEMS.find(x=>x.id===id);
   if(!a) return;
-  a.estatus = newEstatus;
+  paAplicarEstatus(a, newEstatus);
   paSave(a);
   paRenderTipo(a.tipo);
   renderPanel();
@@ -17470,7 +17517,7 @@ function avanceSetField(id, field, value){
   if(field === 'estatus' || field === 'km' || field === 'nota'){
     const act = PA_ITEMS.find(a=>a.id===id);
     if(act){
-      if(field === 'estatus') act.estatus = value;
+      if(field === 'estatus') paAplicarEstatus(act, value);
       if(field === 'km') act.km = value;
       if(field === 'nota') act.notas = value;
       if(typeof supaSyncActividad === 'function') supaSyncActividad(act);
@@ -18003,7 +18050,9 @@ function calHistorialRenderList(){
   }
 
   wrap.innerHTML = revs.map(r=>{
-    const badge = r.resultado==='aprobado'
+    const badge = r.resultado==='aprobado_sin_checklist'
+      ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(61,214,140,.12);color:var(--green);font-weight:600">✅ Aprobado sin checklist</span>`
+      : r.resultado==='aprobado'
       ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(61,214,140,.12);color:var(--green);font-weight:600">✅ Aprobado</span>`
       : `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(245,166,35,.1);color:var(--amber);font-weight:600">⚠ Con deficiencias</span>`;
     return `<div style="display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
@@ -18064,15 +18113,23 @@ function renderSegCalidad(){
     const ultimaCompletada = calUltimaRevisionCompletada(a.id);
     let accion;
     if(isAdmin){
-      const btnLabel = draft ? '↻ Continuar revisión' : (ultimaCompletada ? '🔁 Nueva revisión' : '▶ Iniciar revisión');
-      accion = `<button class="et-act-btn" style="padding:5px 12px;font-size:11px;background:rgba(90,159,240,.12);border:1px solid rgba(90,159,240,.3);color:var(--accent);border-radius:6px" onclick="calAbrirRevision('${a.id}')">${btnLabel}</button>`;
-      if(ultimaCompletada && !draft){
-        accion += `<button class="et-act-btn" style="margin-left:4px" title="Ver último reporte" onclick="calVerReporte('${a.id}')">📄</button>`;
+      const btns = [];
+      if(draft){
+        btns.push(`<button class="et-act-btn" style="padding:5px 12px;font-size:11px;background:rgba(90,159,240,.12);border:1px solid rgba(90,159,240,.3);color:var(--accent);border-radius:6px" onclick="calAbrirRevision('${a.id}')">↻ Continuar revisión</button>`);
+      } else {
+        // Dos caminos: aprobar directo (termina de inmediato) o generar checklist (regresa a
+        // "En proceso" al enviarse, sin importar el resultado, hasta que se apruebe sin checklist).
+        btns.push(`<button class="et-act-btn" style="padding:5px 12px;font-size:11px;background:rgba(61,214,140,.12);border:1px solid rgba(61,214,140,.35);color:var(--green);border-radius:6px" onclick="calAprobarSinChecklist('${a.id}')">✅ Aprobar sin checklist</button>`);
+        btns.push(`<button class="et-act-btn" style="padding:5px 12px;font-size:11px;background:rgba(90,159,240,.12);border:1px solid rgba(90,159,240,.3);color:var(--accent);border-radius:6px" onclick="calAbrirRevision('${a.id}')">${ultimaCompletada ? '🔁 Generar checklist' : '📋 Generar checklist'}</button>`);
       }
+      if(ultimaCompletada && !draft){
+        btns.push(`<button class="et-act-btn" title="Ver último reporte" onclick="calVerReporte('${a.id}')">📄</button>`);
+      }
+      accion = `<div style="display:flex;flex-direction:column;gap:5px;align-items:center">${btns.join('')}</div>`;
     } else if(ultimaCompletada){
-      const badge = ultimaCompletada.resultado==='aprobado'
+      const badge = (ultimaCompletada.resultado==='aprobado' || ultimaCompletada.resultado==='aprobado_sin_checklist')
         ? `<span style="font-size:10px;color:var(--green);font-weight:600">✅ Aprobado</span>`
-        : `<span style="font-size:10px;color:var(--amber);font-weight:600">⚠ Con deficiencias</span>`;
+        : `<span style="font-size:10px;color:var(--amber);font-weight:600">⚠ Con deficiencias — vuelve a "En proceso"</span>`;
       accion = `<div style="display:flex;flex-direction:column;align-items:center;gap:4px">${badge}<button class="et-act-btn" onclick="calVerReporte('${a.id}')">📄 Ver reporte</button></div>`;
     } else {
       accion = `<span style="font-size:10.5px;color:var(--dim);font-style:italic">Pendiente de revisión</span>`;
@@ -18169,9 +18226,11 @@ function calBuildPopupHTML(rev, a, readonly){
   const tipoRevisionOptsFull = (rev.tipoRevision && !tipoRevisionOpts.includes(rev.tipoRevision)) ? [...tipoRevisionOpts, rev.tipoRevision] : tipoRevisionOpts;
 
   const resultBanner = (readonly && rev.resultado) ? (
-    rev.resultado==='aprobado'
-      ? `<div class="calBanner calBannerOk">✅ Revisión aprobada — sin deficiencias · completada el ${fmtD((rev.fechaCompletado||'').slice(0,10))} por ${escapeHtml(rev.completadoPor||rev.validador||'')}</div>`
-      : `<div class="calBanner calBannerWarn">⚠️ Revisión con deficiencias — el folio permanece "En revisión" hasta corregir · completada el ${fmtD((rev.fechaCompletado||'').slice(0,10))} por ${escapeHtml(rev.completadoPor||rev.validador||'')}</div>`
+    rev.resultado==='aprobado_sin_checklist'
+      ? `<div class="calBanner calBannerOk">✅ Aprobada sin checklist — quedó como "Terminado" de inmediato · el ${fmtD((rev.fechaCompletado||'').slice(0,10))} por ${escapeHtml(rev.completadoPor||rev.validador||'')}</div>`
+      : rev.resultado==='aprobado'
+      ? `<div class="calBanner calBannerOk">✅ Revisión enviada — sin deficiencias · el folio vuelve a "En proceso" hasta la aprobación final · completada el ${fmtD((rev.fechaCompletado||'').slice(0,10))} por ${escapeHtml(rev.completadoPor||rev.validador||'')}</div>`
+      : `<div class="calBanner calBannerWarn">⚠️ Revisión con deficiencias — el folio vuelve a "En proceso" para corregir · completada el ${fmtD((rev.fechaCompletado||'').slice(0,10))} por ${escapeHtml(rev.completadoPor||rev.validador||'')}</div>`
   ) : '';
 
   const headerLeft = readonly ? `
@@ -18484,23 +18543,65 @@ async function calFinalizarRevision(revId, payload){
 
   await calRevSaveCritico(rev);
 
+  // Generar y enviar un checklist SIEMPRE regresa la actividad a "En proceso" — sin importar si
+  // salió limpio o con deficiencias. La única forma de dejarla como "Terminado" es aprobarla sin
+  // checklist (calAprobarSinChecklist). Así el ciclo revisión → checklist → en proceso → 100% →
+  // revisión se repite hasta que se apruebe definitivamente.
   const a = PA_ITEMS.find(x=>x.id===rev.actividadId);
   if(a){
-    if(!hayProblemas){
-      a.estatus = 'Terminado';
-      if(typeof paSave==='function') paSave(a);
-    }
+    if(typeof paAplicarEstatus==='function') paAplicarEstatus(a,'En progreso'); else a.estatus = 'En progreso';
+    if(typeof paSave==='function') paSave(a);
     if(a.responsable && typeof supaSyncNotifProy==='function'){
       const n = {
         id: 'np_cal_'+Date.now(),
-        icon: hayProblemas ? '⚠️' : '✅',
-        title: hayProblemas ? 'Revisión de calidad: hay deficiencias' : 'Revisión de calidad aprobada',
-        msg: `"${a.folio||a.actividad||''}" — ${hayProblemas?'se encontraron puntos con deficiencia o que no cumplen, revisa el reporte para corregir.':'quedó aprobada sin observaciones pendientes.'}`,
+        icon: hayProblemas ? '⚠️' : '📋',
+        title: hayProblemas ? 'Revisión de calidad: hay deficiencias' : 'Revisión de calidad enviada',
+        msg: `"${a.folio||a.actividad||''}" — ${hayProblemas?'se encontraron puntos con deficiencia o que no cumplen; revisa el reporte, corrígelos y vuelve a reportar el avance.':'quedó sin observaciones pendientes, pero vuelve a "En proceso"; en cuanto se reporte el 100% de nuevo pasará a revisión para la aprobación final.'}`,
         time: new Date().toISOString(), tipo:'calidad'
       };
       supaSyncNotifProy(a.responsable, n);
     }
   }
+  if(segActiveTab==='calidad' && typeof renderSegCalidad==='function') renderSegCalidad();
+}
+
+// ── Aprobar directamente sin checklist: la actividad pasa a "Terminado" de inmediato.
+// Se guarda un registro mínimo en el historial de calidad (resultado 'aprobado_sin_checklist')
+// para que quede constancia de quién aprobó y cuándo, aunque no se haya llenado un checklist.
+async function calAprobarSinChecklist(id){
+  if(_userRole!=='admin' && _userRole!=='jefe'){ alert('Solo un administrador puede aprobar una actividad.'); return; }
+  const a = PA_ITEMS.find(x=>x.id===id); if(!a) return;
+  if(!confirm('¿Aprobar "'+(a.folio||a.actividad||'esta actividad')+'" sin generar un checklist de calidad?\n\nSe marcará como Terminada de inmediato.')) return;
+
+  calRevLoad();
+  const rev = {
+    id: 'calrev_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+    actividadId: id,
+    proyecto: a.proyecto||'', folio: a.folio||a.actividad||'', tipo: a.tipo||'',
+    proyectista: a.responsable||'',
+    validador: _miNombre||'',
+    tipoRevision: '', dependencia: '', kmTotales: a.km||'',
+    entregables: [], fechaAsignacion: a.fechaAsig||'', fechaRevision: repDateKey(new Date()),
+    fechaProgramada: '', items: [], observaciones: [],
+    estatus: 'completada', resultado: 'aprobado_sin_checklist',
+    fechaCompletado: new Date().toISOString(), completadoPor: _miNombre||'Admin',
+  };
+  CAL_REVISIONES.push(rev);
+  await calRevSaveCritico(rev);
+
+  if(typeof paAplicarEstatus==='function') paAplicarEstatus(a,'Terminado'); else a.estatus = 'Terminado';
+  if(typeof paSave==='function') paSave(a);
+
+  if(a.responsable && typeof supaSyncNotifProy==='function'){
+    supaSyncNotifProy(a.responsable, {
+      id: 'np_cal_'+Date.now(),
+      icon: '✅',
+      title: 'Actividad aprobada',
+      msg: `"${a.folio||a.actividad||''}" fue aprobada sin checklist y quedó marcada como Terminada.`,
+      time: new Date().toISOString(), tipo:'calidad'
+    });
+  }
+
   if(segActiveTab==='calidad' && typeof renderSegCalidad==='function') renderSegCalidad();
 }
 
@@ -19198,6 +19299,7 @@ async function paRefreshFromSupabase(){
         fechaAsig:a.fecha_asig||'', fechaTermino:a.fecha_termino||'',
         fechaReal:a.fecha_real||'', numBobina:a.num_bobina||'',
         juegos:a.juegos||'', planosJuego:a.planos_juego||'',
+        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0,
         createdAt:a.created_at, updatedAt:a.updated_at,
       }));
       localStorage.setItem('c3ntro_panel_actividades', JSON.stringify(PA_ITEMS));
@@ -19325,6 +19427,10 @@ function renderSegPendientes(){
     html += `<div style="display:flex;flex-direction:column;gap:6px;max-height:360px;overflow-y:auto;padding-right:4px">`;
     html += ordenadas.map(a=>{
       const cfg = (typeof PA_STATUS_CFG!=='undefined' && PA_STATUS_CFG[a.estatus]) ? PA_STATUS_CFG[a.estatus] : {cls:'bgr',dot:'var(--dim)'};
+      const _dpPend = (typeof paDiasEnPausa==='function') ? paDiasEnPausa(a) : 0;
+      const pausaBadgePend = a.estatus==='En pausa'
+        ? `<span style="font-size:9px;color:var(--amber);font-weight:600;white-space:nowrap;flex-shrink:0" title="Días hábiles que lleva en pausa">⏸ ${_dpPend}d</span>`
+        : (_dpPend>0 ? `<span style="font-size:9px;color:var(--dim);white-space:nowrap;flex-shrink:0" title="Total de días hábiles que estuvo en pausa">⏸ ${_dpPend}d hist.</span>` : '');
       let fechaTxt = 'Sin fecha límite', fechaColor = 'var(--dim)';
       if(a.fechaTermino){
         if(a.fechaTermino < hoyStr){
@@ -19344,6 +19450,7 @@ function renderSegPendientes(){
           <div style="font-size:10px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.proyecto||''}</div>
         </div>
         <span class="badge ${cfg.cls}" style="font-size:9px;flex-shrink:0;white-space:nowrap">${a.estatus||'Sin iniciar'}</span>
+        ${pausaBadgePend}
         <div style="font-size:11px;color:${fechaColor};font-weight:500;white-space:nowrap;flex-shrink:0;min-width:100px;text-align:right">${fechaTxt}</div>
       </div>`;
     }).join('');
@@ -20135,6 +20242,7 @@ async function supaLoadAll(){
         fechaAsig:a.fecha_asig||'', fechaTermino:a.fecha_termino||'',
         fechaReal:a.fecha_real||'', numBobina:a.num_bobina||'',
         juegos:a.juegos||'', planosJuego:a.planos_juego||'',
+        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0,
         createdAt:a.created_at, updatedAt:a.updated_at,
       }));
       localStorage.setItem('c3ntro_panel_actividades', JSON.stringify(PA_ITEMS));
@@ -20408,6 +20516,7 @@ async function supaMigrateFromLocal(){
         fecha_asig:a.fechaAsig||null, fecha_termino:a.fechaTermino||null,
         fecha_real:a.fechaReal||null, num_bobina:a.numBobina||null,
         juegos:a.juegos||null, planos_juego:a.planosJuego||null,
+        pausa_inicio:a.pausaInicio||null, dias_en_pausa_acum:a.diasEnPausaAcum||0,
         created_at:a.createdAt||new Date().toISOString(),
         updated_at:a.updatedAt||new Date().toISOString(),
       }));
@@ -20655,6 +20764,7 @@ async function supaSyncActividad(a){
     fecha_asig:a.fechaAsig||null, fecha_termino:a.fechaTermino||null,
     fecha_real:a.fechaReal||null, num_bobina:a.numBobina||null,
     juegos:a.juegos||null, planos_juego:a.planosJuego||null,
+    pausa_inicio:a.pausaInicio||null, dias_en_pausa_acum:a.diasEnPausaAcum||0,
     updated_at:new Date().toISOString(),
   };
   try{
