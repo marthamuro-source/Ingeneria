@@ -5861,6 +5861,10 @@ function renderReporteoView(){
           ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(74,143,212,.12);color:var(--accent);font-weight:600">⏳ En proceso de revisión</span>`
           : `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(61,214,140,.15);color:var(--green);font-weight:600">✓ 100% reportada — lista para revisión</span>`)
       : '';
+    const dpHeader = (typeof paDiasEnPausa==='function') ? paDiasEnPausa(a) : 0;
+    const pausaHeaderBadge = a.estatus==='En pausa'
+      ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(245,166,35,.12);color:var(--amber);font-weight:600;white-space:nowrap" title="${a.pausaInicio?'En pausa desde '+cronoFmtDate(a.pausaInicio):'En pausa'}">⏸ En pausa${dpHeader?' · '+dpHeader+'d':''}</span>`
+      : (dpHeader>0 ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(255,255,255,.06);color:var(--dim);white-space:nowrap" title="Total de días hábiles que estuvo en pausa (ver historial abajo)">⏸ ${dpHeader}d pausados (hist.)</span>` : '');
     html += `<div class="panel" style="margin-bottom:12px;padding:0;overflow:hidden">
       <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;border-bottom:${isOpen?'0.5px solid rgba(255,255,255,.06)':'none'}"
         onclick="cronoToggle('${a.id}')">
@@ -5871,6 +5875,7 @@ function renderReporteoView(){
             <span style="font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(74,143,212,.12);color:var(--accent)">${a.tipo}</span>
             ${esConectSub && a.numBobina ? `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(245,166,35,.12);color:var(--amber);font-weight:600">Bna #${a.numBobina}</span>` : ''}
             ${revisionLabel || semaforoLabel}
+            ${pausaHeaderBadge}
           </div>
           <div style="font-size:11px;color:var(--dim);margin-top:2px">${a.proyecto||''} · ${a.responsable?.split(' ').slice(0,2).join(' ')||'—'} · Inicio: ${cronoFmtShort(a.fechaAsig||crono?.fechaInicio)} ${pron?'· Pronóstico: '+cronoFmtShort(pron):''}</div>
         </div>
@@ -13744,6 +13749,7 @@ function paPausaElapsed(desde, hasta){
 
 function paAplicarEstatus(a, newEstatus){
   if(!a || a.estatus === newEstatus) return;
+  if(typeof paEnsurePausaInicio==='function') paEnsurePausaInicio(a);
   const hoy = new Date().toISOString().slice(0,10);
   if(a.estatus === 'En pausa' && a.pausaInicio){
     const diasEstePausa = paPausaElapsed(a.pausaInicio, hoy);
@@ -13758,8 +13764,34 @@ function paAplicarEstatus(a, newEstatus){
   a.estatus = newEstatus;
 }
 
+// Auto-corrige actividades que quedaron marcadas "En pausa" sin fecha de inicio de pausa
+// (por ejemplo, actividades que ya estaban en pausa desde antes de que existiera este seguimiento).
+// Usamos la última fecha de actualización conocida como mejor referencia disponible, para que
+// el conteo de días empiece a correr en vez de quedarse congelado en 0 para siempre.
+function paEnsurePausaInicio(a){
+  if(!a || a.estatus !== 'En pausa' || a.pausaInicio) return false;
+  a.pausaInicio = (a.updatedAt||a.createdAt||'').slice(0,10) || new Date().toISOString().slice(0,10);
+  return true;
+}
+
+function paHealPausasLegacy(){
+  if(!Array.isArray(PA_ITEMS) || !PA_ITEMS.length) return;
+  let changed = false;
+  PA_ITEMS.forEach(a=>{
+    if(paEnsurePausaInicio(a)) changed = true;
+    if(!Array.isArray(a.pausasHistorial)){ a.pausasHistorial = []; }
+  });
+  if(changed){
+    localStorage.setItem('c3ntro_panel_actividades', JSON.stringify(PA_ITEMS));
+    if(typeof supaSyncActividad==='function'){
+      PA_ITEMS.filter(a=>a.estatus==='En pausa').forEach(a=>supaSyncActividad(a));
+    }
+  }
+}
+
 function paDiasEnPausa(a){
   if(!a) return 0;
+  paEnsurePausaInicio(a);
   let dias = a.diasEnPausaAcum||0;
   if(a.estatus==='En pausa' && a.pausaInicio){
     dias += paPausaElapsed(a.pausaInicio, new Date().toISOString().slice(0,10));
