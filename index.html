@@ -1059,9 +1059,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 </head>
 <script>
 (function(){
+  // El dashboard siempre abre en tema claro, sin importar el rol ni una preferencia
+  // guardada anteriormente. El botón de tema sigue funcionando durante la sesión,
+  // pero cada vez que se abre/recarga la app vuelve a este valor fijo.
   try{
-    var t = localStorage.getItem("c3ntro_theme_v1") || "dark";
-    document.documentElement.setAttribute("data-theme", t);
+    document.documentElement.setAttribute("data-theme", "light");
   }catch(e){}
 })();
 </script>
@@ -5243,9 +5245,10 @@ function toggleTheme(){
   try{ localStorage.setItem(THEME_KEY, next); }catch(e){}
 }
 (function initTheme(){
-  let saved = 'dark';
-  try{ saved = localStorage.getItem(THEME_KEY) || 'dark'; }catch(e){}
-  document.documentElement.setAttribute('data-theme', saved);
+  // Siempre abre en tema claro (cualquier rol), sin importar una preferencia guardada.
+  // toggleTheme() sigue permitiendo cambiar a oscuro dentro de la sesión actual.
+  document.documentElement.setAttribute('data-theme', 'light');
+  applyTheme('light');
 })();
 
 let CRONO_ITEMS = []; // actividades con cronograma
@@ -5443,28 +5446,54 @@ function cronoDiasParaSubtarea(st){
   }
 }
 
+// ── Capacidad de jornada por día, en "jornadas estándar" (lunes a jueves = 1.0) ──
+// Horario real: lunes a jueves 9:00am-7:00pm con 1h de comida = 9h efectivas (jornada completa).
+// Viernes: solo 6h efectivas → 6/9 de una jornada estándar. El rendimiento que se captura en el
+// catálogo (ej. "6 km/día") está calibrado contra un día normal de lunes a jueves, así que un
+// viernes solo alcanza para 6/9 de ese ritmo — por eso el pronóstico debe avanzar el calendario
+// más lento cuando el trabajo cae en viernes.
+const CRONO_CAPACIDAD_VIERNES = 6/9;
+function cronoCapacidadDia(fechaOrDate){
+  const d = (fechaOrDate instanceof Date) ? fechaOrDate : new Date(fechaOrDate+'T00:00:00');
+  if(isWeekend(d)) return 0;
+  if(FESTIVOS.includes(repDateKey(d))) return 0;
+  return d.getDay()===5 ? CRONO_CAPACIDAD_VIERNES : 1;
+}
+
 // ── Avanza un cursor de fechas consumiendo "capacidad de jornada" fraccionaria ──
 // cursor: fecha (YYYY-MM-DD) del día hábil en el que estamos parados.
-// usado: fracción de ESE día ya ocupada por subtareas anteriores (0 = día libre, 1 = día lleno).
-// diasNecesarios: cuánto (en jornadas, puede ser fracción) necesita la subtarea actual.
+// usado: fracción de ESE día ya ocupada por subtareas anteriores, en jornadas estándar
+//        (0 = día libre, 1 = día lleno si es lunes-jueves; los viernes valen menos, ver arriba).
+// diasNecesarios: cuánto (en jornadas estándar, puede ser fracción) necesita la subtarea actual.
 // Devuelve {inicio, fin, cursor, usado} — inicio/fin son las fechas a mostrar para ESTA subtarea,
 // y cursor/usado ya quedan listos para la siguiente llamada (encadenado).
 function cronoAvanzarCursorDia(cursor, usado, diasNecesarios){
   const EPS = 1e-9;
-  const dias = Math.max(0, diasNecesarios||0);
-  const total = usado + dias; // jornadas acumuladas incluyendo lo ya ocupado en el día "cursor"
-  if(total < 1 - EPS){
-    // Ni sumando esta subtarea se completa un día de trabajo: se resuelve el mismo día "cursor",
-    // sin mover el calendario (así varias subtareas chicas pueden compartir el mismo día).
-    return { inicio: cursor, fin: cursor, cursor, usado: total };
+  let restante = Math.max(0, diasNecesarios||0);
+  const capacidadHoy = cronoCapacidadDia(cursor);
+  const disponibleHoy = Math.max(0, capacidadHoy - (usado||0));
+  if(restante <= disponibleHoy + EPS){
+    // Se resuelve el mismo día "cursor", sin mover el calendario (así varias subtareas chicas
+    // pueden compartir el mismo día, y un viernes se llena con menos trabajo que un lunes-jueves).
+    return { inicio: cursor, fin: cursor, cursor, usado: (usado||0) + restante };
   }
-  // Se completa (o se supera) al menos un día de trabajo acumulado: el calendario avanza tantos
-  // días hábiles completos como se hayan cubierto, y lo que sobre queda "usado" en el día de llegada.
-  // Nota: para subtareas de 1 día exacto esto da el mismo resultado de siempre (ej. Lunes → Martes).
-  const diasCompletosAAvanzar = Math.floor(total + EPS);
-  const nuevoCursor = cronoAddWorkdays(cursor, diasCompletosAAvanzar);
-  const restante = total - diasCompletosAAvanzar;
-  return { inicio: cursor, fin: nuevoCursor, cursor: nuevoCursor, usado: Math.max(0, restante) };
+  // No alcanza con lo que queda del día "cursor": avanzar día por día (saltando fines de semana
+  // y festivos), restando la capacidad real de cada día hasta cubrir lo necesario.
+  restante -= disponibleHoy;
+  let d = new Date(cursor + 'T00:00:00');
+  let fin = cursor;
+  while(restante > EPS){
+    d.setDate(d.getDate()+1);
+    const key = repDateKey(d);
+    if(isWeekend(d) || FESTIVOS.includes(key)) continue; // día no laborable, no cuenta
+    fin = key;
+    const cap = cronoCapacidadDia(d);
+    if(restante <= cap + EPS){
+      return { inicio: cursor, fin, cursor: fin, usado: restante };
+    }
+    restante -= cap;
+  }
+  return { inicio: cursor, fin, cursor: fin, usado: 0 };
 }
 
 // ── Rendimiento diario esperado de una subtarea (unidades/día, sin importar el tipo capturado) ──
@@ -16491,6 +16520,10 @@ function applyRole(role, nombre){
   // Botón migrar datos solo visible para admin
   var migrateBtn = document.getElementById('supaMigrateBtn');
   if(migrateBtn) migrateBtn.style.display = (role==='admin') ? '' : 'none';
+
+  // Ahora que ya se conoce el rol/nombre, activar el canal de notificaciones propias
+  // del proyectista (no se puede activar antes porque no se conocía _miNombre).
+  if(role === 'proyectista' && typeof supaStartProyNotifRealtime==='function') supaStartProyNotifRealtime();
 }
 
 // goView con bloqueo para proyectistas
@@ -20635,14 +20668,44 @@ async function supaMigrateFromLocal(){
   if(btn){ btn.disabled=false; btn.textContent='☁️ Migrar datos a nube'; }
 }
 
+// ── Notificaciones propias del proyectista en tiempo real ──
+// Se activa desde applyRole() en el momento del login (cuando ya se conoce _miNombre),
+// no desde supaStartRealtime() (que corre al cargar la página, antes de iniciar sesión).
+let _proyNotifRealtimeStarted = false;
+function supaStartProyNotifRealtime(){
+  if(!SUPA_ONLINE || !_supa) return;
+  if(_userRole !== 'proyectista' || !_miNombre) return;
+  if(_proyNotifRealtimeStarted) return; // evitar suscribirse dos veces en la misma sesión
+  _proyNotifRealtimeStarted = true;
+  _supa.channel('notifs_proy_'+toCanonical(_miNombre))
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'notificaciones_proyectista',filter:`proyectista=eq.${_miNombre}`},
+      payload=>{
+        if(_userRole !== 'proyectista') return;
+        const n = payload.new;
+        const deletedKey = 'c3ntro_notifs_deleted_proy_'+toCanonical(_miNombre);
+        try{ const del=JSON.parse(localStorage.getItem(deletedKey)||'[]'); if(del.includes(n.id)) return; }catch(e){}
+        notifLoad();
+        if(!NOTIFS.find(x=>x.id===n.id)){
+          const notif = {id:n.id,icon:n.icon||'🔔',title:n.title||'',msg:n.msg||'',tipo:n.tipo||'general',read:false,time:n.created_at};
+          NOTIFS.unshift(notif);
+          notifSave(); notifUpdateBell(); notifShowToast(notif);
+        }
+      })
+    .subscribe();
+}
+
 // ── SINCRONIZACIÓN EN TIEMPO REAL (escuchar cambios) ──
 function supaStartRealtime(){
   if(!SUPA_ONLINE) return;
 
-  // Escuchar nuevas notificaciones para Raquel
+  // Escuchar nuevas notificaciones para Raquel/admin/jefe — NUNCA para proyectista.
+  // Importante: esta suscripción arranca al cargar la página, antes de que exista sesión
+  // (_userRole todavía no se conoce), así que el filtro por rol se evalúa DENTRO del callback
+  // (en el momento en que llega cada notificación), no al momento de suscribirse.
   _supa.channel('notificaciones')
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'notificaciones'},
-      payload=>{ 
+      payload=>{
+        if(_userRole === 'proyectista') return; // un proyectista nunca debe ver notificaciones de otros
         const n = payload.new;
         // No mostrar si ya fue eliminada
         try{ const del=JSON.parse(localStorage.getItem('c3ntro_notifs_deleted')||'[]'); if(del.includes(n.id)) return; }catch(e){}
@@ -20664,23 +20727,9 @@ function supaStartRealtime(){
       payload=>{ if(curView==='seguimiento') renderSegAvance(); })
     .subscribe();
 
-  // Escuchar nuevas notificaciones para proyectista
-  if(_userRole === 'proyectista' && _miNombre){
-    _supa.channel('notifs_proy_'+toCanonical(_miNombre))
-      .on('postgres_changes',{event:'INSERT',schema:'public',table:'notificaciones_proyectista',filter:`proyectista=eq.${_miNombre}`},
-        payload=>{
-          const n = payload.new;
-          const deletedKey = 'c3ntro_notifs_deleted_proy_'+toCanonical(_miNombre);
-          try{ const del=JSON.parse(localStorage.getItem(deletedKey)||'[]'); if(del.includes(n.id)) return; }catch(e){}
-          notifLoad();
-          if(!NOTIFS.find(x=>x.id===n.id)){
-            const notif = {id:n.id,icon:n.icon||'🔔',title:n.title||'',msg:n.msg||'',tipo:n.tipo||'general',read:false,time:n.created_at};
-            NOTIFS.unshift(notif);
-            notifSave(); notifUpdateBell(); notifShowToast(notif);
-          }
-        })
-      .subscribe();
-  }
+  // El canal de notificaciones propias del proyectista se activa aparte, desde
+  // supaStartProyNotifRealtime() — en el momento del login, cuando ya se conoce su nombre
+  // (aquí, al cargar la página, _userRole/_miNombre todavía no existen).
 
   // Escuchar cambios en cronograma (subtareas y reportes en tiempo real)
   _supa.channel('cronograma_changes')
