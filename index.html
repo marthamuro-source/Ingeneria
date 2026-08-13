@@ -2367,10 +2367,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
         <div class="panel">
           <div class="ph">
             <div><div class="pt">Disponibilidad del equipo</div><div class="ps">Toca una tarjeta para filtrar sus actividades</div></div>
-            <div style="display:flex;gap:12px;font-size:11px;color:var(--muted);align-items:center">
-              <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:4px"></span>Disponible</span>
-              <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--amber);margin-right:4px"></span>En atención</span>
-              <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--red);margin-right:4px"></span>Ocupado</span>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+              <button onclick="paDescargarGraficoCarga()" title="Descargar como imagen el gráfico de distribución de carga de trabajo de todo el equipo" style="font-size:11px;padding:4px 10px;border-radius:6px;border:0.5px solid var(--border);background:var(--surface2);color:var(--accent);cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap">⬇ Gráfico de carga</button>
+              <div style="display:flex;gap:12px;font-size:11px;color:var(--muted);align-items:center">
+                <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:4px"></span>Disponible</span>
+                <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--amber);margin-right:4px"></span>En atención</span>
+                <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--red);margin-right:4px"></span>Ocupado</span>
+              </div>
             </div>
           </div>
           <div class="pb"><div class="avail-grid" id="paAvailGrid" style="grid-template-columns:repeat(auto-fill,minmax(175px,1fr))"></div></div>
@@ -2906,7 +2909,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
         </div>
         <!-- Proyecto + Km -->
         <div class="pa-row2" id="paProyectoRow">
-          <div class="pa-field">
+          <div class="pa-field" id="paProyectoWrap">
             <label>Proyecto / Cliente</label>
             <select id="paFProyectoSel" onchange="paProjSelChange()" style="margin-bottom:6px">
               <option value="">— Selecciona —</option>
@@ -2921,7 +2924,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
             </select>
             <input type="text" id="paFProyecto" placeholder="Escribe el proyecto" style="display:none">
           </div>
-          <div class="pa-field">
+          <div class="pa-field" id="paKmWrap">
             <label>Kilómetros</label>
             <input type="number" id="paFKm" placeholder="0.0" step="0.1" min="0">
           </div>
@@ -5463,6 +5466,25 @@ function cronoDiasParaSubtarea(st){
   }
 }
 
+// ── Días hábiles que FALTAN para una subtarea, restando lo ya reportado (avanceAcum) ──
+// A diferencia de cronoDiasParaSubtarea (que siempre da la duración TOTAL configurada, sin
+// importar cuánto se ha avanzado), esta función se usa para el pronóstico de entrega: si ya
+// se reportó avance en la subtarea, ese trabajo ya no debe volver a contarse como pendiente.
+// Una subtarea ya al 100% (o marcada "completada") devuelve 0 — no consume tiempo en el pronóstico.
+function cronoDiasRestantesSubtarea(st){
+  if(st.estatus==='completada') return 0;
+  const tipo = st.tipo || 'unidades_por_dia';
+  const cant = parseFloat(st.cantidad)||1;
+  const rend = parseFloat(st.rendimiento)||1;
+  const avance = Math.max(0, Math.min(cant, parseFloat(st.avanceAcum)||0));
+  const restante = Math.max(0, cant - avance);
+  if(tipo === 'dias_por_unidad'){
+    return restante * rend;
+  } else {
+    return restante / rend;
+  }
+}
+
 // ── Capacidad de jornada por día, en "jornadas estándar" (lunes a jueves = 1.0) ──
 // Horario real: lunes a jueves 9:00am-7:00pm con 1h de comida = 9h efectivas (jornada completa).
 // Viernes: solo 6h efectivas → 6/9 de una jornada estándar. El rendimiento que se captura en el
@@ -5613,12 +5635,12 @@ function cronoCalcPronostico(subtareas, fechaInicio){
     if(procesados.has(st.id)) return;
     if(st.paqueteId){
       const delGrupo = validas.filter(s=>s.paqueteId===st.paqueteId);
-      const diasMax = Math.max(...delGrupo.map(s=>cronoDiasParaSubtarea(s)));
+      const diasMax = Math.max(...delGrupo.map(s=>cronoDiasRestantesSubtarea(s)));
       delGrupo.forEach(s=>procesados.add(s.id));
       const r = cronoAvanzarCursorDia(cursor, usado, diasMax);
       cursor = r.cursor; usado = r.usado;
     } else {
-      const dias = cronoDiasParaSubtarea(st);
+      const dias = cronoDiasRestantesSubtarea(st);
       const r = cronoAvanzarCursorDia(cursor, usado, dias);
       cursor = r.cursor; usado = r.usado;
       procesados.add(st.id);
@@ -5896,7 +5918,7 @@ function renderReporteoView(){
           <thead><tr style="border-bottom:0.5px solid var(--border)">
             <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Subtarea</th>
             <th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Cantidad</th>
-            <th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Días est.</th>
+            <th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Días rest. <span style="cursor:help;text-transform:none;letter-spacing:0;font-weight:400" title="Días hábiles que faltan según lo ya avanzado en esta subtarea — no la duración total configurada.">ⓘ</span></th>
             <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Pronóstico <span style="cursor:help;text-transform:none;letter-spacing:0;font-weight:400" title="El pronóstico ya considera que el viernes es una jornada más corta (6h efectivas) que lunes-jueves (9h efectivas) — por eso el trabajo agendado en viernes avanza más lento que un día normal.">ⓘ</span></th>
             <th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Avance</th>
             <th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Estatus</th>
@@ -5907,13 +5929,13 @@ function renderReporteoView(){
         let usado = 0; // fracción del día "cursor" ya ocupada por subtareas anteriores
         const _paqCache = {}; // paqueteId -> {inicio, fin} ya calculado (para que corran en paralelo)
         subtareas.forEach((st,si)=>{
-          const dias = cronoDiasParaSubtarea(st);
+          const dias = cronoDiasRestantesSubtarea(st);
           const diasRaw = dias;
           let stInicio, stFin;
           if(st.paqueteId){
             if(!_paqCache[st.paqueteId]){
               const delGrupo = subtareas.filter(s=>s.paqueteId===st.paqueteId);
-              const diasMax = Math.max(...delGrupo.map(s=>cronoDiasParaSubtarea(s)));
+              const diasMax = Math.max(...delGrupo.map(s=>cronoDiasRestantesSubtarea(s)));
               const inicioGrupo = cursor;
               const r = cronoAvanzarCursorDia(cursor, usado, diasMax);
               const finGrupo = r.fin;
@@ -12474,6 +12496,69 @@ function paAvailability(){
   return [...active, ...inactive];
 }
 
+// ── Descargar como imagen (PNG) el gráfico de distribución de carga de trabajo de todo el equipo ──
+// "Carga" = actividades activas (todo lo que no está Terminado) por persona, sin importar el período.
+function paDescargarGraficoCarga(){
+  if(typeof Chart==='undefined'){ alert('No se pudo generar el gráfico (Chart.js no está disponible en este momento).'); return; }
+  const nameShort = n => (n||'Sin asignar').split(' ').slice(0,2).join(' ');
+  const cargaPorPersona = {};
+  PA_MEMBERS.forEach(name=>{ cargaPorPersona[name] = 0; });
+  PA_ITEMS.filter(a=>a.estatus!=='Terminado' && a.responsable).forEach(a=>{
+    cargaPorPersona[a.responsable] = (cargaPorPersona[a.responsable]||0) + 1;
+  });
+  const entries = Object.entries(cargaPorPersona).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length){ alert('No hay actividades activas para graficar.'); return; }
+  const labels = entries.map(([n])=>nameShort(n));
+  const data = entries.map(([,c])=>c);
+  const colors = ['#2a78d6','#1baf7a','#eda100','#e24b4a','#a78bfa','#34d399','#fb923c','#ff7eb3'];
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 900; canvas.height = 520;
+  canvas.style.position = 'fixed'; canvas.style.left = '-9999px';
+  document.body.appendChild(canvas);
+
+  const tmpChart = new Chart(canvas, {
+    type: 'bar',
+    data: { labels, datasets: [{ label:'Actividades activas', data, backgroundColor: labels.map((_,i)=>colors[i%colors.length]), borderRadius:4 }] },
+    options: {
+      responsive: false, animation: false,
+      layout: { padding: { top:10, right:20, bottom:10, left:10 } },
+      plugins: {
+        legend: { display:false },
+        title: { display:true, text:'Distribución de carga de trabajo — C3NTRO Ingeniería', font:{size:17, weight:'bold'}, color:'#0f2d6b', padding:{bottom:6} },
+        subtitle: { display:true, text:'Actividades activas por persona · '+new Date().toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'}), font:{size:12}, color:'#666', padding:{bottom:18} }
+      },
+      scales: {
+        x: { grid:{display:false}, ticks:{color:'#1a1a2e', font:{size:12}} },
+        y: { beginAtZero:true, ticks:{color:'#1a1a2e', font:{size:11}, precision:0}, grid:{color:'#eee'} }
+      }
+    },
+    plugins: [{
+      id: 'paWhiteBg',
+      beforeDraw(chart){
+        const {ctx, width, height} = chart;
+        ctx.save(); ctx.globalCompositeOperation = 'destination-over';
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,width,height); ctx.restore();
+      }
+    }]
+  });
+
+  setTimeout(()=>{
+    try{
+      const url = tmpChart.toBase64Image('image/png', 1);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'distribucion-carga-equipo-'+new Date().toISOString().slice(0,10)+'.png';
+      document.body.appendChild(a); a.click(); a.remove();
+    }catch(e){
+      console.warn('paDescargarGraficoCarga error:', e);
+      alert('No se pudo generar la imagen del gráfico.');
+    }
+    tmpChart.destroy();
+    canvas.remove();
+  }, 80);
+}
+
 function fmtD(d){
   if(!d) return '—';
   const dt = d instanceof Date ? d : new Date(d+'T00:00:00');
@@ -13879,7 +13964,10 @@ function paTipoChange(){
   const isProj = t==='Proyecto'||t==='Planos de Conectividad'||t==='Conectividad (Bobinas)';
   const showFolio = isProj||t==='Impresiones'||t==='Conectividad (Bobinas)';
   document.getElementById('paFolioWrap').style.display = showFolio ? '' : 'none';
-  document.getElementById('paProyectoRow').style.display = isProj ? '' : 'none';
+  // "Proyecto / Cliente" se pregunta siempre, sin importar el tipo de asignación.
+  document.getElementById('paProyectoRow').style.display = '';
+  document.getElementById('paProyectoWrap').style.display = '';
+  document.getElementById('paKmWrap').style.display = isProj ? '' : 'none';
   document.getElementById('paPropietarioWrap').style.display = isProj ? '' : 'none';
   document.getElementById('paJuegosWrap').style.display = t==='Impresiones' ? '' : 'none';
   document.getElementById('paNumBobinaWrap').style.display = t==='Planos de Conectividad' ? '' : 'none';
@@ -14577,17 +14665,17 @@ function pdmGeneratePDF(period){
   const retrasadas = all.filter(a=>a.estatus!=='Terminado'&&a.fechaTermino&&new Date(a.fechaTermino+'T00:00:00')<now).length;
   const pct = n => all.length ? Math.round(n/all.length*100) : 0;
 
-  // #2 Ocupación por proyecto (agrupado según el catálogo predeterminado)
-  const PROYECTOS_FIJOS = ['TIKVA MEXICO','TIKVA USA','Microsoft','Pesma','Mantenimiento','Obra Común','Especiales'];
+  // #2 Ocupación por proyecto — se agrupa únicamente por el nombre real del proyecto
+  // (a.proyecto), sin usar el propietario como respaldo y sin restringir a una lista fija:
+  // cada proyecto que exista en los datos aparece con su propio nombre.
   const byProy = {};
   all.forEach(a=>{
-    const raw = (a.proyecto||a.propietario||'').trim();
-    const p = PROYECTOS_FIJOS.includes(raw) ? raw : 'Otros';
+    const p = (a.proyecto||'').trim() || 'Sin proyecto';
     byProy[p]=(byProy[p]||0)+1;
   });
   const proySort = Object.keys(byProy).sort((a,b)=>{
-    if(a==='Otros') return 1;
-    if(b==='Otros') return -1;
+    if(a==='Sin proyecto') return 1;
+    if(b==='Sin proyecto') return -1;
     return byProy[b]-byProy[a];
   });
 
