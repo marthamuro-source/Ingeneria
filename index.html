@@ -7117,7 +7117,7 @@ function cronoRecalcularReportesSubtarea(item, st){
     if(esPct){
       r.bajoRendimiento = false;
       r.rendimientoEsperado = null;
-      runningAcum = Math.max(0, Math.min(100, cant));
+      runningAcum = Math.max(0, Math.min(100, runningAcum + cant));
       return;
     }
     const { bajo, esperado } = cronoEvaluarRendimientoReporte({...st, avanceAcum: runningAcum}, cant);
@@ -9055,7 +9055,7 @@ function calProyCantCheckRendimiento(){
     infoEl.innerHTML = `⚠️ <span style="color:var(--amber)">Vas por debajo del rendimiento esperado: reportaste ${cantidad} ${st.unidad}, se esperaban ${esperado} ${st.unidad}/día. Se guardará con esta marca.</span>`;
   } else {
     const esPct = st.unidad==='%' || st.esOperativo;
-    infoEl.textContent = esPct ? `Llevas reportado: ${st.avanceAcum||0}%` : `Acumulado: ${st.avanceAcum||0}/${st.cantidad} ${st.unidad}`;
+    infoEl.textContent = esPct ? `Ya llevas acumulado: ${st.avanceAcum||0}% (esto se sumará)` : `Acumulado: ${st.avanceAcum||0}/${st.cantidad} ${st.unidad}`;
   }
 }
 function calProyLimpiarFormActual(){
@@ -9076,6 +9076,12 @@ function calProyAgregarPendiente(){
     const restante = st.cantidad - yaAcumulado;
     if(entry.cantidad > restante){
       if(!confirm(`"${st.nombre}" tiene ${st.cantidad} ${st.unidad} en total y ya llevas ${yaAcumulado} ${st.unidad}. Solo quedan ${Math.max(restante,0)} ${st.unidad} disponibles, pero estás reportando ${entry.cantidad}.\n\n¿Seguro que quieres continuar? Se ajustará al máximo disponible al guardar.`)) return;
+    }
+  } else if(esPct){
+    const yaAcumulado = (st.avanceAcum||0) + (window._calProyPendientes||[]).filter(p=>p.stData.st.id===st.id).reduce((s,p)=>s+p.cantidad,0);
+    const restante = 100 - yaAcumulado;
+    if(entry.cantidad > restante){
+      if(!confirm(`"${st.nombre}" ya lleva ${yaAcumulado}% acumulado. Solo quedan ${Math.max(restante,0)}% disponibles, pero estás reportando ${entry.cantidad}%.\n\n¿Seguro que quieres continuar? Se ajustará al máximo (100%) al guardar.`)) return;
     }
   }
   if(entry.bajoRendimiento){
@@ -9104,8 +9110,8 @@ function calProyStChangeHoy(){
   const esPct = x.st.unidad==='%' || x.st.esOperativo;
   if(unidEl) unidEl.textContent = x.st.unidad;
   if(esPct){
-    if(labelEl) labelEl.textContent = '% que llevas (acumulado, no lo que avanzaste hoy)';
-    if(infoEl) infoEl.textContent = `Llevas reportado: ${x.st.avanceAcum||0}%`;
+    if(labelEl) labelEl.textContent = '% que avanzaste hoy (se suma al acumulado)';
+    if(infoEl) infoEl.textContent = `Ya llevas acumulado: ${x.st.avanceAcum||0}%`;
   } else {
     if(labelEl) labelEl.textContent = 'Cantidad avanzada hoy';
     if(infoEl) infoEl.textContent = `Acumulado: ${x.st.avanceAcum||0}/${x.st.cantidad} ${x.st.unidad}`;
@@ -9149,7 +9155,8 @@ async function calProyGuardarReporteHoy(){
 
     const esPct = st.unidad==='%' || st.esOperativo;
     if(esPct){
-      st.avanceAcum = Math.max(0, Math.min(100, entry.cantidad)); // valor absoluto reportado, tope 0-100
+      // Cada reporte SUMA al acumulado (igual que las subtareas por cantidad), tope 0-100.
+      st.avanceAcum = Math.max(0, Math.min(100, (st.avanceAcum||0) + entry.cantidad));
     } else {
       const nuevoAcum = (st.avanceAcum||0) + entry.cantidad;
       st.avanceAcum = st.cantidad ? Math.min(nuevoAcum, st.cantidad) : nuevoAcum;
