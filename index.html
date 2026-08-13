@@ -5586,6 +5586,19 @@ function cronoFmtDiasHoras(dias){
   return partes.length ? partes.join(' ') : '0min';
 }
 
+// ── Punto de partida "efectivo" del cronograma de una actividad ──
+// Si la actividad estuvo (o sigue) en pausa, esos días no cuentan como tiempo de trabajo perdido
+// contra el proyectista: el pronóstico se corre hacia adelante exactamente los días hábiles que
+// estuvo pausada, en vez de quedarse anclado a la fecha de asignación original. Así, al reanudarla,
+// se le "cuenta" de nuevo el mismo plan completo, solo que arrancando más tarde — no se le penaliza
+// con un pronóstico que ya quedó en el pasado ni con un falso "Retraso".
+function cronoFechaEfectiva(a, fechaBase){
+  if(!fechaBase || !a) return fechaBase;
+  const diasPausa = (typeof paDiasEnPausa==='function') ? paDiasEnPausa(a) : 0;
+  if(!diasPausa) return fechaBase;
+  return cronoAddWorkdays(fechaBase, diasPausa);
+}
+
 // ── Calcular pronóstico de toda la actividad (suma de subtareas en cadena) ──
 function cronoCalcPronostico(subtareas, fechaInicio){
   if(!subtareas||!subtareas.length||!fechaInicio) return null;
@@ -5761,7 +5774,7 @@ function renderReporteoView(){
   let enTiempo=0, conRetraso=0;
   actConCrono.forEach(({a,crono})=>{
     if(!crono||!crono.subtareas||!crono.subtareas.length) return;
-    const pron = cronoCalcPronostico(crono.subtareas, a.fechaAsig||crono.fechaInicio);
+    const pron = cronoCalcPronostico(crono.subtareas, cronoFechaEfectiva(a, a.fechaAsig||crono.fechaInicio));
     const hoy = repDateKey(new Date());
     const termino = a.fechaTermino;
     const avanceKpi = cronoAvance(crono.subtareas);
@@ -5823,7 +5836,7 @@ function renderReporteoView(){
     const subtareas = crono?.subtareas||[];
     const reportes = crono?.reportes||[];
     const avance = cronoAvance(subtareas);
-    const pron = crono ? cronoCalcPronostico(subtareas, a.fechaAsig||crono.fechaInicio) : null;
+    const pron = crono ? cronoCalcPronostico(subtareas, cronoFechaEfectiva(a, a.fechaAsig||crono.fechaInicio)) : null;
     const diasRest = pron ? cronoDiasRestantes(pron) : null;
     const hoy = repDateKey(new Date());
     let semaforo = 'neutral';
@@ -5885,7 +5898,7 @@ function renderReporteoView(){
             <th style="width:80px"></th>
           </tr></thead><tbody>`;
 
-        let cursor = a.fechaAsig||crono.fechaInicio;
+        let cursor = cronoFechaEfectiva(a, a.fechaAsig||crono.fechaInicio);
         let usado = 0; // fracción del día "cursor" ya ocupada por subtareas anteriores
         const _paqCache = {}; // paqueteId -> {inicio, fin} ya calculado (para que corran en paralelo)
         subtareas.forEach((st,si)=>{
@@ -5942,12 +5955,34 @@ function renderReporteoView(){
         if(pron){
           const diasR = cronoDiasRestantes(pron);
           const pronColor = semaforo==='warn'?'var(--amber)':'var(--green)';
-          html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          const _dpTot = (typeof paDiasEnPausa==='function') ? paDiasEnPausa(a) : 0;
+          html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
             <span style="font-size:11px;padding:4px 12px;border-radius:20px;background:${semaforo==='warn'?'rgba(245,166,35,.1)':'rgba(61,214,140,.1)'};color:${pronColor}">
               📅 Pronóstico de entrega: ${cronoFmtDate(pron)} ${diasR!==null?'· '+diasR+' días hábiles restantes':''}
             </span>
             ${a.fechaTermino?`<span style="font-size:11px;color:var(--dim)">Fecha límite: ${cronoFmtDate(a.fechaTermino)}</span>`:''}
             <span style="font-size:10px;color:var(--dim);display:flex;align-items:center;gap:4px" title="Lunes a jueves se cuentan como jornada completa (9h efectivas) y el viernes como 6/9 de jornada (6h efectivas) — el cálculo ya reparte el trabajo con menos avance esperado para el viernes.">🕐 Ya considera jornada reducida de viernes (6h vs 9h)</span>
+          </div>`;
+          if(_dpTot>0){
+            html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:14px">
+              <span style="font-size:10.5px;padding:4px 10px;border-radius:20px;background:rgba(74,143,212,.1);color:var(--accent)" title="El pronóstico ya se recorrió hacia adelante por el tiempo que la actividad estuvo en pausa, para no penalizar el plan original ni marcar retraso falso por la pausa.">⏸ Pronóstico ajustado: +${_dpTot} día${_dpTot===1?'':'s'} hábil${_dpTot===1?'':'es'} por pausa(s) — no cuenta como retraso</span>
+            </div>`;
+          } else {
+            html += `<div style="margin-bottom:14px"></div>`;
+          }
+        }
+        if(Array.isArray(a.pausasHistorial) && a.pausasHistorial.length){
+          html += `<div style="margin-bottom:16px">
+            <div style="font-size:11px;font-weight:500;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">⏸ Historial de pausas</div>
+            <div style="border:0.5px solid var(--border);border-radius:8px;overflow:hidden">`;
+          [...a.pausasHistorial].reverse().forEach(p=>{
+            html += `<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 12px;font-size:11px;border-bottom:0.5px solid var(--border)">
+              <span style="color:var(--text)">${cronoFmtDate(p.inicio)} → ${cronoFmtDate(p.fin)}</span>
+              <span style="color:var(--amber);font-weight:500;white-space:nowrap">${p.dias} día${p.dias===1?'':'s'} hábil${p.dias===1?'':'es'}</span>
+            </div>`;
+          });
+          html += `</div>
+            <div style="font-size:10px;color:var(--dim);margin-top:6px">Total pausado: ${a.pausasHistorial.reduce((s,p)=>s+(p.dias||0),0)} días hábiles · este tiempo ya se sumó al pronóstico de entrega, no se pierde ni se penaliza como retraso.</div>
           </div>`;
         }
       } else {
@@ -12118,7 +12153,7 @@ function paRenderTipo(tipo){
     // Calcular pronóstico de subtareas (disponible para todos los tipos)
     const _cronoItem = CRONO_ITEMS.find(x=>x.actividadId===a.id);
     const _pronSub = _cronoItem && _cronoItem.subtareas && _cronoItem.subtareas.filter(s=>!s.pendienteValidacion).length
-      ? cronoCalcPronostico(_cronoItem.subtareas, a.fechaAsig||_cronoItem.fechaInicio)
+      ? cronoCalcPronostico(_cronoItem.subtareas, cronoFechaEfectiva(a, a.fechaAsig||_cronoItem.fechaInicio))
       : null;
     const _pronSubFmt = _pronSub ? (()=>{ const d=new Date(_pronSub+'T00:00:00'); return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`; })() : '—';
     const _pronColor = _pronSub && a.fechaTermino
@@ -13711,7 +13746,10 @@ function paAplicarEstatus(a, newEstatus){
   if(!a || a.estatus === newEstatus) return;
   const hoy = new Date().toISOString().slice(0,10);
   if(a.estatus === 'En pausa' && a.pausaInicio){
-    a.diasEnPausaAcum = (a.diasEnPausaAcum||0) + paPausaElapsed(a.pausaInicio, hoy);
+    const diasEstePausa = paPausaElapsed(a.pausaInicio, hoy);
+    a.diasEnPausaAcum = (a.diasEnPausaAcum||0) + diasEstePausa;
+    if(!Array.isArray(a.pausasHistorial)) a.pausasHistorial = [];
+    a.pausasHistorial.push({ inicio: a.pausaInicio, fin: hoy, dias: diasEstePausa });
     a.pausaInicio = null;
   }
   if(newEstatus === 'En pausa'){
@@ -13973,6 +14011,7 @@ function paGuardar(){
       data.createdAt = prev.createdAt;
       data.pausaInicio = prev.pausaInicio || null;
       data.diasEnPausaAcum = prev.diasEnPausaAcum || 0;
+      data.pausasHistorial = Array.isArray(prev.pausasHistorial) ? prev.pausasHistorial.slice() : [];
       const nuevoEstatus = data.estatus;
       data.estatus = prev.estatus; // para que paAplicarEstatus detecte la transición real de estatus
       paAplicarEstatus(data, nuevoEstatus);
@@ -13982,6 +14021,7 @@ function paGuardar(){
     data.createdAt = data.updatedAt;
     data.pausaInicio = data.estatus === 'En pausa' ? new Date().toISOString().slice(0,10) : null;
     data.diasEnPausaAcum = 0;
+    data.pausasHistorial = [];
     PA_ITEMS.unshift(data);
       if(data.responsable && typeof notifNuevaActividad==='function'){
         notifNuevaActividad(data.responsable, data.folio||'', data.proyecto||data.actividad||'');
@@ -19365,7 +19405,7 @@ async function paRefreshFromSupabase(){
         fechaAsig:a.fecha_asig||'', fechaTermino:a.fecha_termino||'',
         fechaReal:a.fecha_real||'', numBobina:a.num_bobina||'',
         juegos:a.juegos||'', planosJuego:a.planos_juego||'',
-        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0,
+        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[],
         createdAt:a.created_at, updatedAt:a.updated_at,
       }));
       localStorage.setItem('c3ntro_panel_actividades', JSON.stringify(PA_ITEMS));
@@ -20308,7 +20348,7 @@ async function supaLoadAll(){
         fechaAsig:a.fecha_asig||'', fechaTermino:a.fecha_termino||'',
         fechaReal:a.fecha_real||'', numBobina:a.num_bobina||'',
         juegos:a.juegos||'', planosJuego:a.planos_juego||'',
-        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0,
+        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[],
         createdAt:a.created_at, updatedAt:a.updated_at,
       }));
       localStorage.setItem('c3ntro_panel_actividades', JSON.stringify(PA_ITEMS));
@@ -20582,7 +20622,7 @@ async function supaMigrateFromLocal(){
         fecha_asig:a.fechaAsig||null, fecha_termino:a.fechaTermino||null,
         fecha_real:a.fechaReal||null, num_bobina:a.numBobina||null,
         juegos:a.juegos||null, planos_juego:a.planosJuego||null,
-        pausa_inicio:a.pausaInicio||null, dias_en_pausa_acum:a.diasEnPausaAcum||0,
+        pausa_inicio:a.pausaInicio||null, dias_en_pausa_acum:a.diasEnPausaAcum||0, pausas_historial:a.pausasHistorial||[],
         created_at:a.createdAt||new Date().toISOString(),
         updated_at:a.updatedAt||new Date().toISOString(),
       }));
@@ -20846,7 +20886,7 @@ async function supaSyncActividad(a){
     fecha_asig:a.fechaAsig||null, fecha_termino:a.fechaTermino||null,
     fecha_real:a.fechaReal||null, num_bobina:a.numBobina||null,
     juegos:a.juegos||null, planos_juego:a.planosJuego||null,
-    pausa_inicio:a.pausaInicio||null, dias_en_pausa_acum:a.diasEnPausaAcum||0,
+    pausa_inicio:a.pausaInicio||null, dias_en_pausa_acum:a.diasEnPausaAcum||0, pausas_historial:a.pausasHistorial||[],
     updated_at:new Date().toISOString(),
   };
   try{
