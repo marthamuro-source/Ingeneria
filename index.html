@@ -2368,7 +2368,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           <div class="ph">
             <div><div class="pt">Disponibilidad del equipo</div><div class="ps">Toca una tarjeta para filtrar sus actividades</div></div>
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
-              <button onclick="paDescargarGraficoCarga()" title="Descargar como imagen el gráfico de distribución de carga de trabajo de todo el equipo" style="font-size:11px;padding:4px 10px;border-radius:6px;border:0.5px solid var(--border);background:var(--surface2);color:var(--accent);cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap">⬇ Gráfico de carga</button>
+              <button onclick="paAbrirCargaPeriodoModal()" title="Generar y descargar como PDF la distribución de carga por proyecto de todo el equipo" style="font-size:11px;padding:4px 10px;border-radius:6px;border:0.5px solid var(--border);background:var(--surface2);color:var(--accent);cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap">⬇ Reporte de carga (PDF)</button>
               <div style="display:flex;gap:12px;font-size:11px;color:var(--muted);align-items:center">
                 <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:4px"></span>Disponible</span>
                 <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--amber);margin-right:4px"></span>En atención</span>
@@ -2795,6 +2795,51 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
             <div style="font-size:10px;color:var(--muted)">Julio – Septiembre</div>
           </button>
           <button class="dir-export-fmt-btn" onclick="pdmGeneratePDF('Q4')" title="Reporte del cuarto trimestre">
+            <span style="font-size:16px;font-weight:700;color:var(--red)">Q4</span>
+            <div style="font-size:12px;font-weight:600">Cuarto trimestre</div>
+            <div style="font-size:10px;color:var(--muted)">Octubre – Diciembre</div>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL PERÍODO REPORTE DE CARGA — TODO EL EQUIPO -->
+  <div class="pa-modal-bg" id="cargaPeriodModal" onclick="if(event.target===this)paCerrarCargaPeriodoModal()" style="z-index:4000">
+    <div class="pa-modal" style="max-width:380px">
+      <div class="pa-modal-hd">
+        <div class="pa-modal-title">Período del reporte</div>
+        <button class="pa-modal-close" onclick="paCerrarCargaPeriodoModal()" title="Cerrar">×</button>
+      </div>
+      <div class="pa-modal-body">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Distribución de carga por proyecto de todo el equipo</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button class="dir-export-fmt-btn" onclick="paReporteCargaTodos('mes')" title="Reporte del último mes">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            <div style="font-size:12px;font-weight:600">Último mes</div>
+            <div style="font-size:10px;color:var(--muted)">Mes anterior completo</div>
+          </button>
+          <button class="dir-export-fmt-btn" onclick="paReporteCargaTodos('all')" title="Reporte de todo el historial">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3h18v18H3z"></path><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line></svg>
+            <div style="font-size:12px;font-weight:600">Todo el historial</div>
+            <div style="font-size:10px;color:var(--muted)">Todas las actividades</div>
+          </button>
+          <button class="dir-export-fmt-btn" onclick="paReporteCargaTodos('Q1')" title="Reporte del primer trimestre">
+            <span style="font-size:16px;font-weight:700;color:var(--accent)">Q1</span>
+            <div style="font-size:12px;font-weight:600">Primer trimestre</div>
+            <div style="font-size:10px;color:var(--muted)">Enero – Marzo</div>
+          </button>
+          <button class="dir-export-fmt-btn" onclick="paReporteCargaTodos('Q2')" title="Reporte del segundo trimestre">
+            <span style="font-size:16px;font-weight:700;color:var(--green)">Q2</span>
+            <div style="font-size:12px;font-weight:600">Segundo trimestre</div>
+            <div style="font-size:10px;color:var(--muted)">Abril – Junio</div>
+          </button>
+          <button class="dir-export-fmt-btn" onclick="paReporteCargaTodos('Q3')" title="Reporte del tercer trimestre">
+            <span style="font-size:16px;font-weight:700;color:var(--amber)">Q3</span>
+            <div style="font-size:12px;font-weight:600">Tercer trimestre</div>
+            <div style="font-size:10px;color:var(--muted)">Julio – Septiembre</div>
+          </button>
+          <button class="dir-export-fmt-btn" onclick="paReporteCargaTodos('Q4')" title="Reporte del cuarto trimestre">
             <span style="font-size:16px;font-weight:700;color:var(--red)">Q4</span>
             <div style="font-size:12px;font-weight:600">Cuarto trimestre</div>
             <div style="font-size:10px;color:var(--muted)">Octubre – Diciembre</div>
@@ -12496,67 +12541,137 @@ function paAvailability(){
   return [...active, ...inactive];
 }
 
-// ── Descargar como imagen (PNG) el gráfico de distribución de carga de trabajo de todo el equipo ──
-// "Carga" = actividades activas (todo lo que no está Terminado) por persona, sin importar el período.
-function paDescargarGraficoCarga(){
-  if(typeof Chart==='undefined'){ alert('No se pudo generar el gráfico (Chart.js no está disponible en este momento).'); return; }
-  const nameShort = n => (n||'Sin asignar').split(' ').slice(0,2).join(' ');
-  const cargaPorPersona = {};
-  PA_MEMBERS.forEach(name=>{ cargaPorPersona[name] = 0; });
-  PA_ITEMS.filter(a=>a.estatus!=='Terminado' && a.responsable).forEach(a=>{
-    cargaPorPersona[a.responsable] = (cargaPorPersona[a.responsable]||0) + 1;
+// ── Reporte compilado: "Distribución de carga por proyecto" de TODO el equipo, imprimible/PDF ──
+function paAbrirCargaPeriodoModal(){
+  const modal = document.getElementById('cargaPeriodModal');
+  if(modal) modal.classList.add('open');
+}
+function paCerrarCargaPeriodoModal(){
+  const modal = document.getElementById('cargaPeriodModal');
+  if(modal) modal.classList.remove('open');
+}
+
+function paReporteCargaTodos(period){
+  paCerrarCargaPeriodoModal();
+  const now    = new Date();
+  const y      = now.getFullYear();
+  const genStr = now.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' · '+now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
+
+  // Mismo esquema de período que el reporte individual (pdmGeneratePDF)
+  let rangeStart, rangeEnd, periodoLabel;
+  if(period==='mes'){
+    rangeStart = new Date(y, now.getMonth()-1, 1);
+    rangeEnd   = new Date(y, now.getMonth(), 0, 23,59,59);
+    periodoLabel = rangeStart.toLocaleDateString('es-MX',{month:'long',year:'numeric'});
+  } else if(period==='Q1'){
+    rangeStart = new Date(y,0,1); rangeEnd = new Date(y,2,31,23,59,59);
+    periodoLabel = `Q1 ${y} · Enero – Marzo`;
+  } else if(period==='Q2'){
+    rangeStart = new Date(y,3,1); rangeEnd = new Date(y,5,30,23,59,59);
+    periodoLabel = `Q2 ${y} · Abril – Junio`;
+  } else if(period==='Q3'){
+    rangeStart = new Date(y,6,1); rangeEnd = new Date(y,8,30,23,59,59);
+    periodoLabel = `Q3 ${y} · Julio – Septiembre`;
+  } else if(period==='Q4'){
+    rangeStart = new Date(y,9,1); rangeEnd = new Date(y,11,31,23,59,59);
+    periodoLabel = `Q4 ${y} · Octubre – Diciembre`;
+  } else {
+    rangeStart = new Date(2020,0,1); rangeEnd = new Date(2099,11,31);
+    periodoLabel = 'Historial completo';
+  }
+
+  const nombresEquipo = [...PA_MEMBERS];
+
+  // Por persona: mismo criterio que el reporte individual — se agrupa únicamente por el
+  // nombre real del proyecto (a.proyecto), sin respaldo al propietario y sin lista fija.
+  const porPersona = nombresEquipo.map(name=>{
+    const all = PA_ITEMS.filter(a=>{
+      if(a.responsable!==name) return false;
+      if(period==='all') return true;
+      const ref = a.fechaAsig ? new Date(a.fechaAsig+'T00:00:00') : new Date(a.createdAt||0);
+      return ref >= rangeStart && ref <= rangeEnd;
+    });
+    const byProy = {};
+    all.forEach(a=>{
+      const p = (a.proyecto||'').trim() || 'Sin proyecto';
+      byProy[p] = (byProy[p]||0) + 1;
+    });
+    const proySort = Object.keys(byProy).sort((a,b)=>{
+      if(a==='Sin proyecto') return 1;
+      if(b==='Sin proyecto') return -1;
+      return byProy[b]-byProy[a];
+    });
+    return { name, total: all.length, byProy, proySort };
   });
-  const entries = Object.entries(cargaPorPersona).sort((a,b)=>b[1]-a[1]);
-  if(!entries.length){ alert('No hay actividades activas para graficar.'); return; }
-  const labels = entries.map(([n])=>nameShort(n));
-  const data = entries.map(([,c])=>c);
-  const colors = ['#2a78d6','#1baf7a','#eda100','#e24b4a','#a78bfa','#34d399','#fb923c','#ff7eb3'];
 
-  const canvas = document.createElement('canvas');
-  canvas.width = 900; canvas.height = 520;
-  canvas.style.position = 'fixed'; canvas.style.left = '-9999px';
-  document.body.appendChild(canvas);
+  if(!porPersona.some(p=>p.total>0)){
+    alert(`Sin actividades en el período seleccionado (${periodoLabel}).`);
+    return;
+  }
 
-  const tmpChart = new Chart(canvas, {
-    type: 'bar',
-    data: { labels, datasets: [{ label:'Actividades activas', data, backgroundColor: labels.map((_,i)=>colors[i%colors.length]), borderRadius:4 }] },
-    options: {
-      responsive: false, animation: false,
-      layout: { padding: { top:10, right:20, bottom:10, left:10 } },
-      plugins: {
-        legend: { display:false },
-        title: { display:true, text:'Distribución de carga de trabajo — C3NTRO Ingeniería', font:{size:17, weight:'bold'}, color:'#0f2d6b', padding:{bottom:6} },
-        subtitle: { display:true, text:'Actividades activas por persona · '+new Date().toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'}), font:{size:12}, color:'#666', padding:{bottom:18} }
-      },
-      scales: {
-        x: { grid:{display:false}, ticks:{color:'#1a1a2e', font:{size:12}} },
-        y: { beginAtZero:true, ticks:{color:'#1a1a2e', font:{size:11}, precision:0}, grid:{color:'#eee'} }
-      }
-    },
-    plugins: [{
-      id: 'paWhiteBg',
-      beforeDraw(chart){
-        const {ctx, width, height} = chart;
-        ctx.save(); ctx.globalCompositeOperation = 'destination-over';
-        ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,width,height); ctx.restore();
-      }
-    }]
-  });
+  const personasHTML = porPersona.map(p=>{
+    const bloqueBarras = p.total ? p.proySort.map(proy=>{
+      const pct2 = Math.round(p.byProy[proy]/p.total*100);
+      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+        +'<div style="font-size:11px;font-weight:500;color:#1a1a2e;width:150px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+proy+'</div>'
+        +'<div style="flex:1;height:10px;background:#e5e7eb;border-radius:5px;overflow:hidden">'
+        +'<div style="width:'+pct2+'%;height:100%;background:#2a78d6;border-radius:5px"></div></div>'
+        +'<div style="font-size:11px;font-weight:700;color:#2a78d6;min-width:52px;text-align:right">'+pct2+'% ('+p.byProy[proy]+')</div>'
+        +'</div>';
+    }).join('') : '<div style="font-size:11px;color:#9aa5b1;padding:6px 0">Sin actividades registradas en este período.</div>';
 
-  setTimeout(()=>{
-    try{
-      const url = tmpChart.toBase64Image('image/png', 1);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'distribucion-carga-equipo-'+new Date().toISOString().slice(0,10)+'.png';
-      document.body.appendChild(a); a.click(); a.remove();
-    }catch(e){
-      console.warn('paDescargarGraficoCarga error:', e);
-      alert('No se pudo generar la imagen del gráfico.');
-    }
-    tmpChart.destroy();
-    canvas.remove();
-  }, 80);
+    return `<div style="margin:16px 0;padding:14px 16px;background:#f8fafc;border:1px solid #e2eaf3;border-radius:8px;page-break-inside:avoid">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:700;color:#0f2744;text-transform:uppercase;letter-spacing:.06em">${p.name}</div>
+        <div style="font-size:10px;color:#888">${p.total} actividad${p.total!==1?'es':''}</div>
+      </div>
+      ${bloqueBarras}
+    </div>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Distribución de carga por proyecto · Todo el equipo · ${periodoLabel}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
+  body{font-family:'Inter',sans-serif;font-size:11px;color:#1a1a2e;background:#fff;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
+  @media print{ *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;} .page{padding:16px 26px;} }
+  .page{max-width:1000px;margin:0 auto;padding:36px 44px;}
+  .rpt-header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid #0f2d6b;margin-bottom:22px;}
+  .co{font-size:19px;font-weight:700;color:#0f2d6b;} .dep{font-size:11px;color:#666;margin-top:2px;}
+  .doc-title{font-size:15px;font-weight:700;color:#0f2d6b;text-align:right;}
+  .doc-sub{font-size:11px;text-align:right;margin-top:3px;}
+  .rpt-footer{margin-top:28px;padding-top:12px;border-top:1px solid #e5eaf0;display:flex;justify-content:space-between;color:#aaa;font-size:9px;}
+</style></head><body><div class="page">
+  <div class="rpt-header">
+    <div>
+      <div class="co">C3NTRO Telecom</div>
+      <div class="dep">Coordinación de Ingeniería · Distribución de Carga por Proyecto — Todo el Equipo</div>
+    </div>
+    <div>
+      <div class="doc-title">Reporte de equipo</div>
+      <div class="doc-sub" style="color:#0f2d6b;font-weight:500">${periodoLabel}</div>
+      <div class="doc-sub" style="color:#aaa;font-size:10px;margin-top:2px">${genStr}</div>
+    </div>
+  </div>
+
+  ${personasHTML}
+
+  <div class="rpt-footer">
+    <span>C3NTRO Telecom · Coordinación de Ingeniería</span>
+    <span>Todo el equipo · ${nombresEquipo.length} proyectistas</span>
+    <span>${genStr}</span>
+  </div>
+</div>
+<scr`+'ipt>window.onload=()=>window.print();</scr'+'ipt>'+`
+</body></html>`;
+
+  const blob = new Blob([html],{type:'text/html;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const win  = window.open(url,'_blank');
+  if(!win) alert('Permite ventanas emergentes para generar el PDF.');
+  setTimeout(()=>URL.revokeObjectURL(url), 60000);
 }
 
 function fmtD(d){
@@ -14287,7 +14402,11 @@ function usbExportPDF(){
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{font-family:'Inter',sans-serif;font-size:11px;color:#1a1a2e;background:#fff;line-height:1.5;}
+  /* Sin esto, Chrome/Safari quitan los colores de fondo (badges, barras, encabezados de sección)
+     al imprimir o guardar como PDF, aunque en pantalla se vean bien. */
+  html{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
+  body{font-family:'Inter',sans-serif;font-size:11px;color:#1a1a2e;background:#fff;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
+  @media print{ *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;} }
   .page{max-width:900px;margin:0 auto;padding:36px 44px;}
   .rpt-header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid #7a0a4a;margin-bottom:22px;}
   .co{font-size:19px;font-weight:700;color:#7a0a4a;} .dep{font-size:11px;color:#666;margin-top:2px;}
@@ -14752,7 +14871,11 @@ function pdmGeneratePDF(period){
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{font-family:'Inter',sans-serif;font-size:11px;color:#1a1a2e;background:#fff;line-height:1.5;}
+  /* Sin esto, Chrome/Safari quitan los colores de fondo (badges, barras, encabezados de sección)
+     al imprimir o guardar como PDF, aunque en pantalla se vean bien. */
+  html{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
+  body{font-family:'Inter',sans-serif;font-size:11px;color:#1a1a2e;background:#fff;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
+  @media print{ *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;} }
   .page{max-width:1000px;margin:0 auto;padding:36px 44px;}
   .rpt-header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid #0f2d6b;margin-bottom:22px;}
   .co{font-size:19px;font-weight:700;color:#0f2d6b;} .dep{font-size:11px;color:#666;margin-top:2px;}
@@ -15687,7 +15810,11 @@ function dirExportPDF(fields, active, vacante){
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{font-family:'Inter',sans-serif;font-size:11px;color:#1a1a2e;background:#fff;line-height:1.5;}
+  /* Sin esto, Chrome/Safari quitan los colores de fondo (badges, barras, encabezados de sección)
+     al imprimir o guardar como PDF, aunque en pantalla se vean bien. */
+  html{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
+  body{font-family:'Inter',sans-serif;font-size:11px;color:#1a1a2e;background:#fff;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
+  @media print{ *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;} }
   .page{max-width:960px;margin:0 auto;padding:40px 48px;}
   .rpt-header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:18px;border-bottom:3px solid #0f2d6b;margin-bottom:26px;}
   .rpt-logo .co{font-size:20px;font-weight:700;color:#0f2d6b;}
@@ -16497,7 +16624,11 @@ function paExportPDF(){
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{font-family:'Inter',sans-serif;font-size:11px;color:#1a1a2e;background:#fff;line-height:1.5;}
+  /* Sin esto, Chrome/Safari quitan los colores de fondo (badges, barras, encabezados de sección)
+     al imprimir o guardar como PDF, aunque en pantalla se vean bien. */
+  html{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
+  body{font-family:'Inter',sans-serif;font-size:11px;color:#1a1a2e;background:#fff;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
+  @media print{ *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;} }
   .page{max-width:960px;margin:0 auto;padding:36px 44px;}
   .rpt-header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid #0f2d6b;margin-bottom:22px;}
   .co{font-size:20px;font-weight:700;color:#0f2d6b;}.dep{font-size:11px;color:#666;margin-top:2px;}
