@@ -11262,6 +11262,37 @@ let herrEditingId = null; // id de la tarjeta que se está editando en el modal,
 function herrDefaultsFresh(){
   return HERR_DEFAULT.map(c=>({...c}));
 }
+// Migración de la versión vieja (localStorage 'herrCards_v1', sin id ni visible) — recupera
+// accesos personalizados que el admin haya agregado antes de que esto se conectara a Supabase,
+// y que por el cambio de clave (v1 → v2) se quedaron sin usarse. Se compara por título+enlace
+// para no duplicar los que ya existan, y se borra la clave vieja una vez migrado todo.
+async function herrMigrateLegacyV1(){
+  try{
+    const raw = localStorage.getItem('herrCards_v1');
+    if(!raw) return;
+    const legacy = JSON.parse(raw);
+    if(!Array.isArray(legacy) || !legacy.length) return;
+    const current = herrGetCards();
+    let added = false;
+    legacy.forEach(item=>{
+      if(!item || !item.title || !item.url) return;
+      const yaExiste = current.some(c => c.title===item.title && c.url===item.url);
+      if(!yaExiste){
+        const card = {id:'herr_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), icon:item.icon||'🔗', title:item.title, desc:item.desc||'', url:item.url, visible:true, orden:current.length};
+        current.push(card);
+        herrSaveCardToSupabase(card);
+        added = true;
+        console.log('♻️ Acceso recuperado de la versión anterior:', item.title);
+      }
+    });
+    if(added){
+      herrPersistLocal();
+      if(typeof herrRenderGrid==='function') herrRenderGrid();
+      if(typeof herrRenderMgrList==='function') herrRenderMgrList();
+    }
+    localStorage.removeItem('herrCards_v1'); // ya migrado (o no había nada nuevo) — no repetir
+  }catch(e){ console.warn('herrMigrateLegacyV1 error:', e); }
+}
 async function herrLoadCards(){
   // Caché local primero, para pintar rápido mientras llega Supabase
   try{
@@ -11270,10 +11301,10 @@ async function herrLoadCards(){
   }catch(e){}
   if(!HERR_CARDS) HERR_CARDS = herrDefaultsFresh();
 
-  if(!_supa) return;
+  if(!_supa){ await herrMigrateLegacyV1(); return; }
   try{
     const { data, error } = await _supa.from('herr_cards').select('*').order('orden', {ascending:true});
-    if(error){ console.warn('herrLoadCards Supabase error (¿falta la tabla herr_cards?):', error); return; }
+    if(error){ console.warn('herrLoadCards Supabase error (¿falta la tabla herr_cards?):', error); await herrMigrateLegacyV1(); return; }
     if(data && data.length){
       HERR_CARDS = data.map(r=>({ id:r.id, icon:r.icon||'🔗', title:r.title||'', desc:r.desc||'', url:r.url||'', visible: r.visible!==false, orden: r.orden||0 }));
       try{ localStorage.setItem(HERR_LS_KEY, JSON.stringify(HERR_CARDS)); }catch(e){}
@@ -11288,6 +11319,7 @@ async function herrLoadCards(){
           .then(({error})=>{ if(error) console.error('❌ herr seed error:', error); });
       });
     }
+    await herrMigrateLegacyV1(); // recupera accesos personalizados de la versión anterior, si los hay
   }catch(e){ console.warn('herrLoadCards exception:', e); }
 }
 function herrGetCards(){
