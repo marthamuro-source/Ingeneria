@@ -5662,8 +5662,18 @@ function cronoFmtDiasHoras(dias){
 function cronoFechaEfectiva(a, fechaBase){
   if(!fechaBase || !a) return fechaBase;
   const diasPausa = (typeof paDiasEnPausa==='function') ? paDiasEnPausa(a) : 0;
-  if(!diasPausa) return fechaBase;
-  return cronoAddWorkdays(fechaBase, diasPausa);
+  let efectiva = diasPausa ? cronoAddWorkdays(fechaBase, diasPausa) : fechaBase;
+  // El pronóstico ahora se calcula sobre el TRABAJO RESTANTE (no la duración total configurada,
+  // ver cronoDiasRestantesSubtarea). Por eso, si ya pasó bastante tiempo desde la fecha de
+  // asignación original, arrancar el conteo ahí subestima el pronóstico: con poco trabajo
+  // restante y un ancla vieja, el resultado cae en el pasado aunque el avance real vaya bien.
+  // El conteo de días restantes nunca debe arrancar antes de HOY (salvo que la actividad todavía
+  // no empiece, es decir fechaAsig/reanudación en el futuro) — así el pronóstico siempre refleja
+  // "cuánto falta a partir de ahora", y la comparación contra la fecha límite (a.fechaTermino)
+  // sigue siendo la señal real de retraso.
+  const hoy = repDateKey(new Date());
+  if(efectiva < hoy) efectiva = hoy;
+  return efectiva;
 }
 
 // ── Calcular pronóstico de toda la actividad (suma de subtareas en cadena) ──
@@ -5963,6 +5973,7 @@ function renderReporteoView(){
           <thead><tr style="border-bottom:0.5px solid var(--border)">
             <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Subtarea</th>
             <th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Cantidad</th>
+            <th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Duración total <span style="cursor:help;text-transform:none;letter-spacing:0;font-weight:400" title="Duración total configurada para esta subtarea (cantidad ÷ rendimiento), sin importar el avance ya reportado.">ⓘ</span></th>
             <th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Días rest. <span style="cursor:help;text-transform:none;letter-spacing:0;font-weight:400" title="Días hábiles que faltan según lo ya avanzado en esta subtarea — no la duración total configurada.">ⓘ</span></th>
             <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Pronóstico <span style="cursor:help;text-transform:none;letter-spacing:0;font-weight:400" title="El pronóstico ya considera que el viernes es una jornada más corta (6h efectivas) que lunes-jueves (9h efectivas) — por eso el trabajo agendado en viernes avanza más lento que un día normal.">ⓘ</span></th>
             <th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Avance</th>
@@ -5975,6 +5986,7 @@ function renderReporteoView(){
         const _paqCache = {}; // paqueteId -> {inicio, fin} ya calculado (para que corran en paralelo)
         subtareas.forEach((st,si)=>{
           const dias = cronoDiasRestantesSubtarea(st);
+          const diasTotal = cronoDiasParaSubtarea(st);
           const diasRaw = dias;
           let stInicio, stFin;
           if(st.paqueteId){
@@ -6004,6 +6016,7 @@ function renderReporteoView(){
           html += `<tr id="subrow-${st.id}" style="border-bottom:0.5px solid var(--border)">
             <td style="padding:8px 8px"><div style="font-weight:500;color:var(--text)">${st.nombre}</div><div style="font-size:10px;color:var(--dim)">${st.unidad}${st.paqueteId?' · en paralelo':''}</div></td>
             <td style="padding:8px;text-align:center;color:var(--text)">${st.cantidad} <span style="color:var(--dim);font-size:10.5px">${st.unidad}</span></td>
+            <td style="padding:8px;text-align:center;color:var(--text)" title="Duración total configurada, sin restar avance">${cronoFmtDiasHoras(diasTotal)}</td>
             <td style="padding:8px;text-align:center;color:var(--dim)" title="${dias < 1 ? 'Menos de una jornada — puede compartir el día con otras subtareas' : ''}">${cronoFmtDiasHoras(dias)}</td>
             <td style="padding:8px;font-size:11px;color:var(--dim)">${cronoFmtShort(stInicio)}→${cronoFmtShort(fechaFin)}</td>
             <td style="padding:8px;text-align:center">
