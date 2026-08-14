@@ -2504,8 +2504,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           </div>
           <div class="pa-table-wrap">
             <table class="et">
-              <thead><tr><th style="cursor:pointer;padding-left:14px;min-width:200px" onclick="paSortTipo('Trabajo Operativo','actividad')"><span class="pa-th-inner">Actividad <span id="paS-Trabajo Operativo-actividad" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','responsable')"><span class="pa-th-inner">Responsable <span id="paS-Trabajo Operativo-responsable" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','fechaAsig')"><span class="pa-th-inner">F. Asig. <span id="paS-Trabajo Operativo-fechaAsig" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','fechaTermino')"><span class="pa-th-inner">F. Término <span id="paS-Trabajo Operativo-fechaTermino" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','fechaReal')" title="Fecha en la que realmente se entregó"><span class="pa-th-inner">F. Final Real <span id="paS-Trabajo Operativo-fechaReal" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','estatus')"><span class="pa-th-inner">Estatus <span id="paS-Trabajo Operativo-estatus" class="pa-sort-icon"></span></span></th><th style="text-align:center;white-space:nowrap">Pronóstico</th><th style="text-align:center">D.Est</th><th style="text-align:center">D.Real</th><th style="min-width:110px">Notas</th><th style="width:32px;text-align:center">🔗</th><th style="width:56px;padding-right:12px"></th></tr></thead>
-              <tbody id="paTbody-Trabajo Operativo"><tr><td colspan="11" class="pa-empty"><p>Cargando…</p></td></tr></tbody>
+              <thead><tr><th style="cursor:pointer;padding-left:14px;min-width:200px" onclick="paSortTipo('Trabajo Operativo','actividad')"><span class="pa-th-inner">Actividad <span id="paS-Trabajo Operativo-actividad" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','proyecto')"><span class="pa-th-inner">Proyecto <span id="paS-Trabajo Operativo-proyecto" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','responsable')"><span class="pa-th-inner">Responsable <span id="paS-Trabajo Operativo-responsable" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','fechaAsig')"><span class="pa-th-inner">F. Asig. <span id="paS-Trabajo Operativo-fechaAsig" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','fechaTermino')"><span class="pa-th-inner">F. Término <span id="paS-Trabajo Operativo-fechaTermino" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','fechaReal')" title="Fecha en la que realmente se entregó"><span class="pa-th-inner">F. Final Real <span id="paS-Trabajo Operativo-fechaReal" class="pa-sort-icon"></span></span></th><th style="cursor:pointer;" onclick="paSortTipo('Trabajo Operativo','estatus')"><span class="pa-th-inner">Estatus <span id="paS-Trabajo Operativo-estatus" class="pa-sort-icon"></span></span></th><th style="text-align:center;white-space:nowrap">Pronóstico</th><th style="text-align:center">D.Est</th><th style="text-align:center">D.Real</th><th style="min-width:110px">Notas</th><th style="width:32px;text-align:center">🔗</th><th style="width:56px;padding-right:12px"></th></tr></thead>
+              <tbody id="paTbody-Trabajo Operativo"><tr><td colspan="12" class="pa-empty"><p>Cargando…</p></td></tr></tbody>
             </table>
           </div>
         </div>
@@ -12148,7 +12148,7 @@ function paRenderTipo(tipo){
   const countEl = document.getElementById('paCount-'+varId);
   if(countEl) countEl.textContent = `${items.length}/${total}`;
 
-  const colCount = tipo==='Planos de Conectividad'?16:tipo==='Proyecto'?13:tipo==='Trabajo Operativo'?11:12;
+  const colCount = tipo==='Planos de Conectividad'?16:tipo==='Proyecto'?13:tipo==='Trabajo Operativo'?12:12;
 
   if(!items.length){
     tbody.innerHTML=`<tr><td colspan="${colCount}" class="pa-empty"><p>${total?'Sin resultados para los filtros':'Sin registros aún'}</p></td></tr>`;
@@ -12211,7 +12211,7 @@ function paRenderTipo(tipo){
       : `<td style="color:var(--text);font-size:11px;white-space:nowrap">${a.fechaReal?fmtD(a.fechaReal):'<span style="color:var(--dim)">—</span>'}${realBadge}</td>`;
 
     const acciones = (_userRole !== 'proyectista')
-      ? `<td style="padding-right:10px;white-space:nowrap"><button class="et-act-btn" onclick="paOpenModal('${a.id}')" title="Editar">✎</button><button class="et-act-btn del" onclick="paDelete('${a.id}')" title="Eliminar">✕</button></td>`
+      ? `<td style="padding-right:10px;white-space:nowrap"><button class="et-act-btn" onclick="paDuplicarActividad('${a.id}')" title="Crear una nueva actividad precargada con estos mismos datos">⧉</button><button class="et-act-btn" onclick="paOpenModal('${a.id}')" title="Editar">✎</button><button class="et-act-btn del" onclick="paDelete('${a.id}')" title="Eliminar">✕</button></td>`
       : `<td></td>`;
     const dCells = `<td style="text-align:center">${dEstCell}</td><td style="text-align:center">${dRealCell}</td>`;
     const enlaceTd = `<td style="text-align:center;width:32px">${enlaceCell}</td>`;
@@ -12258,8 +12258,10 @@ function paRenderTipo(tipo){
         ${estatusTd}${pronSubTd}${dCells}${notasTd}${enlaceTd}${acciones}
       </tr>`;
     } else if(tipo==='Trabajo Operativo'){
+      const proyectoTdOp = `<td style="max-width:110px"><div class="cs" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.proyecto||'—'}</div></td>`;
       return `<tr class="${hlCls}">
         <td style="padding-left:14px;min-width:180px;max-width:240px"><div class="cm" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(a.actividad||'').replace(/"/g,'&quot;')}">${a.actividad||'—'}</div></td>
+        ${proyectoTdOp}
         ${respTd}${fechaAsigTd}${fechaTermTd}${fechaRealTd}${estatusTd}${pronSubTd}${dCells}${notasTd}${enlaceTd}${acciones}
       </tr>`;
     } else { // Impresiones
@@ -14277,6 +14279,42 @@ function paGuardar(){
       if(body) body.style.maxHeight = body.scrollHeight + 'px';
     });
   }
+}
+
+// ── Duplicar actividad: abre el modal de "Nueva actividad" precargado con los mismos
+// datos (folio, proyecto, responsable, km, notas, enlace, etc.), pero SIN modificar la
+// actividad original — es una copia. Fecha de asignación y estatus se reinician (hoy /
+// "Sin iniciar") porque es una actividad nueva que apenas comienza.
+function paDuplicarActividad(id){
+  const a = PA_ITEMS.find(x=>x.id===id);
+  if(!a) return;
+  paOpenModal(null, a.tipo);
+  document.getElementById('paFFolio').value = a.folio||'';
+  document.getElementById('paFNumBobina').value = a.numBobina||'';
+  document.getElementById('paFActividad').value = a.actividad||'';
+  document.getElementById('paFProyecto').value = a.proyecto||'';
+  const projSel = document.getElementById('paFProyectoSel');
+  const projOpts = [...projSel.options].map(o=>o.value);
+  projSel.value = projOpts.includes(a.proyecto) ? a.proyecto : (a.proyecto ? '__otro__' : '');
+  document.getElementById('paFProyecto').style.display = (projSel.value==='__otro__') ? '' : 'none';
+  document.getElementById('paFKm').value = a.km||'';
+  document.getElementById('paFPropietario').value = a.propietario||'';
+  document.getElementById('paFResponsable').value = a.responsable||'';
+  document.getElementById('paFJuegos').value = a.juegos||'';
+  if(document.getElementById('paFPlanosJuego')) document.getElementById('paFPlanosJuego').value = a.planosJuego||'';
+  document.getElementById('paFObs').value = a.observaciones||'';
+  document.getElementById('paFNotas').value = a.notas||'';
+  document.getElementById('paFEnlace').value = a.enlace||'';
+  // Actividad-select (Impresiones/Conectividad): sincronizar con el texto ya cargado arriba
+  const actSel = document.getElementById('paFActividadSel');
+  const actInp = document.getElementById('paFActividad');
+  if(actSel && actSel.style.display!=='none'){
+    const opt = [...actSel.options].find(o=>o.value===actInp.value && o.style.display!=='none');
+    if(opt){ actSel.value = actInp.value; actInp.style.display='none'; }
+    else if(actInp.value){ actSel.value='__otro__'; actInp.style.display=''; }
+  }
+  // Nota visible de que esto es una copia, no la actividad original
+  document.getElementById('paModalTitle').textContent = 'Nueva actividad (copia de "'+(a.actividad||a.folio||'')+'")';
 }
 
 function paDelete(id){
