@@ -2169,6 +2169,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       </div>
 
       <div class="srv-filters" id="srvFilters"></div>
+      <datalist id="srvContratistasList"></datalist>
       <div class="srv-table-wrap">
         <table class="srv-table">
           <thead>
@@ -2176,11 +2177,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
               <th>Proyecto</th>
               <th>Act. vinculada</th>
               <th>Tipo</th>
+              <th>Contratista</th>
               <th>Estado</th>
               <th style="text-align:center">Km</th>
               <th>F. Solicitud</th>
-              <th>F. Inicio</th>
-              <th>F. Entrega pactada</th>
+              <th>F. Entregable</th>
+              <th>F. Validación</th>
               <th>Estatus</th>
               <th>COT</th>
               <th>OS</th>
@@ -5654,29 +5656,27 @@ function cronoFmtDiasHoras(dias){
 }
 
 // ── Punto de partida "efectivo" del cronograma de una actividad ──
-// Si la actividad estuvo (o sigue) en pausa, esos días no cuentan como tiempo de trabajo perdido
-// contra el proyectista: el pronóstico se corre hacia adelante exactamente los días hábiles que
-// estuvo pausada, en vez de quedarse anclado a la fecha de asignación original. Así, al reanudarla,
-// se le "cuenta" de nuevo el mismo plan completo, solo que arrancando más tarde — no se le penaliza
-// con un pronóstico que ya quedó en el pasado ni con un falso "Retraso".
+// El pronóstico se calcula con la DURACIÓN TOTAL configurada de cada subtarea (cronoDiasParaSubtarea),
+// no con el avance real reportado — es "para cuándo debería terminar según el rendimiento capturado",
+// una fecha fija que no se recalcula solo porque reportes avance. La única excepción es la pausa:
+// si la actividad estuvo (o sigue) en pausa, esos días no cuentan como tiempo de trabajo perdido
+// contra el proyectista, así que el pronóstico se corre hacia adelante exactamente los días hábiles
+// que estuvo pausada, en vez de quedarse anclado a la fecha de asignación original. Al reanudarla,
+// se le "cuenta" de nuevo el mismo plan completo (misma duración total restante en el cronograma),
+// solo que arrancando más tarde — no se le da crédito de más ni de menos por el avance real.
 function cronoFechaEfectiva(a, fechaBase){
   if(!fechaBase || !a) return fechaBase;
   const diasPausa = (typeof paDiasEnPausa==='function') ? paDiasEnPausa(a) : 0;
-  let efectiva = diasPausa ? cronoAddWorkdays(fechaBase, diasPausa) : fechaBase;
-  // El pronóstico ahora se calcula sobre el TRABAJO RESTANTE (no la duración total configurada,
-  // ver cronoDiasRestantesSubtarea). Por eso, si ya pasó bastante tiempo desde la fecha de
-  // asignación original, arrancar el conteo ahí subestima el pronóstico: con poco trabajo
-  // restante y un ancla vieja, el resultado cae en el pasado aunque el avance real vaya bien.
-  // El conteo de días restantes nunca debe arrancar antes de HOY (salvo que la actividad todavía
-  // no empiece, es decir fechaAsig/reanudación en el futuro) — así el pronóstico siempre refleja
-  // "cuánto falta a partir de ahora", y la comparación contra la fecha límite (a.fechaTermino)
-  // sigue siendo la señal real de retraso.
-  const hoy = repDateKey(new Date());
-  if(efectiva < hoy) efectiva = hoy;
-  return efectiva;
+  if(!diasPausa) return fechaBase;
+  return cronoAddWorkdays(fechaBase, diasPausa);
 }
 
 // ── Calcular pronóstico de toda la actividad (suma de subtareas en cadena) ──
+// Usa la DURACIÓN TOTAL configurada de cada subtarea (cronoDiasParaSubtarea), no el avance real
+// reportado: el pronóstico representa "para cuándo debería terminar según el rendimiento capturado",
+// y es una fecha fija que solo se mueve si cambian las fechas/cantidades/rendimientos del catálogo,
+// o si la actividad estuvo en pausa (ver cronoFechaEfectiva). El avance real reportado se compara
+// aparte (fuera de esta función) contra esta fecha para decidir si hay retraso.
 function cronoCalcPronostico(subtareas, fechaInicio){
   if(!subtareas||!subtareas.length||!fechaInicio) return null;
   let cursor = fechaInicio;
@@ -5690,12 +5690,12 @@ function cronoCalcPronostico(subtareas, fechaInicio){
     if(procesados.has(st.id)) return;
     if(st.paqueteId){
       const delGrupo = validas.filter(s=>s.paqueteId===st.paqueteId);
-      const diasMax = Math.max(...delGrupo.map(s=>cronoDiasRestantesSubtarea(s)));
+      const diasMax = Math.max(...delGrupo.map(s=>cronoDiasParaSubtarea(s)));
       delGrupo.forEach(s=>procesados.add(s.id));
       const r = cronoAvanzarCursorDia(cursor, usado, diasMax);
       cursor = r.cursor; usado = r.usado;
     } else {
-      const dias = cronoDiasRestantesSubtarea(st);
+      const dias = cronoDiasParaSubtarea(st);
       const r = cronoAvanzarCursorDia(cursor, usado, dias);
       cursor = r.cursor; usado = r.usado;
       procesados.add(st.id);
@@ -5985,14 +5985,18 @@ function renderReporteoView(){
         let usado = 0; // fracción del día "cursor" ya ocupada por subtareas anteriores
         const _paqCache = {}; // paqueteId -> {inicio, fin} ya calculado (para que corran en paralelo)
         subtareas.forEach((st,si)=>{
-          const dias = cronoDiasRestantesSubtarea(st);
+          // diasTotal maneja el AVANCE DEL CALENDARIO (cursor): el cronograma usa la duración TOTAL
+          // configurada, no el avance real, así que el pronóstico es "para cuándo debería terminar
+          // según el rendimiento" y no se recorta solo porque ya se reportó avance.
+          // dias (restante) es SOLO informativo — se muestra en la columna "Días rest." para que
+          // se vea cuánto trabajo real falta, pero no mueve el cursor ni la fecha pronóstico.
           const diasTotal = cronoDiasParaSubtarea(st);
-          const diasRaw = dias;
+          const dias = cronoDiasRestantesSubtarea(st);
           let stInicio, stFin;
           if(st.paqueteId){
             if(!_paqCache[st.paqueteId]){
               const delGrupo = subtareas.filter(s=>s.paqueteId===st.paqueteId);
-              const diasMax = Math.max(...delGrupo.map(s=>cronoDiasRestantesSubtarea(s)));
+              const diasMax = Math.max(...delGrupo.map(s=>cronoDiasParaSubtarea(s)));
               const inicioGrupo = cursor;
               const r = cronoAvanzarCursorDia(cursor, usado, diasMax);
               const finGrupo = r.fin;
@@ -6002,7 +6006,7 @@ function renderReporteoView(){
             stInicio = _paqCache[st.paqueteId].inicio;
             stFin = _paqCache[st.paqueteId].fin;
           } else {
-            const r = cronoAvanzarCursorDia(cursor, usado, dias);
+            const r = cronoAvanzarCursorDia(cursor, usado, diasTotal);
             stInicio = r.inicio;
             stFin = r.fin;
             cursor = r.cursor; usado = r.usado;
@@ -17289,9 +17293,14 @@ function srvRenderTable(){
   if(srvFiltroEstado!=='todos') items = items.filter(s=>s.estado===srvFiltroEstado);
 
   if(!items.length){
-    tbody.innerHTML = `<tr><td colspan="14" style="text-align:center;padding:28px;color:var(--dim)">Sin registros${srvFiltroTipo!=='todos'||srvFiltroEstado!=='todos'?' con los filtros actuales':' — agrega una nueva solicitud'}.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="15" style="text-align:center;padding:28px;color:var(--dim)">Sin registros${srvFiltroTipo!=='todos'||srvFiltroEstado!=='todos'?' con los filtros actuales':' — agrega una nueva solicitud'}.</td></tr>`;
     return;
   }
+
+  // Lista de contratistas ya capturados, para autocompletar (datalist) en la celda de Contratista.
+  const contratistasFrecuentes = [...new Set(SRV_ITEMS.map(s=>s.contratista).filter(Boolean))].sort();
+  const datalistEl = document.getElementById('srvContratistasList');
+  if(datalistEl) datalistEl.innerHTML = contratistasFrecuentes.map(c=>`<option value="${escapeHtml(c)}">`).join('');
 
   tbody.innerHTML = items.map(s=>{
     const sc = SRV_STATUS.find(x=>x.key===s.estatus)||SRV_STATUS[0];
@@ -17322,6 +17331,12 @@ function srvRenderTable(){
       <td style="font-weight:500;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(s.proyecto||'').replace(/"/g,'&quot;')}">${s.proyecto||'—'}</td>
       <td>${linkedCell}</td>
       <td><span class="srv-tipo ${tipoClass}">${s.tipo||'—'}</span></td>
+      <td style="max-width:130px">
+        <input type="text" list="srvContratistasList" value="${escapeHtml(s.contratista||'')}" placeholder="—"
+          onchange="srvSetContratista('${s.id}', this.value)"
+          style="width:100%;max-width:130px;background:transparent;border:0.5px solid transparent;border-radius:5px;padding:3px 5px;font-size:11px;font-family:var(--font);color:var(--text)"
+          onfocus="this.style.borderColor='var(--border)'" onblur="this.style.borderColor='transparent'">
+      </td>
       <td style="font-size:11px;white-space:nowrap">${s.estado||'—'}</td>
       <td style="text-align:center;font-family:var(--mono);font-size:11px;font-weight:600">${s.km||'—'}</td>
       <td style="font-size:11px;white-space:nowrap;color:var(--muted)">${fmtD(s.fechaSolicitud)}</td>
@@ -17352,6 +17367,13 @@ function srvInlineLink(id, field){
   if(url===null) return;
   const s = SRV_ITEMS.find(x=>x.id===id); if(!s) return;
   s[field]=url.trim(); srvSave(); srvRenderTable();
+}
+
+function srvSetContratista(id, value){
+  const s = SRV_ITEMS.find(x=>x.id===id); if(!s) return;
+  s.contratista = (value||'').trim();
+  srvSave();
+  srvRenderTable(); // refresca el datalist con el nuevo contratista frecuente para las demás filas
 }
 
 function srvDelete(id){
@@ -17404,6 +17426,10 @@ function srvBuildModal(s){
       <div class="srv-field" id="srvNuevoTipoField" style="display:none">
         <label>Nombre del nuevo tipo</label>
         <input type="text" id="srvNuevoTipo" placeholder="Ej. Estudio hidrológico">
+      </div>
+      <div class="srv-field">
+        <label>Contratista</label>
+        <input type="text" id="srvContratista" list="srvContratistasList" value="${s?.contratista||''}" placeholder="Nombre del contratista">
       </div>
       <div class="srv-field">
         <label>Estado de la república</label>
@@ -17516,6 +17542,7 @@ function srvSaveModal(){
   const data = {
     proyecto,
     tipo:         tipoFinal,
+    contratista:  document.getElementById('srvContratista')?.value?.trim()||'',
     estado:       document.getElementById('srvEstado')?.value||'',
     km:           document.getElementById('srvKm')?.value||'',
     estatus:      document.getElementById('srvEstatus')?.value||'COT Firmada',
@@ -19529,7 +19556,7 @@ async function supaSyncServicios(){
   try{
     if(!SRV_ITEMS.length) return;
     const rows = SRV_ITEMS.map(s=>({
-      id:s.id, proyecto:s.proyecto||null, tipo:s.tipo||null,
+      id:s.id, proyecto:s.proyecto||null, tipo:s.tipo||null, contratista:s.contratista||null,
       estado:s.estado||null, km:s.km||null, estatus:s.estatus||'COT Firmada',
       fecha_solicitud:s.fechaSolicitud||null, fecha_inicio:s.fechaInicio||null,
       fecha_entrega:s.fechaEntrega||null, link_cot:s.linkCOT||null, link_os:s.linkOS||null,
@@ -20729,7 +20756,7 @@ async function supaLoadAll(){
     const { data: srvs } = await _supa.from('servicios_esp').select('*').order('created_at',{ascending:false});
     if(srvs && srvs.length){
       SRV_ITEMS = srvs.map(s=>({
-        id:s.id, proyecto:s.proyecto||'', tipo:s.tipo||'',
+        id:s.id, proyecto:s.proyecto||'', tipo:s.tipo||'', contratista:s.contratista||'',
         estado:s.estado||'', km:s.km||'', estatus:s.estatus||'COT Firmada',
         fechaSolicitud:s.fecha_solicitud||'', fechaInicio:s.fecha_inicio||'',
         fechaEntrega:s.fecha_entrega||'', linkCOT:s.link_cot||'', linkOS:s.link_os||'',
@@ -20946,7 +20973,7 @@ async function supaMigrateFromLocal(){
     // 3. Servicios especiales
     if(typeof SRV_ITEMS!=='undefined' && SRV_ITEMS.length){
       const rows = SRV_ITEMS.map(s=>({
-        id:s.id, proyecto:s.proyecto||null, tipo:s.tipo||null,
+        id:s.id, proyecto:s.proyecto||null, tipo:s.tipo||null, contratista:s.contratista||null,
         estado:s.estado||null, km:s.km||null, estatus:s.estatus||'COT Firmada',
         fecha_solicitud:s.fechaSolicitud||null, fecha_inicio:s.fechaInicio||null,
         fecha_entrega:s.fechaEntrega||null, link_cot:s.linkCOT||null, link_os:s.linkOS||null,
