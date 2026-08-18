@@ -2881,6 +2881,28 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
     </div>
   </div>
 
+  <!-- MODAL: Exportar reporte de reporteo (Panel de Seguimiento › Reporteo) -->
+  <div class="pa-modal-bg" id="calReportModal" onclick="if(event.target===this)calCerrarReportModal()" style="z-index:4000">
+    <div class="pa-modal" style="max-width:380px">
+      <div class="pa-modal-hd">
+        <div class="pa-modal-title">Exportar reporte de reporteo</div>
+        <button class="pa-modal-close" onclick="calCerrarReportModal()" title="Cerrar">×</button>
+      </div>
+      <div class="pa-modal-body">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Compila los reportes diarios registrados en el período y proyectista que elijas, listo para imprimir o guardar en PDF.</div>
+        <div class="pa-field" style="margin-bottom:12px">
+          <label>Período</label>
+          <select id="calReportPeriodo"></select>
+        </div>
+        <div class="pa-field" style="margin-bottom:16px">
+          <label>Proyectista</label>
+          <select id="calReportProyectista"></select>
+        </div>
+        <button class="pa-btn pa-btn-primary" style="width:100%" onclick="calGenerarReporteReporteo()">📄 Generar reporte</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL SELECTOR DE TIPO -->
   <div class="pa-modal-bg" id="paTypeSelectorBg" onclick="if(event.target===this)paCloseTypeSelector()">
     <div class="pa-modal" style="max-width:420px">
@@ -9583,6 +9605,185 @@ function calDiaGenerarPDF(fecha){
   setTimeout(()=>URL.revokeObjectURL(url), 60000);
 }
 
+// ── Exportar reporte compilado de reporteo (por mes, trimestre o historial, todos o un proyectista) ──
+function calAbrirReportModal(){
+  const perSel = document.getElementById('calReportPeriodo');
+  const proySel = document.getElementById('calReportProyectista');
+  if(!perSel || !proySel) return;
+  const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  perSel.innerHTML = `
+    <option value="mes-visible">${meses[calMes]} ${calAnio} (mes que estás viendo)</option>
+    <option value="mes-actual">Mes actual</option>
+    <option value="Q1">Q1 · Enero – Marzo</option>
+    <option value="Q2">Q2 · Abril – Junio</option>
+    <option value="Q3">Q3 · Julio – Septiembre</option>
+    <option value="Q4">Q4 · Octubre – Diciembre</option>
+    <option value="all">Todo el historial</option>
+  `;
+  proySel.innerHTML = `<option value="">Todos los proyectistas</option>` +
+    PA_MEMBERS.map(m=>`<option value="${m.replace(/"/g,'&quot;')}">${m}</option>`).join('');
+  document.getElementById('calReportModal').classList.add('open');
+}
+function calCerrarReportModal(){
+  const modal = document.getElementById('calReportModal');
+  if(modal) modal.classList.remove('open');
+}
+
+function calGenerarReporteReporteo(){
+  const periodo = document.getElementById('calReportPeriodo')?.value || 'mes-visible';
+  const proyFiltro = document.getElementById('calReportProyectista')?.value || '';
+  calCerrarReportModal();
+  cronoLoad();
+
+  const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const now = new Date();
+  const y = periodo==='mes-visible' ? calAnio : now.getFullYear();
+
+  let rangeStart, rangeEnd, periodoLabel;
+  if(periodo==='mes-visible'){
+    rangeStart = new Date(calAnio, calMes, 1);
+    rangeEnd   = new Date(calAnio, calMes+1, 0, 23,59,59);
+    periodoLabel = `${meses[calMes]} ${calAnio}`;
+  } else if(periodo==='mes-actual'){
+    rangeStart = new Date(y, now.getMonth(), 1);
+    rangeEnd   = new Date(y, now.getMonth()+1, 0, 23,59,59);
+    periodoLabel = `${meses[now.getMonth()]} ${y}`;
+  } else if(periodo==='Q1'){
+    rangeStart = new Date(y,0,1); rangeEnd = new Date(y,2,31,23,59,59);
+    periodoLabel = `Q1 ${y} · Enero – Marzo`;
+  } else if(periodo==='Q2'){
+    rangeStart = new Date(y,3,1); rangeEnd = new Date(y,5,30,23,59,59);
+    periodoLabel = `Q2 ${y} · Abril – Junio`;
+  } else if(periodo==='Q3'){
+    rangeStart = new Date(y,6,1); rangeEnd = new Date(y,8,30,23,59,59);
+    periodoLabel = `Q3 ${y} · Julio – Septiembre`;
+  } else if(periodo==='Q4'){
+    rangeStart = new Date(y,9,1); rangeEnd = new Date(y,11,31,23,59,59);
+    periodoLabel = `Q4 ${y} · Octubre – Diciembre`;
+  } else {
+    rangeStart = new Date(2020,0,1); rangeEnd = new Date(2099,11,31,23,59,59);
+    periodoLabel = 'Historial completo';
+  }
+  const rsKey = repDateKey(rangeStart), reKey = repDateKey(rangeEnd);
+
+  // Reunir todos los reportes del rango (y del proyectista, si se eligió uno específico)
+  const reps = [];
+  CRONO_ITEMS.forEach(item=>{
+    const pa = PA_ITEMS.find(a=>a.id===item.actividadId);
+    (item.reportes||[]).forEach(r=>{
+      if(!r.fecha || r.fecha<rsKey || r.fecha>reKey) return;
+      if(proyFiltro && r.quien!==proyFiltro) return;
+      reps.push({...r, proyecto:item.proyecto||'', folio:pa?.folio||pa?.actividad||'', tipo:pa?.tipo||'', numBobina:pa?.numBobina||''});
+    });
+  });
+  reps.sort((a,b)=> (a.fecha||'').localeCompare(b.fecha||'') || (a.quien||'').localeCompare(b.quien||''));
+
+  // Agrupar por fecha para el detalle día por día
+  const porFecha = {};
+  reps.forEach(r=>{ (porFecha[r.fecha] = porFecha[r.fecha]||[]).push(r); });
+  const fechas = Object.keys(porFecha).sort();
+
+  // Días hábiles transcurridos del rango (no cuenta días futuros que aún no pueden tener reporte)
+  let diasHabiles = 0;
+  {
+    let d = new Date(rangeStart);
+    const fin = rangeEnd < now ? rangeEnd : now;
+    while(d <= fin){
+      const key = repDateKey(d);
+      if(!isWeekend(d) && !(typeof FESTIVOS!=='undefined' && FESTIVOS.includes(key))) diasHabiles++;
+      d.setDate(d.getDate()+1);
+    }
+  }
+
+  // Resumen por persona — solo si se incluyó a todo el equipo (si se filtró a alguien, el detalle ya es suficiente)
+  const resumenPersonas = (!proyFiltro ? [...PA_MEMBERS] : []).map(nombre=>{
+    const repsPersona = reps.filter(r=>r.quien===nombre);
+    const diasReportados = new Set(repsPersona.map(r=>r.fecha)).size;
+    return { nombre, totalReportes: repsPersona.length, diasReportados };
+  }).sort((a,b)=>b.totalReportes-a.totalReportes);
+
+  const genStr = now.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const proyLabel = proyFiltro ? proyFiltro : `Todo el equipo (${PA_MEMBERS.length} proyectistas)`;
+
+  const html2 = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Reporte de reporteo — ${periodoLabel}</title>
+  <style>
+    html{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
+    body{font-family:Arial,sans-serif;font-size:12px;color:#1a1a2e;background:#fff;padding:24px;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
+    .hdr{display:flex;justify-content:space-between;border-bottom:3px solid #0f2744;padding-bottom:10px;margin-bottom:16px}
+    .logo{font-size:18px;font-weight:900;color:#0f2744}
+    .rtitle{text-align:right}.rtitle h1{font-size:15px;font-weight:700}
+    .rtitle p{font-size:10px;color:#6b7280;margin-top:2px}
+    .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+    .kpi{background:#f8fafc;border:1px solid #e2eaf3;border-radius:8px;padding:12px 14px;text-align:center}
+    .kpi .v{font-size:20px;font-weight:800;color:#0f2744}
+    .kpi .l{font-size:9.5px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+    .sec{font-size:11px;font-weight:700;text-transform:uppercase;color:#0f2744;border-bottom:2px solid #0f2744;padding:6px 0;margin:16px 0 10px}
+    .day-hd{font-size:11px;font-weight:700;color:#fff;background:#0f2744;padding:5px 10px;border-radius:6px 6px 0 0;margin-top:14px;text-transform:capitalize}
+    .day-body{border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;padding:8px 10px 2px}
+    .rep-card{border-bottom:1px solid #eef1f5;padding:8px 2px;page-break-inside:avoid}
+    .rep-card:last-child{border-bottom:none}
+    .rep-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+    .rep-name{font-weight:700;font-size:11.5px;color:#0f2744}
+    .rep-tag{font-size:9px;padding:2px 7px;border-radius:10px;background:#eef2f7;color:#4a5568}
+    .rep-folio{font-size:9px;color:#6b7280;font-family:monospace}
+    .rep-nota{font-size:10.5px;color:#1a1a2e;margin-bottom:2px}
+    .rep-cant{font-size:10px;color:#1a4fa0;font-weight:600}
+    .resumen-table{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:10.5px}
+    .resumen-table th{text-align:left;padding:5px 8px;background:#f8fafc;border-bottom:2px solid #e2eaf3;font-size:9.5px;text-transform:uppercase;color:#6b7280}
+    .resumen-table td{padding:5px 8px;border-bottom:1px solid #eef1f5}
+    .pbt{text-align:center;margin:20px 0}
+    .pbt button{padding:9px 24px;background:#0f2744;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
+    @media print{.pbt{display:none} *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color-adjust:exact !important;}@page{margin:.6cm}}
+  </style></head><body>
+  <div class="hdr">
+    <div><div class="logo">C3NTRO Telecom</div><div style="font-size:11px;color:#6b7280;margin-top:2px">Coordinación de Ingeniería</div></div>
+    <div class="rtitle"><h1>Reporte de Reporteo Diario</h1><p>${periodoLabel} · ${proyLabel}<br>Generado el ${genStr}</p></div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="v">${reps.length}</div><div class="l">Reportes registrados</div></div>
+    <div class="kpi"><div class="v">${fechas.length}/${diasHabiles}</div><div class="l">Días con reporte / días hábiles del período</div></div>
+    <div class="kpi"><div class="v">${new Set(reps.map(r=>r.quien)).size}</div><div class="l">Proyectistas con al menos 1 reporte</div></div>
+  </div>
+  ${resumenPersonas.length ? `
+  <div class="sec">Resumen por proyectista</div>
+  <table class="resumen-table"><thead><tr><th>Proyectista</th><th>Reportes</th><th>Días reportados</th></tr></thead><tbody>
+    ${resumenPersonas.map(p=>`<tr><td>${p.nombre}</td><td>${p.totalReportes}</td><td>${p.diasReportados}</td></tr>`).join('')}
+  </tbody></table>` : ''}
+  <div class="sec">Detalle de reportes</div>
+  ${fechas.length ? fechas.map(fecha=>{
+    const d = new Date(fecha+'T00:00:00');
+    let fmtFecha = d.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    fmtFecha = fmtFecha.charAt(0).toUpperCase()+fmtFecha.slice(1);
+    const repsDia = porFecha[fecha];
+    return `<div class="day-hd">${fmtFecha} — ${repsDia.length} reporte${repsDia.length!==1?'s':''}</div>
+    <div class="day-body">
+      ${repsDia.map(r=>{
+        const esConect = r.tipo==='Planos de Conectividad'||r.tipo==='Conectividad (Bobinas)';
+        return `<div class="rep-card">
+          <div class="rep-head">
+            <span class="rep-name">${(r.quien||'').split(' ').slice(0,2).join(' ')}</span>
+            ${r.subtareaNombre?`<span class="rep-tag">${r.subtareaNombre}</span>`:''}
+            ${r.proyecto?`<span class="rep-folio">${r.proyecto}</span>`:''}
+            ${r.folio?`<span class="rep-folio">${r.folio}</span>`:''}
+            ${esConect && r.numBobina?`<span class="rep-tag" style="background:#fdf0da;color:#a05a00">Bna #${r.numBobina}</span>`:''}
+          </div>
+          ${r.nota?`<div class="rep-nota">${r.nota}</div>`:''}
+          ${r.cantidad?`<div class="rep-cant">+${r.cantidad} ${r.unidad||''}</div>`:''}
+        </div>`;
+      }).join('')}
+    </div>`;
+  }).join('') : `<div style="font-size:11px;color:#6b7280">Sin reportes registrados en este período${proyFiltro?' para '+proyFiltro:''}.</div>`}
+  <div class="pbt"><button onclick="window.print()">Exportar PDF / Imprimir</button></div>
+  <scr`+`ipt>window.onload=()=>window.print();</scr`+`ipt>
+  </body></html>`;
+
+  const blob2 = new Blob([html2], {type:'text/html;charset=utf-8'});
+  const url2 = URL.createObjectURL(blob2);
+  const win2 = window.open(url2, '_blank');
+  if(!win2) alert('Permite ventanas emergentes para generar el PDF.');
+  setTimeout(()=>URL.revokeObjectURL(url2), 60000);
+}
+
 function renderCronoCalendario(){
   const el = document.getElementById('cronoCalendarioWrap');
   if(!el) return;
@@ -9634,6 +9835,7 @@ function renderCronoCalendario(){
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div style="font-size:14px;font-weight:600;color:var(--text)">📅 Reportes diarios — ${meses[calMes]} ${calAnio}</div>
       <div style="display:flex;gap:6px">
+        <button class="pa-btn pa-btn-ghost" onclick="calAbrirReportModal()" style="font-size:12px;padding:4px 10px" title="Exportar un reporte compilado de los reporteos generados">⬇ Exportar reporte</button>
         <button class="pa-btn pa-btn-ghost" onclick="calPrevMes()" style="font-size:12px;padding:4px 10px">← Anterior</button>
         <button class="pa-btn pa-btn-ghost" onclick="calHoy()" style="font-size:12px;padding:4px 10px">Hoy</button>
         <button class="pa-btn pa-btn-ghost" onclick="calNextMes()" style="font-size:12px;padding:4px 10px">Siguiente →</button>
@@ -18638,6 +18840,10 @@ function renderSegCalidad(){
   items.forEach(a=>{
     const folio = (a.folio||a.actividad||'—');
     const proy = (a.proyecto||'—');
+    const esConect = a.tipo==='Planos de Conectividad'||a.tipo==='Conectividad (Bobinas)';
+    const bobinaBadge = (esConect && a.numBobina)
+      ? `<span style="font-size:10px;padding:1px 7px;border-radius:10px;background:rgba(245,166,35,.12);color:var(--amber);font-weight:600;margin-left:6px;white-space:nowrap">Bna #${a.numBobina}</span>`
+      : '';
     const tipoColor = a.tipo==='Proyecto'?'#4a8fd4':a.tipo==='Trabajo Operativo'?'#f5a623':a.tipo==='Planos de Conectividad'?'#9a6ef0':'#5ce8a6';
 
     const draft = calRevisionEnProgreso(a.id);
@@ -18669,7 +18875,7 @@ function renderSegCalidad(){
     html += `<tr>
       <td style="padding-left:12px"><span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${tipoColor}1a;color:${tipoColor};font-weight:500">${a.tipo||'—'}</span></td>
       <td><div style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(proy||'').replace(/"/g,'&quot;')}">${proy}</div></td>
-      <td><div style="font-family:var(--mono);font-size:11px;color:var(--accent);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(folio||'').replace(/"/g,'&quot;')}">${folio}</div></td>
+      <td><div style="display:flex;align-items:center;max-width:280px"><span style="font-family:var(--mono);font-size:11px;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(folio||'').replace(/"/g,'&quot;')}">${folio}</span>${bobinaBadge}</div></td>
       <td style="font-size:11px;color:var(--muted);white-space:nowrap">${(a.responsable||'—').split(' ').slice(0,2).join(' ')}</td>
       <td style="font-size:11px;white-space:nowrap;color:var(--muted)">${fmtD(a.fechaTermino)}</td>
       <td style="text-align:center">${accion}</td>
