@@ -1396,6 +1396,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"></path><polyline points="16 11 17.5 13 21 10"></polyline></svg>
       Evaluaciones
     </button>
+    <button class="ni" id="navSbiBtn" onclick="goView(&#39;sbi&#39;)" style="display:none" title="Solo visible para ti como administrador">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+      Feedback SBI 🔒
+    </button>
     <span id="notifBellLabel" style="display:none">Sin notificaciones</span>
   </nav>
   <!-- Footer fijo al fondo del sidebar -->
@@ -2361,6 +2365,54 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <!-- Cuadrícula de tarjetas -->
       <div id="evalGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px"></div>
 
+    </div>
+  </div>
+
+  <!-- FEEDBACK SBI — privado, solo admin -->
+  <div id="v-sbi" style="display:none">
+    <div class="topbar">
+      <div>
+        <h1>Feedback SBI</h1>
+        <div class="tmeta">Guía privada para planear y dar feedback — solo visible para ti</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="pa-btn pa-btn-ghost" onclick="sbiAbrirEjemplos()" style="font-size:12px">📖 Ver los 6 ejemplos</button>
+        <button class="pa-btn pa-btn-primary" onclick="sbiAbrirModal()">+ Nuevo feedback SBI</button>
+      </div>
+    </div>
+    <div class="content" id="sbiMount"></div>
+  </div>
+
+  <!-- MODAL: Nuevo / editar feedback SBI -->
+  <div class="pa-modal-bg" id="sbiModal" onclick="if(event.target===this)sbiCerrarModal()" style="z-index:4200">
+    <div class="pa-modal" style="max-width:640px">
+      <div class="pa-modal-hd">
+        <div class="pa-modal-title" id="sbiModalTitle">Nuevo feedback SBI</div>
+        <button class="pa-modal-close" onclick="sbiCerrarModal()" title="Cerrar">×</button>
+      </div>
+      <div class="pa-modal-body" id="sbiModalBody"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: seguimiento post-feedback -->
+  <div class="pa-modal-bg" id="sbiSeguimientoModal" onclick="if(event.target===this)sbiCerrarSeguimiento()" style="z-index:4200">
+    <div class="pa-modal" style="max-width:420px">
+      <div class="pa-modal-hd">
+        <div class="pa-modal-title">Seguimiento del feedback</div>
+        <button class="pa-modal-close" onclick="sbiCerrarSeguimiento()" title="Cerrar">×</button>
+      </div>
+      <div class="pa-modal-body" id="sbiSeguimientoBody"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: banco de ejemplos (referencia de la guía) -->
+  <div class="pa-modal-bg" id="sbiEjemplosModal" onclick="if(event.target===this)sbiCerrarEjemplos()" style="z-index:4200">
+    <div class="pa-modal" style="max-width:640px;max-height:82vh;overflow-y:auto">
+      <div class="pa-modal-hd">
+        <div class="pa-modal-title">Banco de ejemplos — Guía SBI</div>
+        <button class="pa-modal-close" onclick="sbiCerrarEjemplos()" title="Cerrar">×</button>
+      </div>
+      <div class="pa-modal-body" id="sbiEjemplosBody"></div>
     </div>
   </div>
 
@@ -10599,6 +10651,413 @@ function renderEvaluaciones(){
     `<div class="empty" style="grid-column:1/-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" style="width:38px;height:38px;margin:0 auto 12px;display:block;opacity:.25"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg><p>Sin datos disponibles</p><small>Avance y Reporteo se toman de Panel de Seguimiento, Udemy de Panel de Seguimiento &gt; Udemy, y Calidad del CSV que cargues.</small></div>`;
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// FEEDBACK SBI — espacio privado del administrador (Situación + Comportamiento
+// + Impacto + Pedido, guía Center for Creative Leadership). Se guarda SOLO en
+// este navegador (localStorage) — NUNCA se sincroniza con Supabase, porque son
+// notas sensibles de desempeño de un solo administrador, no datos de equipo.
+// ══════════════════════════════════════════════════════════════════════════
+const SBI_KEY = 'c3ntro_sbi_feedback_v1';
+let SBI_ITEMS = [];
+let sbiEditId = null;
+let sbiSeguimientoId = null;
+let sbiFiltroPersona = '';
+let sbiFiltroEstatus = 'todos';
+
+function sbiLoad(){
+  try{ SBI_ITEMS = JSON.parse(localStorage.getItem(SBI_KEY)||'[]'); }catch(e){ SBI_ITEMS=[]; }
+}
+function sbiSave(){
+  localStorage.setItem(SBI_KEY, JSON.stringify(SBI_ITEMS));
+}
+function sbiFmtDate(d){
+  if(!d) return '—';
+  return new Date(d+'T00:00:00').toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+function sbiResultadoLabel(r){
+  return r==='conversacion' ? '💬 Generó conversación' : r==='defensa' ? '🛡 Generó defensa o cierre' : '➖ Neutral, sin cambio visible';
+}
+function sbiTextoCompleto(f){
+  const partes = [];
+  if(f.situacion) partes.push(`<span style="color:var(--dim)">(S)</span> ${f.situacion.replace(/</g,'&lt;')}`);
+  if(f.comportamiento) partes.push(`<span style="color:var(--dim)">(B)</span> ${f.comportamiento.replace(/</g,'&lt;')}`);
+  if(f.impacto) partes.push(`<span style="color:var(--dim)">(I)</span> ${f.impacto.replace(/</g,'&lt;')}`);
+  if(f.pedido) partes.push(`<span style="color:var(--dim)">(${f.tipo==='reconocimiento'?'Refuerzo':'Pedido'})</span> ${f.pedido.replace(/</g,'&lt;')}`);
+  return partes.length ? partes.join(' ') : '<span style="color:var(--dim);font-style:italic">Sin redactar todavía</span>';
+}
+
+function renderSbi(){
+  if(_userRole !== 'admin') return; // espacio privado — nadie más debería llegar aquí
+  const mount = document.getElementById('sbiMount');
+  if(!mount) return;
+  sbiLoad();
+
+  const personas = [...PA_MEMBERS];
+
+  // Cuenta de confianza por persona — solo cuenta lo que ya se DIO (los borradores no cuentan)
+  const dados = SBI_ITEMS.filter(f=>f.estatus==='dado');
+  const cuentas = personas.map(nombre=>{
+    const reco = dados.filter(f=>f.persona===nombre && f.tipo==='reconocimiento').length;
+    const desa = dados.filter(f=>f.persona===nombre && f.tipo==='desarrollo').length;
+    return { nombre, reco, desa, saldo: reco - desa };
+  });
+
+  let html = `
+  <div style="background:rgba(154,110,240,.06);border:0.5px solid rgba(154,110,240,.25);border-radius:10px;padding:14px 16px;margin-bottom:16px">
+    <div style="font-size:12px;font-weight:600;color:#c9a6ff;margin-bottom:6px">🔒 Espacio privado — solo tú lo ves</div>
+    <div style="font-size:11.5px;color:var(--muted);line-height:1.55">
+      Modelo <b style="color:var(--text)">S</b>ituación + <b style="color:var(--text)">B</b>Comportamiento + <b style="color:var(--text)">I</b>mpacto + Pedido. Antes de dar el feedback, revisa las 3 condiciones: <b style="color:var(--text)">cuenta de confianza</b> (¿tienes saldo con esta persona?), <b style="color:var(--text)">el momento</b> (¿es cercano al hecho?) y <b style="color:var(--text)">tu estado</b> (¿lo das para que mejore, o para descargar frustración?). El modelo sin las condiciones es una técnica vacía; las condiciones sin el modelo son buena voluntad desordenada.
+    </div>
+  </div>`;
+
+  html += `<div class="panel" style="margin-bottom:16px">
+    <div class="ph"><div><div class="pt">Cuenta de confianza</div><div class="ps">Reconocimientos vs. desarrollo YA dados a cada persona</div></div></div>
+    <div class="pb" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
+      ${cuentas.map(c=>{
+        const sinReco = c.desa>0 && c.reco===0;
+        const color = sinReco ? 'var(--red)' : c.saldo>=0 ? 'var(--green)' : 'var(--amber)';
+        const msg = sinReco ? '⚠ Solo desarrollo, sin reconocimientos' : (c.reco===0 && c.desa===0) ? 'Sin feedback registrado aún' : `Saldo: ${c.saldo>0?'+':''}${c.saldo}`;
+        return `<div style="background:var(--surface2);border:0.5px solid var(--border);border-radius:8px;padding:10px 12px">
+          <div style="font-size:11.5px;font-weight:600;color:var(--text);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.nombre}">${c.nombre.split(' ').slice(0,2).join(' ')}</div>
+          <div style="display:flex;gap:6px;margin-bottom:6px">
+            <span style="font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(61,214,140,.12);color:var(--green)">+${c.reco} reconoc.</span>
+            <span style="font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(74,143,212,.12);color:var(--accent)">${c.desa} desarrollo</span>
+          </div>
+          <div style="font-size:10.5px;color:${color};font-weight:500">${msg}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  const estatusOpts = [['todos','Todos'],['borrador','Borradores'],['dado','Dados']];
+  html += `<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+    <select onchange="sbiFiltroPersona=this.value;renderSbi()" style="font-size:11px;padding:5px 10px;border-radius:6px;border:0.5px solid var(--border);background:var(--surface2);color:var(--text)">
+      <option value="">Todas las personas</option>
+      ${personas.map(p=>`<option value="${p.replace(/"/g,'&quot;')}" ${sbiFiltroPersona===p?'selected':''}>${p}</option>`).join('')}
+    </select>
+    <div style="display:flex;gap:6px">
+      ${estatusOpts.map(([k,label])=>`<button class="srv-chip ${sbiFiltroEstatus===k?'on':''}" onclick="sbiFiltroEstatus='${k}';renderSbi()">${label}</button>`).join('')}
+    </div>
+  </div>`;
+
+  let items = [...SBI_ITEMS];
+  if(sbiFiltroPersona) items = items.filter(f=>f.persona===sbiFiltroPersona);
+  if(sbiFiltroEstatus!=='todos') items = items.filter(f=>f.estatus===sbiFiltroEstatus);
+  items.sort((a,b)=>(b.fechaCreado||'').localeCompare(a.fechaCreado||''));
+
+  if(!items.length){
+    html += `<div style="padding:32px;text-align:center;color:var(--dim);font-size:12px">Sin feedback registrado${sbiFiltroPersona||sbiFiltroEstatus!=='todos'?' con estos filtros':' — empieza con "+ Nuevo feedback SBI"'}.</div>`;
+  } else {
+    html += items.map(f=>sbiCardHTML(f)).join('');
+  }
+
+  mount.innerHTML = html;
+}
+
+function sbiCardHTML(f){
+  const tipoBadge = f.tipo==='reconocimiento'
+    ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(61,214,140,.12);color:var(--green);font-weight:600">✓ Reconocimiento</span>`
+    : `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(74,143,212,.12);color:var(--accent);font-weight:600">↗ Desarrollo</span>`;
+  const estatusBadge = f.estatus==='dado'
+    ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(255,255,255,.08);color:var(--muted)">✔ Dado ${sbiFmtDate(f.fechaDado)}</span>`
+    : `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(245,166,35,.1);color:var(--amber)">📝 Borrador</span>`;
+
+  const checklistFallas = [];
+  if(f.checklist){
+    if(f.checklist.confianza===false) checklistFallas.push('Sin saldo de confianza');
+    if(f.checklist.momento===false) checklistFallas.push('No es cercano al hecho');
+    if(f.checklist.estado===false) checklistFallas.push('Podría ser descarga, no feedback');
+  }
+
+  const seguimientoHTML = f.seguimiento && f.seguimiento.resultado
+    ? `<div style="margin-top:8px;padding:8px 10px;background:rgba(255,255,255,.03);border-radius:6px;font-size:11px;color:var(--muted)">
+        <b style="color:var(--text)">Seguimiento:</b> ${sbiResultadoLabel(f.seguimiento.resultado)}${f.seguimiento.nota?' — '+f.seguimiento.nota.replace(/</g,'&lt;'):''}
+      </div>`
+    : '';
+
+  return `<div class="panel" style="margin-bottom:10px;padding:14px 16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:12.5px;font-weight:600;color:var(--text)">${f.persona}</span>
+        ${tipoBadge}
+        ${estatusBadge}
+      </div>
+      <div style="display:flex;gap:6px">
+        ${f.estatus==='borrador' ? `<button class="et-act-btn" style="background:rgba(61,214,140,.12);border:1px solid rgba(61,214,140,.35);color:var(--green)" onclick="sbiMarcarDado('${f.id}')">✔ Marcar como dado</button>` : ''}
+        ${f.estatus==='dado' ? `<button class="et-act-btn" onclick="sbiAbrirSeguimiento('${f.id}')">📝 ${f.seguimiento&&f.seguimiento.resultado?'Editar':'Agregar'} seguimiento</button>` : ''}
+        <button class="et-act-btn" onclick="sbiAbrirModal('${f.id}')" title="Editar">✎</button>
+        <button class="et-act-btn del" onclick="sbiEliminar('${f.id}')" title="Eliminar">✕</button>
+      </div>
+    </div>
+    ${checklistFallas.length ? `<div style="font-size:10.5px;color:var(--amber);margin-bottom:8px">⚠ ${checklistFallas.join(' · ')}</div>` : ''}
+    <div style="font-size:12px;color:var(--text);line-height:1.55;background:var(--surface2);border-radius:8px;padding:10px 12px">
+      ${sbiTextoCompleto(f)}
+    </div>
+    ${seguimientoHTML}
+  </div>`;
+}
+
+// ── Modal: nuevo / editar feedback ──
+function sbiAbrirModal(id){
+  sbiLoad();
+  sbiEditId = id || null;
+  const f = id ? SBI_ITEMS.find(x=>x.id===id) : null;
+  const titleEl = document.getElementById('sbiModalTitle');
+  if(titleEl) titleEl.textContent = f ? 'Editar feedback SBI' : 'Nuevo feedback SBI';
+  sbiBuildModalBody(f);
+  document.getElementById('sbiModal').classList.add('open');
+}
+function sbiCerrarModal(){
+  const modal = document.getElementById('sbiModal');
+  if(modal) modal.classList.remove('open');
+  sbiEditId = null;
+}
+
+function sbiChecklistItemHTML(key, pregunta, tip, valorActual){
+  return `<div style="margin-bottom:10px">
+    <div style="font-size:11.5px;color:var(--text);margin-bottom:4px">${pregunta}</div>
+    <div style="display:flex;gap:8px;margin-bottom:4px">
+      <button type="button" class="srv-chip ${valorActual===true?'on':''}" onclick="sbiSetChecklist('${key}',true)" id="sbiCk-${key}-si">Sí</button>
+      <button type="button" class="srv-chip ${valorActual===false?'on':''}" onclick="sbiSetChecklist('${key}',false)" id="sbiCk-${key}-no">No</button>
+    </div>
+    <div id="sbiCkTip-${key}" style="font-size:10.5px;color:var(--amber);display:${valorActual===false?'block':'none'}">→ ${tip}</div>
+  </div>`;
+}
+function sbiSetChecklist(key, valor){
+  const btnSi = document.getElementById(`sbiCk-${key}-si`);
+  const btnNo = document.getElementById(`sbiCk-${key}-no`);
+  const tip = document.getElementById(`sbiCkTip-${key}`);
+  if(btnSi) btnSi.classList.toggle('on', valor===true);
+  if(btnNo) btnNo.classList.toggle('on', valor===false);
+  if(tip) tip.style.display = valor===false ? 'block' : 'none';
+  window['_sbiCk_'+key] = valor;
+}
+
+function sbiBuildModalBody(f){
+  const personas = [...PA_MEMBERS];
+  const tipo = (f && f.tipo) || 'desarrollo';
+  const ck = (f && f.checklist) || {};
+  window._sbiCk_confianza = ck.confianza;
+  window._sbiCk_momento = ck.momento;
+  window._sbiCk_estado = ck.estado;
+
+  const body = document.getElementById('sbiModalBody');
+  if(!body) return;
+  body.innerHTML = `
+    <div class="pa-field" style="margin-bottom:10px">
+      <label>Persona</label>
+      <select id="sbiFPersona">
+        ${personas.map(p=>`<option value="${p.replace(/"/g,'&quot;')}" ${f&&f.persona===p?'selected':''}>${p}</option>`).join('')}
+      </select>
+    </div>
+    <div class="pa-field" style="margin-bottom:14px">
+      <label>Tipo</label>
+      <div style="display:flex;gap:16px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;font-weight:400;text-transform:none">
+          <input type="radio" name="sbiTipo" value="reconocimiento" ${tipo==='reconocimiento'?'checked':''} onchange="sbiOnTipoChange()"> Reconocimiento
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;font-weight:400;text-transform:none">
+          <input type="radio" name="sbiTipo" value="desarrollo" ${tipo==='desarrollo'?'checked':''} onchange="sbiOnTipoChange()"> Desarrollo
+        </label>
+      </div>
+    </div>
+    <div class="pa-field" style="margin-bottom:10px">
+      <label>Situación (S) <span style="font-weight:400;color:var(--dim);text-transform:none">— ¿en qué momento concreto pasó esto?</span></label>
+      <textarea id="sbiFSituacion" rows="2" placeholder="Ej. En la reunión con el cliente del lunes...">${f&&f.situacion||''}</textarea>
+    </div>
+    <div class="pa-field" style="margin-bottom:10px">
+      <label>Comportamiento (B) <span style="font-weight:400;color:var(--dim);text-transform:none">— ¿qué hizo exactamente, sin agregar por qué creo que lo hizo?</span></label>
+      <textarea id="sbiFComportamiento" rows="2" placeholder="Ej. presentó los datos sin mencionar las limitaciones del análisis...">${f&&f.comportamiento||''}</textarea>
+    </div>
+    <div class="pa-field" style="margin-bottom:10px">
+      <label>Impacto (I) <span style="font-weight:400;color:var(--dim);text-transform:none">— ¿qué pasó después, cómo afectó al resultado o a otras personas?</span></label>
+      <textarea id="sbiFImpacto" rows="2" placeholder="Ej. eso generó preguntas que no pudimos responder en el momento.">${f&&f.impacto||''}</textarea>
+    </div>
+    <div class="pa-field" style="margin-bottom:14px">
+      <label id="sbiPedidoLabel">${tipo==='reconocimiento'?'Refuerzo':'Pedido'} <span style="font-weight:400;color:var(--dim);text-transform:none">— ¿qué quiero que pase la próxima vez, concreto?</span></label>
+      <textarea id="sbiFPedido" rows="2" placeholder="${tipo==='reconocimiento'?'Ej. Es exactamente lo que vale la pena que sostengas.':'Ej. Para la próxima presentación, necesito que incluyas una slide con las limitaciones del análisis.'}">${f&&f.pedido||''}</textarea>
+    </div>
+
+    <div style="background:var(--surface2);border:0.5px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:11.5px;font-weight:600;color:var(--text);margin-bottom:8px">Vista previa</div>
+      <div id="sbiPreview" style="font-size:12px;color:var(--muted);line-height:1.5;font-style:italic"></div>
+    </div>
+
+    <div style="border-top:0.5px solid var(--border);padding-top:12px;margin-bottom:6px">
+      <div style="font-size:11.5px;font-weight:600;color:var(--text);margin-bottom:10px">Checklist de condiciones — antes de darlo</div>
+      ${sbiChecklistItemHTML('confianza', '¿Tengo saldo con esta persona, o solo aparezco cuando algo falla?', 'Empieza por depositar (reconocimiento genuino, presencia) antes del feedback de desarrollo.', ck.confianza)}
+      ${sbiChecklistItemHTML('momento', '¿Es cercano al hecho, o ya pasaron semanas?', 'Dalo igual, pero reconoce la demora ("debería haberte dicho esto antes") en vez de actuar como si nada.', ck.momento)}
+      ${sbiChecklistItemHTML('estado', '¿Lo doy para que la persona mejore (no para descargar frustración)?', 'Espera. El feedback en caliente es descarga con formato de feedback, y la persona lo nota.', ck.estado)}
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="pa-btn pa-btn-ghost" style="flex:1" onclick="sbiGuardar(false)">Guardar borrador</button>
+      <button class="pa-btn pa-btn-primary" style="flex:1" onclick="sbiGuardar(true)">✔ Guardar y marcar como dado</button>
+    </div>
+  `;
+
+  ['sbiFSituacion','sbiFComportamiento','sbiFImpacto','sbiFPedido'].forEach(idAttr=>{
+    const el = document.getElementById(idAttr);
+    if(el) el.addEventListener('input', sbiActualizarPreview);
+  });
+  sbiActualizarPreview();
+}
+
+function sbiOnTipoChange(){
+  const tipo = document.querySelector('input[name="sbiTipo"]:checked')?.value || 'desarrollo';
+  const label = document.getElementById('sbiPedidoLabel');
+  if(label) label.innerHTML = `${tipo==='reconocimiento'?'Refuerzo':'Pedido'} <span style="font-weight:400;color:var(--dim);text-transform:none">— ¿qué quiero que pase la próxima vez, concreto?</span>`;
+  const pedidoEl = document.getElementById('sbiFPedido');
+  if(pedidoEl) pedidoEl.placeholder = tipo==='reconocimiento' ? 'Ej. Es exactamente lo que vale la pena que sostengas.' : 'Ej. Para la próxima presentación, necesito que incluyas una slide con las limitaciones del análisis.';
+  sbiActualizarPreview();
+}
+
+function sbiActualizarPreview(){
+  const s = document.getElementById('sbiFSituacion')?.value.trim();
+  const b = document.getElementById('sbiFComportamiento')?.value.trim();
+  const i = document.getElementById('sbiFImpacto')?.value.trim();
+  const p = document.getElementById('sbiFPedido')?.value.trim();
+  const preview = document.getElementById('sbiPreview');
+  if(!preview) return;
+  const partes = [s,b,i,p].filter(Boolean);
+  preview.textContent = partes.length ? partes.join(' ') : 'Escribe los campos arriba para ver aquí el feedback armado…';
+}
+
+function sbiGuardar(marcarDado){
+  sbiLoad();
+  const persona = document.getElementById('sbiFPersona')?.value;
+  const tipo = document.querySelector('input[name="sbiTipo"]:checked')?.value || 'desarrollo';
+  const situacion = document.getElementById('sbiFSituacion')?.value.trim()||'';
+  const comportamiento = document.getElementById('sbiFComportamiento')?.value.trim()||'';
+  const impacto = document.getElementById('sbiFImpacto')?.value.trim()||'';
+  const pedido = document.getElementById('sbiFPedido')?.value.trim()||'';
+  if(!persona){ alert('Selecciona la persona.'); return; }
+  if(!situacion && !comportamiento && !impacto){ alert('Escribe al menos la Situación, el Comportamiento o el Impacto antes de guardar.'); return; }
+
+  const checklist = {
+    confianza: window._sbiCk_confianza,
+    momento: window._sbiCk_momento,
+    estado: window._sbiCk_estado,
+  };
+  const hoy = new Date().toISOString().slice(0,10);
+
+  if(sbiEditId){
+    const idx = SBI_ITEMS.findIndex(x=>x.id===sbiEditId);
+    if(idx>-1){
+      SBI_ITEMS[idx] = {
+        ...SBI_ITEMS[idx],
+        persona, tipo, situacion, comportamiento, impacto, pedido, checklist,
+        estatus: marcarDado ? 'dado' : SBI_ITEMS[idx].estatus,
+        fechaDado: marcarDado ? (SBI_ITEMS[idx].fechaDado || hoy) : SBI_ITEMS[idx].fechaDado,
+      };
+    }
+  } else {
+    SBI_ITEMS.push({
+      id: 'sbi-'+Date.now()+'-'+Math.random().toString(36).slice(2,7),
+      persona, tipo, situacion, comportamiento, impacto, pedido, checklist,
+      estatus: marcarDado ? 'dado' : 'borrador',
+      fechaCreado: hoy,
+      fechaDado: marcarDado ? hoy : null,
+      seguimiento: null,
+    });
+  }
+  sbiSave();
+  sbiCerrarModal();
+  renderSbi();
+}
+
+function sbiMarcarDado(id){
+  sbiLoad();
+  const f = SBI_ITEMS.find(x=>x.id===id); if(!f) return;
+  if(!f.situacion && !f.comportamiento && !f.impacto){
+    if(!confirm('Este feedback todavía no tiene contenido (S/B/I). ¿Marcarlo como dado igual?')) return;
+  }
+  f.estatus = 'dado';
+  f.fechaDado = f.fechaDado || new Date().toISOString().slice(0,10);
+  sbiSave();
+  renderSbi();
+}
+
+function sbiEliminar(id){
+  if(!confirm('¿Eliminar este feedback? No se puede deshacer.')) return;
+  sbiLoad();
+  SBI_ITEMS = SBI_ITEMS.filter(x=>x.id!==id);
+  sbiSave();
+  renderSbi();
+}
+
+// ── Modal: seguimiento post-feedback ──
+function sbiAbrirSeguimiento(id){
+  sbiLoad();
+  sbiSeguimientoId = id;
+  const f = SBI_ITEMS.find(x=>x.id===id); if(!f) return;
+  const seg = f.seguimiento || {};
+  const body = document.getElementById('sbiSeguimientoBody');
+  if(!body) return;
+  body.innerHTML = `
+    <div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">${f.persona} · ${f.tipo==='reconocimiento'?'Reconocimiento':'Desarrollo'} dado el ${sbiFmtDate(f.fechaDado)}</div>
+    <div class="pa-field" style="margin-bottom:10px">
+      <label>¿Qué generó?</label>
+      <select id="sbiSegResultado">
+        <option value="conversacion" ${seg.resultado==='conversacion'?'selected':''}>💬 Generó conversación</option>
+        <option value="defensa" ${seg.resultado==='defensa'?'selected':''}>🛡 Generó defensa o cierre</option>
+        <option value="neutral" ${seg.resultado==='neutral'?'selected':''}>➖ Neutral, sin cambio visible</option>
+      </select>
+    </div>
+    <div class="pa-field" style="margin-bottom:14px">
+      <label>Nota (opcional)</label>
+      <textarea id="sbiSegNota" rows="3" placeholder="¿Por qué crees que reaccionó así?">${seg.nota||''}</textarea>
+    </div>
+    <button class="pa-btn pa-btn-primary" style="width:100%" onclick="sbiGuardarSeguimiento()">Guardar seguimiento</button>
+  `;
+  document.getElementById('sbiSeguimientoModal').classList.add('open');
+}
+function sbiCerrarSeguimiento(){
+  const modal = document.getElementById('sbiSeguimientoModal');
+  if(modal) modal.classList.remove('open');
+  sbiSeguimientoId = null;
+}
+function sbiGuardarSeguimiento(){
+  sbiLoad();
+  const f = SBI_ITEMS.find(x=>x.id===sbiSeguimientoId); if(!f) return;
+  f.seguimiento = {
+    resultado: document.getElementById('sbiSegResultado')?.value || 'neutral',
+    nota: document.getElementById('sbiSegNota')?.value.trim() || '',
+  };
+  sbiSave();
+  sbiCerrarSeguimiento();
+  renderSbi();
+}
+
+// ── Modal: banco de ejemplos de referencia (de la guía) ──
+const SBI_EJEMPLOS = [
+  { caso:'Desempeño', texto:'En el reporte de cierre de mes (S), los números de la región sur no coincidían con el sistema (B), y eso nos hizo perder la mañana del lunes reconciliando datos en vez de analizarlos (I). Necesito que antes de enviarlo, cruces los totales con el sistema y me confirmes que cierran (Pedido).' },
+  { caso:'Actitud', texto:'En la reunión de equipo del martes (S), cuando alguien propuso su idea, hiciste comentarios irónicos y pusiste los ojos en blanco (B). El clima de la reunión se cerró y nadie más propuso nada (I). Necesito que las ideas, aunque no te convenzan, las recibamos con respeto, y si no estás de acuerdo, lo digas directo (Pedido).' },
+  { caso:'Comunicación', texto:'En el mail que mandaste al cliente el jueves (S), confirmaste una fecha que todavía no teníamos cerrada internamente (B), y ahora el cliente espera algo que no podemos cumplir (I). Antes de confirmar fechas externas, necesito que las validemos juntos primero (Pedido).' },
+  { caso:'Puntualidad', texto:'En las últimas tres reuniones de inicio del día (S), te conectaste entre diez y quince minutos tarde (B). El equipo te espera o repite lo ya dicho cuando llegas, y perdemos el ritmo (I). Necesito que estés a horario, y si algún día no puedes, que avises antes (Pedido).' },
+  { caso:'Calidad del trabajo', texto:'En la propuesta que entregaste ayer (S), había tres errores de datos en la tabla principal (B). La tuve que revisar entera antes de presentarla, porque ya no sabía qué más revisar (I). Necesito que antes de entregar, pases una revisión de datos y me marques que ya la hiciste (Pedido).' },
+  { caso:'Colaboración', texto:'En el proyecto compartido con otra área (S), resolviste tu parte sin avisarle al equipo los cambios que hiciste (B), y eso les rompió lo que ya tenían armado (I). Necesito que cuando toques algo que afecta a otros, los pongas en copia antes (Pedido).' },
+  { caso:'Reconocimiento (ejemplo positivo)', texto:'En la presentación de hoy (S), anticipaste las preguntas del cliente antes de que las hicieran (B). Eso generó confianza y nos ayudó a cerrar más rápido (I). Es exactamente lo que vale la pena que sostengas (refuerzo).' },
+];
+function sbiAbrirEjemplos(){
+  const body = document.getElementById('sbiEjemplosBody');
+  if(!body) return;
+  body.innerHTML = `
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;font-style:italic">"Si solo das feedback cuando algo sale mal, el equipo aprende que tu feedback es sinónimo de problema. Equilibra reconocimiento y desarrollo, con la misma frecuencia y especificidad."</div>
+    ${SBI_EJEMPLOS.map(e=>`
+      <div style="margin-bottom:12px;padding-bottom:12px;border-bottom:0.5px solid var(--border)">
+        <div style="font-size:11px;font-weight:600;color:var(--accent);margin-bottom:4px">${e.caso}</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.5">"${e.texto}"</div>
+      </div>
+    `).join('')}
+  `;
+  document.getElementById('sbiEjemplosModal').classList.add('open');
+}
+function sbiCerrarEjemplos(){
+  const modal = document.getElementById('sbiEjemplosModal');
+  if(modal) modal.classList.remove('open');
+}
+
 function scoreColor(s){return s>=80?'#3dd68c':s>=60?'#f5a623':'#ff5c5c';}
 function scoreLabel(s){return s>=80?'Destacado':s>=60?'Regular':'Atención';}
 
@@ -11635,7 +12094,7 @@ function toggleEval(p){
   renderEvaluaciones();
 }
 
-const VIDS=['overview','team','tasks','detalle','charts','reporteo','calidad','udemy','evaluaciones','panel','equipo','ausencias','dashboards','herramientas','seguimiento','servicios'];
+const VIDS=['overview','team','tasks','detalle','charts','reporteo','calidad','udemy','evaluaciones','panel','equipo','ausencias','dashboards','herramientas','seguimiento','servicios','sbi'];
 function goView(name){
   curView=name;
   VIDS.forEach(v=>{ const el=document.getElementById('v-'+v); if(el) el.style.display=v===name?'':'none'; });
@@ -11658,6 +12117,7 @@ function refresh(){
   else if(curView==='panel') renderPanel();
   else if(curView==='equipo') renderEquipo();
   else if(curView==='ausencias') renderAusencias();
+  else if(curView==='sbi') renderSbi();
   else if(curView==='herramientas') herrRenderGrid();
   else if(curView==='charts' && ROWS.length>0) setTimeout(buildCharts,30);
 }
@@ -17125,6 +17585,11 @@ function applyRole(role, nombre){
   var migrateBtn = document.getElementById('supaMigrateBtn');
   if(migrateBtn) migrateBtn.style.display = (role==='admin') ? '' : 'none';
 
+  // Feedback SBI: espacio privado, solo visible/accesible para admin
+  var sbiBtn = document.getElementById('navSbiBtn');
+  if(sbiBtn) sbiBtn.style.display = (role==='admin') ? '' : 'none';
+  if(role !== 'admin' && curView === 'sbi') goView('seguimiento');
+
   // Ahora que ya se conoce el rol/nombre, activar el canal de notificaciones propias
   // del proyectista (no se puede activar antes porque no se conocía _miNombre).
   if(role === 'proyectista' && typeof supaStartProyNotifRealtime==='function') supaStartProyNotifRealtime();
@@ -17142,6 +17607,12 @@ function setupGoViewGuard(){
         _origGoView('seguimiento');
         return;
       }
+    }
+    // Feedback SBI es un espacio privado del administrador — nadie más puede entrar,
+    // ni siquiera el rol "jefe".
+    if(name === 'sbi' && _userRole !== 'admin'){
+      _origGoView('seguimiento');
+      return;
     }
     _origGoView(name);
     if(name === 'dashboards' && typeof dashApplyVisibility === 'function'){
@@ -17279,8 +17750,10 @@ function enterDashboard(){
     if(curView==='evaluaciones' && typeof renderEvaluaciones==='function') renderEvaluaciones();
   }).catch(e=>console.warn('enterDashboard supabase load error',e));
 
+  // El guard de goView (incluye el bloqueo del espacio privado de Feedback SBI para
+  // cualquier rol distinto de admin) debe instalarse siempre, no solo para proyectista.
+  setupGoViewGuard();
   if(_userRole === 'proyectista'){
-    setupGoViewGuard();
     hideNavItems();
     wrapGoViewWithRestrictions();
     setTimeout(applyProyectistaReadOnly, 400);
