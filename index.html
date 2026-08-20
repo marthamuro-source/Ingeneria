@@ -400,12 +400,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .vac-leg-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
 
 /* ── SERVICIOS ESPECIALES ── */
-.srv-kpi-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:18px;}
+.srv-kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:18px;}
 .srv-kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
 .srv-kpi .val{font-size:22px;font-weight:700;color:var(--text);line-height:1;}
 .srv-kpi .lbl{font-size:10px;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.06em;}
 .srv-kpi .tip{font-size:10px;color:var(--dim);margin-top:2px;font-style:italic;}
-.srv-kpi.cot .val{color:#9a6ef0;} .srv-kpi.sol .val{color:#378ADD;} .srv-kpi.oc .val{color:#BA7517;} .srv-kpi.proc .val{color:#d4890a;} .srv-kpi.ent .val{color:var(--green);}
+.srv-kpi.cot .val{color:#9a6ef0;} .srv-kpi.sol .val{color:#378ADD;} .srv-kpi.oc .val{color:#BA7517;} .srv-kpi.seg .val{color:#ff5c5c;} .srv-kpi.proc .val{color:#d4890a;} .srv-kpi.ent .val{color:var(--green);}
 .srv-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
 .srv-chip{padding:4px 12px;border-radius:20px;font-size:11px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;transition:all .15s;}
 .srv-chip.on{background:rgba(74,143,212,.12);border-color:rgba(74,143,212,.35);color:var(--accent);}
@@ -447,6 +447,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .srv-b-oc{background:rgba(186,117,23,.15);color:#f0a940;border:1px solid rgba(186,117,23,.25);}
 .srv-b-proc{background:rgba(212,137,10,.15);color:#f5c242;border:1px solid rgba(212,137,10,.25);}
 .srv-b-ent{background:rgba(61,214,140,.12);color:#3dd68c;border:1px solid rgba(61,214,140,.25);}
+.srv-b-seg{background:rgba(255,92,92,.12);color:#ff5c5c;border:1px solid rgba(255,92,92,.28);}
 .srv-tipo{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:500;}
 .srv-t-topo{background:rgba(131,116,255,.15);color:#a89fff;}
 .srv-t-geo{background:rgba(255,107,74,.15);color:#ff9070;}
@@ -2213,7 +2214,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
               <th class="scol-tipo">Tipo</th>
               <th class="scol-contratista">Contratista</th>
               <th class="scol-estado">Estado</th>
-              <th class="scol-km" style="text-align:center">Km</th>
+              <th class="scol-km" style="text-align:center">Km / Pruebas</th>
               <th class="scol-fsol">F. Solicitud</th>
               <th class="scol-fent">F. Entregable</th>
               <th class="scol-fval">F. Validación</th>
@@ -17928,6 +17929,7 @@ const SRV_STATUS = [
   { key:'COT Firmada',   cls:'srv-b-cot',  dot:'#9a6ef0' },
   { key:'OS Solicitada', cls:'srv-b-sol',  dot:'#378ADD' },
   { key:'OS Resuelta',   cls:'srv-b-oc',   dot:'#BA7517' },
+  { key:'Pendiente de seguimiento', cls:'srv-b-seg', dot:'#ff5c5c' },
   { key:'En Validación', cls:'srv-b-proc', dot:'#d4890a' },
   { key:'Liberada',      cls:'srv-b-ent',  dot:'#3dd68c' },
 ];
@@ -17959,7 +17961,7 @@ const SRV_COLS = [
   {key:'tipo',        label:'Tipo'},
   {key:'contratista', label:'Contratista'},
   {key:'estado',      label:'Estado'},
-  {key:'km',          label:'Km'},
+  {key:'km',          label:'Km / Pruebas'},
   {key:'fsol',        label:'F. Solicitud'},
   {key:'fent',        label:'F. Entregable'},
   {key:'fval',        label:'F. Validación'},
@@ -18034,6 +18036,7 @@ function srvRenderKpis(){
     <div class="srv-kpi cot"><div class="val">${bySt('COT Firmada')}</div><div class="lbl">COT Firmada</div><div class="tip">En espera de OS</div></div>
     <div class="srv-kpi sol"><div class="val">${bySt('OS Solicitada')}</div><div class="lbl">OS Solicitada</div><div class="tip">Esperando que la generen</div></div>
     <div class="srv-kpi oc"><div class="val">${bySt('OS Resuelta')}</div><div class="lbl">OS Resuelta</div><div class="tip">Por arrancar</div></div>
+    <div class="srv-kpi seg"><div class="val">${bySt('Pendiente de seguimiento')}</div><div class="lbl">Pend. Seguimiento</div><div class="tip">Necesita que le den seguimiento</div></div>
     <div class="srv-kpi proc"><div class="val">${bySt('En Validación')}</div><div class="lbl">En Validación</div><div class="tip">Revisando entregables</div></div>
     <div class="srv-kpi ent"><div class="val">${bySt('Liberada')}</div><div class="lbl">Liberada</div><div class="tip">Info lista en Drive</div></div>`;
 }
@@ -18098,8 +18101,13 @@ function srvRenderTable(){
       ? `<a class="srv-link" href="${s.linkEntregable}" target="_blank">📁 Drive</a>`
       : `<span class="srv-add-link" onclick="srvInlineLink('${s.id}','linkEntregable')">+ agregar</span>`;
 
+    const proyEsc = (s.proyecto||'').replace(/"/g,'&quot;');
+    const proyCell = s.linkProyecto
+      ? `<div style="display:flex;align-items:center;gap:4px;min-width:0"><a href="${s.linkProyecto}" target="_blank" style="font-weight:500;color:var(--accent);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0" title="Abrir: ${proyEsc}">${s.proyecto||'—'}</a><span onclick="srvInlineLink('${s.id}','linkProyecto')" title="Editar link" style="cursor:pointer;font-size:10px;color:var(--dim);flex-shrink:0">✎</span></div>`
+      : `<span style="font-weight:500;cursor:pointer;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${proyEsc} — clic para agregar un link y abrir este proyecto desde aquí" onclick="srvInlineLink('${s.id}','linkProyecto')">${s.proyecto||'—'}</span>`;
+
     return `<tr>
-      <td class="scol-proyecto" style="font-weight:500;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(s.proyecto||'').replace(/"/g,'&quot;')}">${s.proyecto||'—'}</td>
+      <td class="scol-proyecto" style="max-width:120px">${proyCell}</td>
       <td class="scol-act">${linkedCell}</td>
       <td class="scol-tipo"><span class="srv-tipo ${tipoClass}">${s.tipo||'—'}</span></td>
       <td class="scol-contratista" style="max-width:130px">
@@ -18109,7 +18117,7 @@ function srvRenderTable(){
           onfocus="this.style.borderColor='var(--border)'" onblur="this.style.borderColor='transparent'">
       </td>
       <td class="scol-estado" style="font-size:11px;white-space:nowrap">${s.estado||'—'}</td>
-      <td class="scol-km" style="text-align:center;font-family:var(--mono);font-size:11px;font-weight:600">${s.km||'—'}</td>
+      <td class="scol-km" style="text-align:center;font-family:var(--mono);font-size:11px;font-weight:600">${s.km ? (s.tipo==='Geotecnia' ? s.km+' pruebas' : s.km+' km') : '—'}</td>
       <td class="scol-fsol" style="font-size:11px;white-space:nowrap;color:var(--muted)">${fmtD(s.fechaSolicitud)}</td>
       <td class="scol-fent" style="font-size:11px;white-space:nowrap;color:var(--muted)">${fmtD(s.fechaInicio)}</td>
       <td class="scol-fval${overdue?' srv-overdue':''}" style="font-size:11px;white-space:nowrap">${fmtD(s.fechaEntrega)}${overdue?' ▲':''}</td>
@@ -18133,10 +18141,10 @@ function srvGoToActivity(id){
 }
 
 function srvInlineLink(id, field){
-  const prompts = {linkCOT:'URL de la Cotización firmada:', linkOS:'URL de la Orden de Servicio:', linkValidacion:'URL de la validación:', linkEntregable:'URL del entregable en Drive:'};
-  const url = prompt(prompts[field]||'URL:','');
-  if(url===null) return;
+  const prompts = {linkCOT:'URL de la Cotización firmada:', linkOS:'URL de la Orden de Servicio:', linkValidacion:'URL de la validación:', linkEntregable:'URL del entregable en Drive:', linkProyecto:'URL para abrir este proyecto:'};
   const s = SRV_ITEMS.find(x=>x.id===id); if(!s) return;
+  const url = prompt(prompts[field]||'URL:', s[field]||'');
+  if(url===null) return;
   s[field]=url.trim(); srvSave(); srvRenderTable();
 }
 
@@ -18188,8 +18196,12 @@ function srvBuildModal(s){
         <input type="text" id="srvProyecto" value="${s?.proyecto||''}" placeholder="Nombre del proyecto">
       </div>
       <div class="srv-field">
+        <label>Link para abrir el proyecto <span style="font-weight:400;color:var(--dim);text-transform:none">(opcional)</span></label>
+        <input type="url" id="srvLinkProyecto" value="${s?.linkProyecto||''}" placeholder="https://…">
+      </div>
+      <div class="srv-field">
         <label>Tipo de servicio</label>
-        <select id="srvTipo" onchange="srvCheckNuevoTipo(this)">
+        <select id="srvTipo" onchange="srvCheckNuevoTipo(this);srvUpdateKmField(this.value)">
           ${tipoOpts}
           <option value="__nuevo__">+ Agregar nuevo tipo…</option>
         </select>
@@ -18207,7 +18219,7 @@ function srvBuildModal(s){
         <select id="srvEstado"><option value="">— Seleccionar —</option>${estadoOpts}</select>
       </div>
       <div class="srv-field">
-        <label>Kilómetros del tramo</label>
+        <label id="srvKmLabel">Kilómetros del tramo</label>
         <input type="number" id="srvKm" value="${s?.km||''}" placeholder="Ej. 12.5" step="0.1" min="0">
       </div>
       <div class="srv-field">
@@ -18252,11 +18264,28 @@ function srvBuildModal(s){
   if(srvLinkedActivity){
     document.getElementById('srvSearchAct').value = srvLinkedActivity.folio||'';
   }
+
+  // Ajustar el campo Km/Pruebas al tipo de servicio ya seleccionado (ej. al editar un registro existente)
+  srvUpdateKmField(s?.tipo||'');
 }
 
 function srvCheckNuevoTipo(sel){
   const field = document.getElementById('srvNuevoTipoField');
   if(field) field.style.display = sel.value==='__nuevo__' ? '' : 'none';
+}
+
+// Para Geotecnia el campo se usa para capturar el número de pruebas, no kilómetros.
+function srvUpdateKmField(tipo){
+  const label = document.getElementById('srvKmLabel');
+  const input = document.getElementById('srvKm');
+  if(!label || !input) return;
+  if(tipo==='Geotecnia'){
+    label.textContent = 'Número de pruebas';
+    input.step = '1'; input.min = '0'; input.placeholder = 'Ej. 8';
+  } else {
+    label.textContent = 'Kilómetros del tramo';
+    input.step = '0.1'; input.min = '0'; input.placeholder = 'Ej. 12.5';
+  }
 }
 
 function srvSearchActivities(q){
@@ -18312,6 +18341,7 @@ function srvSaveModal(){
 
   const data = {
     proyecto,
+    linkProyecto: document.getElementById('srvLinkProyecto')?.value?.trim()||'',
     tipo:         tipoFinal,
     contratista:  document.getElementById('srvContratista')?.value?.trim()||'',
     estado:       document.getElementById('srvEstado')?.value||'',
@@ -20331,7 +20361,7 @@ async function supaSyncServicios(){
   try{
     if(!SRV_ITEMS.length) return;
     const rows = SRV_ITEMS.map(s=>({
-      id:s.id, proyecto:s.proyecto||null, tipo:s.tipo||null, contratista:s.contratista||null,
+      id:s.id, proyecto:s.proyecto||null, link_proyecto:s.linkProyecto||null, tipo:s.tipo||null, contratista:s.contratista||null,
       estado:s.estado||null, km:s.km||null, estatus:s.estatus||'COT Firmada',
       fecha_solicitud:s.fechaSolicitud||null, fecha_inicio:s.fechaInicio||null,
       fecha_entrega:s.fechaEntrega||null, link_cot:s.linkCOT||null, link_os:s.linkOS||null,
@@ -21531,7 +21561,7 @@ async function supaLoadAll(){
     const { data: srvs } = await _supa.from('servicios_esp').select('*').order('created_at',{ascending:false});
     if(srvs && srvs.length){
       SRV_ITEMS = srvs.map(s=>({
-        id:s.id, proyecto:s.proyecto||'', tipo:s.tipo||'', contratista:s.contratista||'',
+        id:s.id, proyecto:s.proyecto||'', linkProyecto:s.link_proyecto||'', tipo:s.tipo||'', contratista:s.contratista||'',
         estado:s.estado||'', km:s.km||'', estatus:s.estatus||'COT Firmada',
         fechaSolicitud:s.fecha_solicitud||'', fechaInicio:s.fecha_inicio||'',
         fechaEntrega:s.fecha_entrega||'', linkCOT:s.link_cot||'', linkOS:s.link_os||'',
@@ -21748,7 +21778,7 @@ async function supaMigrateFromLocal(){
     // 3. Servicios especiales
     if(typeof SRV_ITEMS!=='undefined' && SRV_ITEMS.length){
       const rows = SRV_ITEMS.map(s=>({
-        id:s.id, proyecto:s.proyecto||null, tipo:s.tipo||null, contratista:s.contratista||null,
+        id:s.id, proyecto:s.proyecto||null, link_proyecto:s.linkProyecto||null, tipo:s.tipo||null, contratista:s.contratista||null,
         estado:s.estado||null, km:s.km||null, estatus:s.estatus||'COT Firmada',
         fecha_solicitud:s.fechaSolicitud||null, fecha_inicio:s.fechaInicio||null,
         fecha_entrega:s.fechaEntrega||null, link_cot:s.linkCOT||null, link_os:s.linkOS||null,
