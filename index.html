@@ -1080,6 +1080,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   .panel { border: none !important; box-shadow: none !important; }
 }
 
+/* ── Switch genérico on/off (ej. modo de reporteo: Subtareas vs. General) ── */
+.ui-switch{position:relative;display:inline-block;width:34px;height:19px;flex-shrink:0;cursor:pointer;}
+.ui-switch input{opacity:0;width:0;height:0;position:absolute;}
+.ui-switch .ui-switch-track{position:absolute;inset:0;background:var(--border);border-radius:20px;transition:background .18s;}
+.ui-switch .ui-switch-track:before{content:'';position:absolute;width:15px;height:15px;left:2px;top:2px;background:#fff;border-radius:50%;transition:transform .18s;box-shadow:0 1px 2px rgba(0,0,0,.3);}
+.ui-switch input:checked + .ui-switch-track{background:var(--accent);}
+.ui-switch input:checked + .ui-switch-track:before{transform:translateX(15px);}
+.ui-switch input:disabled + .ui-switch-track{opacity:.5;cursor:not-allowed;}
+
 </style>
 </head>
 <script>
@@ -5876,6 +5885,41 @@ function cronoIniciarAutoRefresh(){
     }catch(e){ console.warn('cronoIniciarAutoRefresh error:', e); }
   }, 20000);
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  MODO DE REPORTEO — Subtareas (comportamiento de siempre) vs. General (% avance + descripción)
+//  Es un switch GLOBAL para todo el equipo. Se reutiliza la misma tabla/mecanismo de Supabase que ya
+//  existe para "dash_visibility" (id -> visible), así no se necesita crear una tabla nueva: aquí el
+//  id 'reporteo_modo_subtareas' con visible=true significa "modo Subtareas activo" (default, tal cual
+//  funcionaba hasta ahora); visible=false significa "modo General activo".
+// ══════════════════════════════════════════════════════════════════════════════
+function reporteoModoEsSubtareas(){
+  const v = (typeof dashGetVisibility==='function') ? dashGetVisibility() : {};
+  return v['reporteo_modo_subtareas'] !== false; // default: true
+}
+async function reporteoToggleModo(activarSubtareas){
+  if(_userRole==='proyectista') return; // solo admin/jefe deciden el modo del equipo
+  const actual = reporteoModoEsSubtareas();
+  if(activarSubtareas === actual) return;
+  const mensaje = activarSubtareas
+    ? '¿Activar el modo de reporteo por Subtareas para todo el equipo?\n\nLos proyectistas volverán a reportar avance eligiendo subtareas y cantidad, como antes.'
+    : '¿Activar el modo de reporteo General para todo el equipo?\n\nEn lugar de subtareas, cada proyectista reportará su avance diario con un % de avance y una descripción de actividades, por cada actividad activa. La "Fecha pronóstico" automática no aplica para actividades reportadas en este modo.';
+  if(!confirm(mensaje)) return;
+  if(typeof dashSetVisibility==='function') await dashSetVisibility('reporteo_modo_subtareas', activarSubtareas);
+  if(_userRole==='proyectista') renderCronoCalProyectista(); else renderReporteoView();
+}
+function reporteoModoSwitchHTML(){
+  if(_userRole==='proyectista') return ''; // los proyectistas solo viven el modo, no lo cambian
+  const esSubtareas = reporteoModoEsSubtareas();
+  return `<div style="margin-left:auto;display:flex;align-items:center;gap:8px" title="Decide cómo reporta avance TODO el equipo">
+    <span style="font-size:11px;color:var(--dim)">Modo de reporteo:</span>
+    <label class="ui-switch">
+      <input type="checkbox" ${esSubtareas?'checked':''} onchange="reporteoToggleModo(this.checked)">
+      <span class="ui-switch-track"></span>
+    </label>
+    <span style="font-size:11px;font-weight:600;color:${esSubtareas?'var(--accent)':'var(--amber)'}">${esSubtareas?'📋 Subtareas':'📝 General (% + descripción)'}</span>
+  </div>`;
+}
 function cronoDetenerAutoRefresh(){
   if(_cronoAutoRefreshInterval){ clearInterval(_cronoAutoRefreshInterval); _cronoAutoRefreshInterval = null; }
 }
@@ -5895,9 +5939,10 @@ function renderReporteoView(){
   }
 
   let html = `
-  <div style="display:flex;gap:0;border-bottom:0.5px solid var(--border);margin-bottom:20px">
+  <div style="display:flex;align-items:center;gap:0;border-bottom:0.5px solid var(--border);margin-bottom:20px">
     <button class="seg-subtab${cronoSubTab==='csv'?' on':''}" onclick="cronoSetSubTab('csv')">📅 Reporte diario</button>
     <button class="seg-subtab${cronoSubTab==='cronograma'?' on':''}" onclick="cronoSetSubTab('cronograma')">📋 Subtareas</button>
+    ${reporteoModoSwitchHTML()}
   </div>`;
 
   if(cronoSubTab==='csv'){
@@ -6192,6 +6237,15 @@ function renderReporteoView(){
         html += `<div style="font-size:11px;font-weight:500;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Reportes del equipo</div>
         <div style="max-height:200px;overflow-y:auto">`;
         [...reportes].reverse().slice(0,10).forEach(r=>{
+          if(r.modo==='general'){
+            html += `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)">
+              <span style="font-size:11px;color:var(--dim);white-space:nowrap;min-width:50px">${r.fecha||'—'}</span>
+              <span style="font-size:11px;font-weight:500;color:var(--accent);min-width:65px">${(r.quien||'').split(' ')[0]}</span>
+              <span style="font-size:12px;color:var(--text);flex:1">${r.descripcion||''}</span>
+              <span style="font-size:11px;font-weight:500;color:var(--accent);white-space:nowrap">${r.avance||0}%</span>
+            </div>`;
+            return;
+          }
           html += `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);${r.bajoRendimiento?'background:rgba(245,166,35,.06)':''}">
             <span style="font-size:11px;color:var(--dim);white-space:nowrap;min-width:50px">${r.fecha||'—'}</span>
             <span style="font-size:11px;font-weight:500;color:var(--accent);min-width:65px">${(r.quien||'').split(' ')[0]}</span>
@@ -9153,12 +9207,20 @@ function calProyVerDia(fecha){
   panel.innerHTML=`
   <div style="background:rgba(61,214,140,.05);border:0.5px solid rgba(61,214,140,.2);border-radius:10px;padding:14px 16px">
     <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:10px;text-transform:capitalize">✓ Reportes del ${fmtDia}</div>
-    ${reps.map(r=>`
+    ${reps.map(r=>{
+      if(r.modo==='general'){
+        return `<div style="padding:8px 0;border-bottom:0.5px solid var(--border)">
+          <div style="font-size:11px;font-weight:500;color:var(--accent);margin-bottom:2px">${r.folio||r.proyecto||''}</div>
+          <div style="font-size:12px;color:var(--text)"><b style="color:var(--accent)">${r.avance||0}% avance</b>${r.descripcion?' — '+r.descripcion:''}</div>
+        </div>`;
+      }
+      return `
       <div style="padding:8px 0;border-bottom:0.5px solid var(--border)">
         <div style="font-size:11px;font-weight:500;color:var(--accent);margin-bottom:2px">${r.subtareaNombre||'—'} · ${r.folio||r.proyecto||''}</div>
         ${r.nota?`<div style="font-size:12px;color:var(--text)">${r.nota}</div>`:''}
         ${r.cantidad?`<div style="font-size:11px;color:var(--dim);margin-top:2px">+${r.cantidad} ${r.unidad||''}</div>`:''}
-      </div>`).join('')}
+      </div>`;
+    }).join('')}
   </div>`;
 }
 
@@ -9168,6 +9230,13 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
 
   const hoyStr = repDateKey(new Date());
   const esHoy = fecha===hoyStr;
+
+  // Modo de reporteo General (switch apagado): en vez de subtareas, se reporta % de avance +
+  // descripción por actividad. Es un flujo aparte, ver renderCalProyPanelHoyGeneral más abajo.
+  if(!reporteoModoEsSubtareas()){
+    renderCalProyPanelHoyGeneral(fecha, repsExistentes, esHoy);
+    return;
+  }
 
   // Mis actividades activas con subtareas validadas
   const misActividades = PA_ITEMS.filter(a=>
@@ -9304,6 +9373,270 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
   </div>`;
 
   panel.innerHTML=html;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  MODO GENERAL — reporte diario con % de avance + descripción por actividad,
+//  en vez de elegir subtareas y cantidad. Se activa/desactiva con el switch global
+//  en Panel de Seguimiento › Reporteo (ver reporteoModoEsSubtareas()).
+//  Los reportes se guardan en el mismo item.reportes del cronograma (vía cronoGetOrCreate),
+//  marcados con modo:'general', así conviven con el historial de reportes por subtareas y
+//  siguen apareciendo en el calendario, el PDF del día y el exportador de reportes.
+// ══════════════════════════════════════════════════════════════════════════════
+function renderCalProyPanelHoyGeneral(fecha, repsExistentes, esHoy){
+  const panel = document.getElementById('calProyPanelHoy');
+  if(!panel) return;
+
+  const misActividades = PA_ITEMS.filter(a=>
+    toCanonical(a.responsable||'')===toCanonical(_miNombre||'') &&
+    ['Proyecto','Trabajo Operativo','Impresiones','Planos de Conectividad'].includes(a.tipo) &&
+    a.estatus!=='Terminado'
+  );
+
+  const dObj = new Date(fecha+'T00:00:00');
+  const fmtDia = dObj.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
+  const horarioCerrado = esHoy && _userRole==='proyectista' && repHorarioCerrado();
+
+  let html=`<div style="background:rgba(74,143,212,.05);border:0.5px solid rgba(74,143,212,.2);border-radius:10px;padding:14px 16px">
+    <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;text-transform:capitalize">${esHoy?'📝 Reporte de hoy — ':''} ${fmtDia}</div>
+    <div style="font-size:10.5px;color:var(--dim);margin-bottom:10px">Modo general activo: reporta tu % de avance y qué hiciste, por cada actividad activa.</div>
+    ${horarioCerrado?`<div style="margin-bottom:12px;padding:8px 10px;background:rgba(255,92,92,.08);border:0.5px solid rgba(255,92,92,.3);border-radius:8px;font-size:11.5px;color:var(--red)">⏰ Ya son las 7:15pm — el horario para reportar el avance de hoy ya cerró. No se puede guardar un reporte nuevo.</div>`:''}`;
+
+  // Reportes ya hechos hoy (pueden incluir reportes viejos guardados cuando estaba activo el modo Subtareas)
+  if(repsExistentes.length){
+    html+=`<div style="margin-bottom:14px">
+      <div style="font-size:11px;color:var(--green);font-weight:500;margin-bottom:6px">✓ Ya reportaste ${repsExistentes.length} actividad${repsExistentes.length!==1?'es':''} hoy</div>
+      ${repsExistentes.map(r=>{
+        if(r.modo==='general'){
+          return `<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim);padding:5px 0;border-bottom:0.5px solid var(--border)">
+            <div style="flex:1">
+              <div style="font-size:10px;color:var(--muted);margin-bottom:1px">${r.folio||r.proyecto||''}</div>
+              <span style="color:var(--accent);font-weight:600">${r.avance||0}% avance</span> · ${r.descripcion||''}
+            </div>
+            <button onclick="calProyEliminarReporte('${r.id||''}',this)" title="Eliminar reporte"
+              style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:13px;padding:2px 6px;border-radius:4px;flex-shrink:0"
+              onmouseover="this.style.color='#ff6b6b'" onmouseout="this.style.color='var(--dim)'">✕</button>
+          </div>`;
+        }
+        // Reporte de un día en que el modo Subtareas estaba activo — se conserva tal cual, sin perder historial.
+        return `<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim);padding:5px 0;border-bottom:0.5px solid var(--border)">
+          <div style="flex:1">
+            <div style="font-size:10px;color:var(--muted);margin-bottom:1px">${r.folio||r.proyecto||''}</div>
+            <span style="color:var(--accent)">${r.subtareaNombre||'—'}</span> · +${r.cantidad||0} ${r.unidad||''} · ${r.nota||''}
+          </div>
+          <button onclick="calProyEliminarReporte('${r.id||''}',this)" title="Eliminar reporte"
+            style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:13px;padding:2px 6px;border-radius:4px;flex-shrink:0"
+            onmouseover="this.style.color='#ff6b6b'" onmouseout="this.style.color='var(--dim)'">✕</button>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  if(!esHoy){
+    html+=`<div style="font-size:12px;color:var(--dim);text-align:center;padding:10px 0">Solo puedes reportar el día de hoy.</div></div>`;
+    panel.innerHTML=html;
+    return;
+  }
+
+  if(!misActividades.length){
+    html+=`<div style="font-size:12px;color:var(--dim);text-align:center;padding:10px 0">No tienes actividades activas para reportar.</div></div>`;
+    panel.innerHTML=html;
+    return;
+  }
+
+  window._calProyActsGeneral = misActividades;
+  window._calProyFechaHoy = fecha;
+  if(!Array.isArray(window._calProyPendientesG) || window._calProyPendienteGFecha !== fecha){
+    window._calProyPendientesG = [];
+    window._calProyPendienteGFecha = fecha;
+  }
+  const pendientes = window._calProyPendientesG;
+
+  // No repetir una actividad que ya se reportó hoy en modo general, ni una que ya está en la lista de por guardar
+  const yaReportadasHoy = new Set(repsExistentes.filter(r=>r.modo==='general' && r.actividadId).map(r=>r.actividadId));
+  const yaPendientes = new Set(pendientes.map(p=>p.actData.id));
+  const actividadesDisponibles = misActividades.filter(a=>!yaReportadasHoy.has(a.id) && !yaPendientes.has(a.id));
+
+  if(pendientes.length){
+    html+=`<div style="margin-bottom:12px">
+      <div style="font-size:11px;color:var(--accent);font-weight:600;margin-bottom:6px">📝 Por guardar (${pendientes.length})</div>
+      ${pendientes.map((p,pi)=>`
+        <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text);padding:6px 8px;margin-bottom:4px;background:rgba(74,143,212,.06);border:0.5px solid rgba(74,143,212,.2);border-radius:6px">
+          <div style="flex:1">
+            <span style="color:var(--accent)">${p.actData.folio||p.actData.actividad||p.actData.proyecto}</span> · ${p.avance}% · ${p.estatus.replace('_',' ')}${p.descripcion?' · '+p.descripcion:''}
+          </div>
+          <button onclick="calProyQuitarPendienteG(${pi})" title="Quitar de la lista"
+            style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:13px;padding:2px 6px;border-radius:4px;flex-shrink:0"
+            onmouseover="this.style.color='#ff6b6b'" onmouseout="this.style.color='var(--dim)'">✕</button>
+        </div>`).join('')}
+    </div>`;
+  }
+
+  if(!actividadesDisponibles.length){
+    html+=`<div style="font-size:12px;color:var(--dim);text-align:center;padding:10px 0">Ya agregaste todas tus actividades activas al reporte de hoy.</div></div>`;
+    panel.innerHTML=html;
+    return;
+  }
+
+  const actOpts = actividadesDisponibles.map((a,i)=>{
+    const idxReal = misActividades.indexOf(a);
+    return `<option value="${idxReal}">${a.folio||a.actividad||a.proyecto} — ${a.proyecto||''}</option>`;
+  }).join('');
+
+  html+=`
+    <div style="margin-bottom:10px">
+      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Actividad a reportar</label>
+      <select id="calProyActSelG" onchange="calProyActChangeG()"
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px">
+        <option value="">— Selecciona una actividad —</option>
+        ${actOpts}
+      </select>
+    </div>
+    <div id="calProyActInfoG" style="font-size:11px;color:var(--accent);margin-bottom:8px;min-height:16px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">% de avance de hoy</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input id="calProyAvanceG" type="number" min="0" max="100" step="1" placeholder="0"
+            style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+          <span style="font-size:11px;color:var(--dim)">%</span>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Estatus</label>
+        <select id="calProyEstatusG" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px">
+          <option value="en_progreso">En progreso</option>
+          <option value="completada">Completada</option>
+          <option value="bloqueada">Bloqueada</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Descripción de actividades realizadas hoy</label>
+      <textarea id="calProyDescG" rows="3" placeholder="¿Qué hiciste hoy en esta actividad? ¿Algún bloqueo o comentario?"
+        style="width:100%;resize:vertical;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px"></textarea>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="pa-btn pa-btn-ghost" onclick="calProyAgregarPendienteG()" style="flex:1">
+        ➕ Agregar otra actividad
+      </button>
+      <button class="pa-btn pa-btn-primary" onclick="calProyGuardarReporteHoyG()" style="flex:1${horarioCerrado?';opacity:.45;cursor:not-allowed':''}" ${horarioCerrado?'disabled title="El horario para reportar ya cerró (7:15pm)"':''}>
+        💾 Guardar reporte del día${pendientes.length?` (${pendientes.length+1})`:''}
+      </button>
+    </div>
+  </div>`;
+
+  panel.innerHTML=html;
+}
+
+function calProyActChangeG(){
+  const acts = window._calProyActsGeneral||[];
+  const sel = document.getElementById('calProyActSelG');
+  const idx = parseInt(sel?.value);
+  const info = document.getElementById('calProyActInfoG');
+  const avInput = document.getElementById('calProyAvanceG');
+  if(isNaN(idx)||idx<0||!acts[idx]){ if(info) info.textContent=''; return; }
+  const a = acts[idx];
+  const item = CRONO_ITEMS.find(x=>x.actividadId===a.id);
+  const reportesGenerales = (item?.reportes||[]).filter(r=>r.modo==='general').sort((x,y)=>(x.fecha||'').localeCompare(y.fecha||''));
+  const ultimo = reportesGenerales[reportesGenerales.length-1];
+  if(info) info.textContent = ultimo ? `Último avance reportado (${ultimo.fecha}): ${ultimo.avance}%` : 'Sin reportes previos en modo general para esta actividad';
+  if(avInput && !avInput.value && ultimo && ultimo.avance!=null) avInput.value = ultimo.avance;
+}
+
+function calProyLeerFormActualG(){
+  const acts = window._calProyActsGeneral||[];
+  const sel = document.getElementById('calProyActSelG');
+  const idx = parseInt(sel?.value);
+  if(isNaN(idx)||idx<0||!acts[idx]) return null;
+  const avance = Math.max(0, Math.min(100, parseFloat(document.getElementById('calProyAvanceG')?.value)||0));
+  const estatus = document.getElementById('calProyEstatusG')?.value||'en_progreso';
+  const descripcion = document.getElementById('calProyDescG')?.value.trim()||'';
+  if(!descripcion && !avance) return null;
+  return { actData: acts[idx], avance, estatus, descripcion };
+}
+function calProyLimpiarFormActualG(){
+  const sel=document.getElementById('calProyActSelG'); if(sel) sel.value='';
+  const av=document.getElementById('calProyAvanceG'); if(av) av.value='';
+  const est=document.getElementById('calProyEstatusG'); if(est) est.value='en_progreso';
+  const desc=document.getElementById('calProyDescG'); if(desc) desc.value='';
+  const info=document.getElementById('calProyActInfoG'); if(info) info.textContent='';
+}
+function calProyAgregarPendienteG(){
+  const entry = calProyLeerFormActualG();
+  if(!entry){ alert('Selecciona una actividad y agrega un % de avance o una descripción antes de agregarla a la lista.'); return; }
+  if(!Array.isArray(window._calProyPendientesG)) window._calProyPendientesG=[];
+  window._calProyPendientesG.push(entry);
+  calProyLimpiarFormActualG();
+  renderCronoCalProyectista();
+}
+function calProyQuitarPendienteG(idx){
+  if(!Array.isArray(window._calProyPendientesG)) return;
+  window._calProyPendientesG.splice(idx,1);
+  renderCronoCalProyectista();
+}
+
+async function calProyGuardarReporteHoyG(){
+  if(_userRole==='proyectista' && repHorarioCerrado()){
+    alert('⏰ Ya son las 7:15pm — el horario para reportar el avance de hoy ya cerró.\n\nEste reporte no se guardó. Cualquier duda, coméntalo con tu coordinador.');
+    return;
+  }
+  const fecha = window._calProyFechaHoy||repDateKey(new Date());
+  const pendientes = Array.isArray(window._calProyPendientesG) ? [...window._calProyPendientesG] : [];
+
+  const formEntry = calProyLeerFormActualG();
+  if(formEntry) pendientes.push(formEntry);
+
+  if(!pendientes.length){ alert('Selecciona al menos una actividad y agrega un % de avance o una descripción.'); return; }
+
+  await cronoRecargarDeSupabase();
+
+  const itemsAfectados = new Set();
+  pendientes.forEach(entry=>{
+    const pa = PA_ITEMS.find(x=>x.id===entry.actData.id);
+    if(!pa) return;
+    const item = cronoGetOrCreate(pa);
+    if(!item.reportes) item.reportes=[];
+    item.reportes.push({
+      id:'rep_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+      fecha, quien: _miNombre||'—',
+      modo:'general', actividadId: pa.id,
+      avance: entry.avance, descripcion: entry.descripcion, estatus: entry.estatus,
+    });
+    itemsAfectados.add(pa.id);
+
+    if(typeof notifAdd==='function'){
+      notifAdd('📝', `${(_miNombre||'').split(' ')[0]} reportó avance`,
+        `${pa.folio||pa.actividad}: ${entry.avance}%${entry.descripcion?' — '+entry.descripcion.slice(0,40):''}`, 'avance', false);
+    }
+  });
+  itemsAfectados.forEach(id=>cronoSaveItem(id));
+
+  // Si alguna actividad quedó al 100% o se marcó completada, pasarla a "En revisión" (misma cortesía que el modo Subtareas)
+  pendientes.forEach(entry=>{
+    const pa = PA_ITEMS.find(x=>x.id===entry.actData.id);
+    if(!pa) return;
+    if((entry.avance>=100 || entry.estatus==='completada') && pa.estatus!=='En revisión' && pa.estatus!=='Terminado'){
+      if(typeof paAplicarEstatus==='function') paAplicarEstatus(pa,'En revisión'); else pa.estatus = 'En revisión';
+      if(typeof paSave==='function') paSave(pa);
+      if(typeof notifAdd==='function'){
+        notifAdd('🏁', `${(_miNombre||'').split(' ')[0]} reportó una actividad al 100%`,
+          `"${pa.folio||pa.actividad}" — lista para revisión`, 'avance', false);
+      }
+    }
+  });
+
+  window._calProyPendientesG = [];
+
+  const btn = document.querySelector('#calProyPanelHoy .pa-btn-primary');
+  if(btn){
+    btn.innerHTML = `✓ ${pendientes.length} actividad${pendientes.length!==1?'es':''} guardada${pendientes.length!==1?'s':''}`;
+    btn.style.background = 'var(--green)';
+    btn.disabled = true;
+    setTimeout(()=>{ renderCronoCalProyectista(); }, 800);
+  } else {
+    renderCronoCalProyectista();
+  }
 }
 
 function calProyLeerFormActual(){
@@ -9635,8 +9968,9 @@ function calDiaGenerarPDF(fecha){
         ${r.folio?`<span class="rep-folio">${r.folio}</span>`:''}
         ${esConect && r.numBobina?`<span class="rep-tag" style="background:#fdf0da;color:#a05a00">Bna #${r.numBobina}</span>`:''}
       </div>
-      ${r.nota?`<div class="rep-nota">${r.nota}</div>`:''}
-      ${r.cantidad?`<div class="rep-cant">+${r.cantidad} ${r.unidad||''}</div>`:''}
+      ${r.modo==='general'
+        ? `<div class="rep-nota">${r.descripcion||''}</div><div class="rep-cant">${r.avance||0}% de avance</div>`
+        : `${r.nota?`<div class="rep-nota">${r.nota}</div>`:''}${r.cantidad?`<div class="rep-cant">+${r.cantidad} ${r.unidad||''}</div>`:''}`}
     </div>`;
   }).join('') : `<div style="font-size:11px;color:#6b7280">Sin reportes registrados este día.</div>`}
   <div class="sec">Sin reportar / justificaciones</div>
@@ -9820,8 +10154,9 @@ function calGenerarReporteReporteo(){
             ${r.folio?`<span class="rep-folio">${r.folio}</span>`:''}
             ${esConect && r.numBobina?`<span class="rep-tag" style="background:#fdf0da;color:#a05a00">Bna #${r.numBobina}</span>`:''}
           </div>
-          ${r.nota?`<div class="rep-nota">${r.nota}</div>`:''}
-          ${r.cantidad?`<div class="rep-cant">+${r.cantidad} ${r.unidad||''}</div>`:''}
+          ${r.modo==='general'
+            ? `<div class="rep-nota">${r.descripcion||''}</div><div class="rep-cant">${r.avance||0}% de avance</div>`
+            : `${r.nota?`<div class="rep-nota">${r.nota}</div>`:''}${r.cantidad?`<div class="rep-cant">+${r.cantidad} ${r.unidad||''}</div>`:''}`}
         </div>`;
       }).join('')}
     </div>`;
@@ -9855,6 +10190,9 @@ function renderCronoCalendario(){
         cantidad: r.cantidad||0,
         unidad: r.unidad||'',
         nota: r.nota||'',
+        modo: r.modo||'',
+        avance: r.avance||0,
+        descripcion: r.descripcion||'',
         actividadId: item.actividadId,
         proyecto: item.proyecto||'',
         folio: (PA_ITEMS.find(a=>a.id===item.actividadId)?.folio)||''
@@ -9974,7 +10312,23 @@ function renderCronoCalendario(){
       </div>`;
 
     if(reps.length){
-      html += reps.map(r=>`
+      html += reps.map(r=>{
+        if(r.modo==='general'){
+          return `<div style="display:flex;gap:10px;padding:10px 8px;border-bottom:0.5px solid var(--border);border-radius:6px">
+            <div style="width:28px;height:28px;border-radius:50%;background:${quienColor(r.quien)};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">
+              ${r.quien.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase()}
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">
+                <span style="font-size:12px;font-weight:600;color:var(--text)">${r.quien.split(' ').slice(0,2).join(' ')}</span>
+                <span style="font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(245,166,35,.12);color:var(--amber)">${r.avance||0}% avance</span>
+                ${r.folio?`<span style="font-size:10px;color:var(--dim)">${r.folio}</span>`:''}
+              </div>
+              ${r.descripcion?`<div style="font-size:12px;color:var(--text)">${r.descripcion}</div>`:''}
+            </div>
+          </div>`;
+        }
+        return `
         <div onclick="cronoIrASubtarea('${r.actividadId}','${r.subtareaId}')" style="display:flex;gap:10px;padding:10px 8px;border-bottom:0.5px solid var(--border);cursor:pointer;border-radius:6px;transition:background .15s" onmouseover="this.style.background='rgba(74,143,212,.06)'" onmouseout="this.style.background='none'" title="Ir a esta subtarea">
           <div style="width:28px;height:28px;border-radius:50%;background:${quienColor(r.quien)};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">
             ${r.quien.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase()}
@@ -9989,7 +10343,8 @@ function renderCronoCalendario(){
             ${r.cantidad?`<div style="font-size:11px;color:var(--accent);font-weight:500">+${r.cantidad} ${r.unidad}</div>`:''}
           </div>
           <div style="align-self:center;color:var(--dim);font-size:14px;flex-shrink:0">›</div>
-        </div>`).join('');
+        </div>`;
+      }).join('');
     } else {
       html += `<div style="text-align:center;color:var(--dim);font-size:12px;padding:8px 0 14px">Sin reportes este día</div>`;
     }
