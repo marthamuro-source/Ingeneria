@@ -412,11 +412,27 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .srv-chip:hover{color:var(--text);}
 .srv-sep{border-left:1px solid var(--border);margin:0 4px;}
 .srv-table-wrap{overflow:auto;background:var(--surface);border-radius:10px;border:1px solid var(--border);}
-.srv-table{width:100%;border-collapse:collapse;font-size:12px;}
-.srv-table th{padding:7px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap;background:var(--surface2);position:sticky;top:0;z-index:2;}
-.srv-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text);}
+.srv-table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}
+.srv-table th{padding:7px 6px;text-align:left;font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.02em;color:var(--muted);border-bottom:1px solid var(--border);white-space:normal;word-break:break-word;background:var(--surface2);position:sticky;top:0;z-index:2;}
+.srv-table td{padding:8px 6px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text);white-space:normal;word-break:break-word;overflow-wrap:break-word;}
 .srv-table tr:last-child td{border-bottom:none;}
 .srv-table tr:hover td{background:var(--surface2);}
+/* Anchos fijos por columna (suman ~100% del ancho disponible, la última columna de acciones queda en px)
+   para que la tabla completa quepa sin necesitar la barra de desplazamiento horizontal. */
+.srv-table th.scol-proyecto{width:7.5%;}
+.srv-table th.scol-act{width:8.5%;}
+.srv-table th.scol-tipo{width:7%;}
+.srv-table th.scol-contratista{width:8%;}
+.srv-table th.scol-estado{width:7%;}
+.srv-table th.scol-km{width:6%;}
+.srv-table th.scol-fsol{width:6%;}
+.srv-table th.scol-fent{width:6%;}
+.srv-table th.scol-fval{width:6%;}
+.srv-table th.scol-estatus{width:9%;}
+.srv-table th.scol-cot{width:5%;}
+.srv-table th.scol-os{width:5%;}
+.srv-table th.scol-val{width:6%;}
+.srv-table th.scol-entregable{width:6%;}
 /* Ocultar/mostrar columnas: cada columna toggleable trae la clase scol-X en su <th> y sus <td>;
    al agregar hide-X en el contenedor .srv-table-wrap, todas las celdas de esa columna desaparecen. */
 .srv-table-wrap.hide-proyecto .scol-proyecto,
@@ -441,7 +457,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .srv-cols-menu-foot{display:flex;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px solid var(--border);}
 .srv-cols-menu-foot button{font-size:10.5px;color:var(--accent);background:none;border:none;cursor:pointer;padding:2px 4px;}
 .srv-cols-menu-foot button:hover{text-decoration:underline;}
-.srv-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:600;white-space:nowrap;}
+.srv-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:12px;font-size:10px;font-weight:600;white-space:normal;line-height:1.3;}
 .srv-b-cot{background:rgba(154,110,240,.15);color:#b79cf5;border:1px solid rgba(154,110,240,.25);}
 .srv-b-sol{background:rgba(55,138,221,.15);color:#63b3ff;border:1px solid rgba(55,138,221,.25);}
 .srv-b-oc{background:rgba(186,117,23,.15);color:#f0a940;border:1px solid rgba(186,117,23,.25);}
@@ -2224,15 +2240,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
               <th class="scol-contratista">Contratista</th>
               <th class="scol-estado">Estado</th>
               <th class="scol-km" style="text-align:center">Km / Pruebas</th>
-              <th class="scol-fsol">F. Solicitud</th>
-              <th class="scol-fent">F. Entregable</th>
-              <th class="scol-fval">F. Validación</th>
+              <th class="scol-fsol">F. Solic.</th>
+              <th class="scol-fent">F. Entreg.</th>
+              <th class="scol-fval">F. Valid.</th>
               <th class="scol-estatus">Estatus</th>
               <th class="scol-cot">COT</th>
               <th class="scol-os">OS</th>
-              <th class="scol-val">Validación</th>
-              <th class="scol-entregable">Entregable</th>
-              <th style="width:44px"></th>
+              <th class="scol-val">Validac.</th>
+              <th class="scol-entregable">Entreg.</th>
+              <th style="width:64px"></th>
             </tr>
           </thead>
           <tbody id="srvTbody"></tbody>
@@ -18458,20 +18474,20 @@ function srvRenderTable(){
 
     const proyEsc = (s.proyecto||'').replace(/"/g,'&quot;');
     const proyCell = s.linkProyecto
-      ? `<div style="display:flex;align-items:center;gap:4px;min-width:0"><a href="${s.linkProyecto}" target="_blank" style="font-weight:500;color:var(--accent);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0" title="Abrir: ${proyEsc}">${s.proyecto||'—'}</a><span onclick="srvInlineLink('${s.id}','linkProyecto')" title="Editar link" style="cursor:pointer;font-size:10px;color:var(--dim);flex-shrink:0">✎</span></div>`
-      : `<span style="font-weight:500;cursor:pointer;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${proyEsc} — clic para agregar un link y abrir este proyecto desde aquí" onclick="srvInlineLink('${s.id}','linkProyecto')">${s.proyecto||'—'}</span>`;
+      ? `<div style="display:flex;align-items:flex-start;gap:4px;min-width:0"><a href="${s.linkProyecto}" target="_blank" style="font-weight:500;color:var(--accent);text-decoration:none;word-break:break-word;min-width:0" title="Abrir: ${proyEsc}">${s.proyecto||'—'}</a><span onclick="srvInlineLink('${s.id}','linkProyecto')" title="Editar link" style="cursor:pointer;font-size:10px;color:var(--dim);flex-shrink:0">✎</span></div>`
+      : `<span style="font-weight:500;cursor:pointer;display:block;word-break:break-word" title="${proyEsc} — clic para agregar un link y abrir este proyecto desde aquí" onclick="srvInlineLink('${s.id}','linkProyecto')">${s.proyecto||'—'}</span>`;
 
     return `<tr>
-      <td class="scol-proyecto" style="max-width:120px">${proyCell}</td>
+      <td class="scol-proyecto">${proyCell}</td>
       <td class="scol-act">${linkedCell}</td>
       <td class="scol-tipo"><span class="srv-tipo ${tipoClass}">${s.tipo||'—'}</span></td>
-      <td class="scol-contratista" style="max-width:130px">
+      <td class="scol-contratista">
         <input type="text" list="srvContratistasList" value="${escapeHtml(s.contratista||'')}" placeholder="—"
           onchange="srvSetContratista('${s.id}', this.value)"
-          style="width:100%;max-width:130px;background:transparent;border:0.5px solid transparent;border-radius:5px;padding:3px 5px;font-size:11px;font-family:var(--font);color:var(--text)"
+          style="width:100%;background:transparent;border:0.5px solid transparent;border-radius:5px;padding:3px 5px;font-size:11px;font-family:var(--font);color:var(--text);box-sizing:border-box"
           onfocus="this.style.borderColor='var(--border)'" onblur="this.style.borderColor='transparent'">
       </td>
-      <td class="scol-estado" style="font-size:11px;white-space:nowrap">${s.estado||'—'}</td>
+      <td class="scol-estado" style="font-size:11px">${s.estado||'—'}</td>
       <td class="scol-km" style="text-align:center;font-family:var(--mono);font-size:11px;font-weight:600">${s.km ? (s.tipo==='Geotecnia' ? s.km+' pruebas' : s.km+' km') : '—'}</td>
       <td class="scol-fsol" style="font-size:11px;white-space:nowrap;color:var(--muted)">${fmtD(s.fechaSolicitud)}</td>
       <td class="scol-fent" style="font-size:11px;white-space:nowrap;color:var(--muted)">${fmtD(s.fechaInicio)}</td>
