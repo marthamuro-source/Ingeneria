@@ -1127,6 +1127,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .proy-th-actions{display:inline-flex;gap:3px;margin-left:5px;opacity:.55;text-transform:none;}
 .proy-th-actions button{background:none;border:none;cursor:pointer;color:inherit;font-size:10px;padding:1px 2px;}
 .proy-th-actions button:hover{opacity:1;color:var(--accent);}
+.proy-th-drag{cursor:grab;opacity:.4;margin-right:5px;user-select:none;display:inline-block;}
+.proy-th-drag:hover{opacity:.9;}
+.proy-th-drag:active{cursor:grabbing;}
+.srv-table th.proy-th-dragover{background:rgba(90,159,240,.22);}
 
 </style>
 </head>
@@ -11539,6 +11543,8 @@ let proyColTablaId = null;    // tabla sobre la que se agrega/edita una columna
 let proyColEditId = null;     // id de columna en edición (null = nueva)
 let proyFilaTablaId = null;   // tabla sobre la que se agrega/edita una fila
 let proyFilaEditId = null;    // id de fila en edición (null = nueva)
+let proyDragColId = null;     // id de la columna que se está arrastrando para reordenar
+let proyDragTablaId = null;   // tabla a la que pertenece esa columna
 
 const PROY_PALETA = [
   {bg:'rgba(90,159,240,.12)',  fg:'#5a9ff0',  bd:'rgba(90,159,240,.3)'},
@@ -11677,7 +11683,8 @@ function proyTablaHTML(t){
   const cols = t.columnas||[];
   const filas = t.filas||[];
   const thCols = cols.map(c=>`
-    <th>${(c.label||'').replace(/</g,'&lt;')}<span class="proy-th-actions">
+    <th ondragover="proyColDragOver(event)" ondragleave="proyColDragLeave(event)" ondrop="proyColDrop(event,'${t.id}','${c.id}')">
+      <span class="proy-th-drag" draggable="true" ondragstart="proyColDragStart(event,'${t.id}','${c.id}')" ondragend="proyColDragEnd()" title="Arrastra para reordenar la columna">⠿</span>${(c.label||'').replace(/</g,'&lt;')}<span class="proy-th-actions">
       <button onclick="proyColAbrirModal('${t.id}','${c.id}')" title="Editar columna">✎</button>
       <button onclick="proyColEliminar('${t.id}','${c.id}')" title="Eliminar columna">🗑</button>
     </span></th>
@@ -11893,6 +11900,42 @@ function proyColEliminar(tablaId, colId){
   if(!confirm(`¿Eliminar la columna "${c.label}"? Se perderá esa información en todas las filas de esta tabla.`)) return;
   t.columnas = t.columnas.filter(x=>x.id!==colId);
   (t.filas||[]).forEach(f=>{ if(f.valores) delete f.valores[colId]; });
+  proyTablasSave();
+  renderProyectos();
+}
+
+// ── Reordenar columnas arrastrando el encabezado (⠿) a donde se necesite ──
+function proyColDragStart(ev, tablaId, colId){
+  proyDragColId = colId;
+  proyDragTablaId = tablaId;
+  try{ ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', colId); }catch(e){}
+}
+function proyColDragOver(ev){
+  ev.preventDefault();
+  try{ ev.dataTransfer.dropEffect = 'move'; }catch(e){}
+  ev.currentTarget.classList.add('proy-th-dragover');
+}
+function proyColDragLeave(ev){
+  ev.currentTarget.classList.remove('proy-th-dragover');
+}
+function proyColDragEnd(){
+  document.querySelectorAll('.proy-th-dragover').forEach(el=>el.classList.remove('proy-th-dragover'));
+  proyDragColId = null; proyDragTablaId = null;
+}
+function proyColDrop(ev, tablaId, colId){
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('proy-th-dragover');
+  const draggedId = proyDragColId, draggedTabla = proyDragTablaId;
+  proyDragColId = null; proyDragTablaId = null;
+  if(!draggedId || draggedTabla!==tablaId || draggedId===colId) return;
+  const t = PROY_TABLAS.find(x=>x.id===tablaId);
+  if(!t) return;
+  const cols = t.columnas||[];
+  const fromIdx = cols.findIndex(c=>c.id===draggedId);
+  const toIdx = cols.findIndex(c=>c.id===colId);
+  if(fromIdx<0 || toIdx<0) return;
+  const [moved] = cols.splice(fromIdx,1);
+  cols.splice(toIdx,0,moved);
   proyTablasSave();
   renderProyectos();
 }
