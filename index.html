@@ -1131,6 +1131,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .proy-th-drag:hover{opacity:.9;}
 .proy-th-drag:active{cursor:grabbing;}
 .srv-table th.proy-th-dragover{background:rgba(90,159,240,.22);}
+.proy-link-btn{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:14px;font-size:10.5px;font-weight:600;background:rgba(90,159,240,.12);color:var(--accent);border:1px solid rgba(90,159,240,.3);text-decoration:none;white-space:nowrap;transition:background .15s;}
+.proy-link-btn:hover{background:rgba(90,159,240,.22);}
 
 </style>
 </head>
@@ -11660,12 +11662,18 @@ function proyRenderDetalle(p){
   mount.innerHTML = tablas.map(t=>proyTablaHTML(t)).join('');
 }
 
-function proyColCellDisplay(col, val){
-  if(val===undefined || val===null || val==='') return '<span style="color:var(--dim)">—</span>';
+function proyColCellDisplay(col, val, tablaId, filaId){
   if(col.tipo==='link'){
-    const esc = (val+'').replace(/"/g,'&quot;');
-    return `<a href="${esc}" target="_blank" rel="noopener" style="color:var(--accent);word-break:break-word">Abrir ↗</a>`;
+    const tieneLink = val && (val+'').trim();
+    const boton = tieneLink
+      ? `<a href="${(val+'').replace(/"/g,'&quot;')}" target="_blank" rel="noopener" class="proy-link-btn">🔗 Abrir</a>`
+      : `<span style="color:var(--dim)">—</span>`;
+    const editable = (tablaId && filaId)
+      ? `<span onclick="proyCeldaLinkEditar('${tablaId}','${filaId}','${col.id}')" title="${tieneLink?'Editar link':'Agregar link'}" style="cursor:pointer;font-size:11px;color:var(--dim);flex-shrink:0">✎</span>`
+      : '';
+    return `<div style="display:flex;align-items:center;gap:6px;min-width:0">${boton}${editable}</div>`;
   }
+  if(val===undefined || val===null || val==='') return '<span style="color:var(--dim)">—</span>';
   if(col.tipo==='estatus'){
     const opts = col.opciones||[];
     const idx = Math.max(0, opts.indexOf(val));
@@ -11690,7 +11698,7 @@ function proyTablaHTML(t){
     </span></th>
   `).join('');
   const rowsHTML = filas.length ? filas.map(f=>{
-    const tds = cols.map(c=>`<td>${proyColCellDisplay(c, f.valores?f.valores[c.id]:'')}</td>`).join('');
+    const tds = cols.map(c=>`<td>${proyColCellDisplay(c, f.valores?f.valores[c.id]:'', t.id, f.id)}</td>`).join('');
     return `<tr>${tds}<td style="width:64px;white-space:nowrap">
       <button class="et-act-btn" onclick="proyFilaAbrirModal('${t.id}','${f.id}')" title="Editar fila">✎</button>
       <button class="et-act-btn" onclick="proyFilaEliminar('${t.id}','${f.id}')" title="Eliminar fila">🗑</button>
@@ -11997,6 +12005,21 @@ function proyFilaEliminar(tablaId, filaId){
   if(!t) return;
   if(!confirm('¿Eliminar esta fila?')) return;
   t.filas = (t.filas||[]).filter(x=>x.id!==filaId);
+  proyTablasSave();
+  renderProyectos();
+}
+
+// ── Edición rápida de una celda tipo "link": clic en el lápiz, sin abrir el modal de la fila completa ──
+function proyCeldaLinkEditar(tablaId, filaId, colId){
+  const t = PROY_TABLAS.find(x=>x.id===tablaId);
+  if(!t) return;
+  const f = (t.filas||[]).find(x=>x.id===filaId);
+  if(!f) return;
+  const actual = (f.valores && f.valores[colId]) || '';
+  const url = prompt('URL para abrir desde este botón:', actual);
+  if(url===null) return;
+  f.valores = f.valores || {};
+  f.valores[colId] = url.trim();
   proyTablasSave();
   renderProyectos();
 }
