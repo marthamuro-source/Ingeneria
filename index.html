@@ -1105,6 +1105,29 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .ui-switch input:checked + .ui-switch-track:before{transform:translateX(15px);}
 .ui-switch input:disabled + .ui-switch-track{opacity:.5;cursor:not-allowed;}
 
+/* ── Proyectos: carpetas + tablas de seguimiento a la medida (solo admin) ── */
+.proy-card{background:#060e1a;border:1px solid rgba(0,229,255,.2);border-radius:14px;padding:20px;cursor:pointer;transition:all .2s;position:relative;box-shadow:0 0 16px rgba(0,229,255,.05);}
+[data-theme="light"] .proy-card{background:linear-gradient(160deg,#eef6ff 0%,#f5faff 100%);border-color:rgba(26,86,208,.25);box-shadow:0 2px 14px rgba(26,86,208,.08);}
+.proy-card:hover{border-color:rgba(0,229,255,.5);transform:translateY(-3px);box-shadow:0 0 24px rgba(0,229,255,.15),0 12px 30px rgba(0,0,0,.3);}
+[data-theme="light"] .proy-card:hover{border-color:rgba(26,86,208,.45);box-shadow:0 4px 18px rgba(26,86,208,.14);}
+.proy-card-actions{position:absolute;top:10px;right:10px;display:flex;gap:2px;opacity:0;transition:opacity .15s;}
+.proy-card:hover .proy-card-actions{opacity:1;}
+.proy-card-icon{font-size:26px;margin-bottom:10px;display:block;}
+.proy-card-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;word-break:break-word;}
+.proy-card-desc{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:10px;min-height:16px;word-break:break-word;}
+.proy-card-count{font-size:10px;color:var(--dim);font-weight:600;}
+.proy-crumb{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-bottom:4px;}
+.proy-crumb a{color:var(--accent);cursor:pointer;text-decoration:none;}
+.proy-crumb a:hover{text-decoration:underline;}
+.proy-tabla-block{background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:18px;overflow:hidden;}
+.proy-tabla-hd{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface2);gap:10px;flex-wrap:wrap;}
+.proy-tabla-title{font-size:13px;font-weight:600;color:var(--text);}
+.proy-empty{font-size:11px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;line-height:1.6;text-align:center;}
+.proy-pill{display:inline-flex;align-items:center;padding:3px 9px;border-radius:12px;font-size:10px;font-weight:600;white-space:normal;line-height:1.3;}
+.proy-th-actions{display:inline-flex;gap:3px;margin-left:5px;opacity:.55;text-transform:none;}
+.proy-th-actions button{background:none;border:none;cursor:pointer;color:inherit;font-size:10px;padding:1px 2px;}
+.proy-th-actions button:hover{opacity:1;color:var(--accent);}
+
 </style>
 </head>
 <script>
@@ -1425,6 +1448,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
     <button class="ni" id="navSbiBtn" onclick="goView(&#39;sbi&#39;)" style="display:none" title="Solo visible para ti como administrador">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
       Feedback SBI 🔒
+    </button>
+    <button class="ni" id="navProyectosBtn" onclick="goView(&#39;proyectos&#39;)" style="display:none" title="Solo visible para el rol de administrador">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+      Proyectos
     </button>
     <span id="notifBellLabel" style="display:none">Sin notificaciones</span>
   </nav>
@@ -2439,6 +2466,72 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
         <button class="pa-modal-close" onclick="sbiCerrarEjemplos()" title="Cerrar">×</button>
       </div>
       <div class="pa-modal-body" id="sbiEjemplosBody"></div>
+    </div>
+  </div>
+
+  <!-- PROYECTOS (carpetas + tablas de seguimiento a la medida — solo administrador) -->
+  <div id="v-proyectos" style="display:none">
+    <div class="topbar" id="proyTopbar"></div>
+    <div class="content" id="proyMount"></div>
+  </div>
+
+  <!-- MODAL: nuevo/editar proyecto (carpeta) -->
+  <div class="pa-modal-bg" id="proyModal" onclick="if(event.target===this)proyCerrarModal()" style="z-index:4200">
+    <div class="pa-modal" style="max-width:480px">
+      <div class="pa-modal-hd">
+        <div class="pa-modal-title" id="proyModalTitle">Nuevo proyecto</div>
+        <button class="pa-modal-close" onclick="proyCerrarModal()" title="Cerrar">×</button>
+      </div>
+      <div class="pa-modal-body" id="proyModalBody"></div>
+      <div class="pa-modal-ft">
+        <button class="pa-modal-close" style="font-size:13px;padding:8px 16px;border:1px solid var(--border);border-radius:8px" onclick="proyCerrarModal()">Cancelar</button>
+        <button class="pa-btn pa-btn-primary" onclick="proyGuardarModal()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: nueva tabla de seguimiento / renombrar -->
+  <div class="pa-modal-bg" id="proyTablaModal" onclick="if(event.target===this)proyTablaCerrarModal()" style="z-index:4200">
+    <div class="pa-modal" style="max-width:420px">
+      <div class="pa-modal-hd">
+        <div class="pa-modal-title" id="proyTablaModalTitle">Nueva tabla de seguimiento</div>
+        <button class="pa-modal-close" onclick="proyTablaCerrarModal()" title="Cerrar">×</button>
+      </div>
+      <div class="pa-modal-body" id="proyTablaModalBody"></div>
+      <div class="pa-modal-ft">
+        <button class="pa-modal-close" style="font-size:13px;padding:8px 16px;border:1px solid var(--border);border-radius:8px" onclick="proyTablaCerrarModal()">Cancelar</button>
+        <button class="pa-btn pa-btn-primary" onclick="proyTablaGuardarModal()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: nueva/editar columna de una tabla de seguimiento -->
+  <div class="pa-modal-bg" id="proyColModal" onclick="if(event.target===this)proyColCerrarModal()" style="z-index:4300">
+    <div class="pa-modal" style="max-width:420px">
+      <div class="pa-modal-hd">
+        <div class="pa-modal-title" id="proyColModalTitle">Nueva columna</div>
+        <button class="pa-modal-close" onclick="proyColCerrarModal()" title="Cerrar">×</button>
+      </div>
+      <div class="pa-modal-body" id="proyColModalBody"></div>
+      <div class="pa-modal-ft">
+        <button class="pa-modal-close" style="font-size:13px;padding:8px 16px;border:1px solid var(--border);border-radius:8px" onclick="proyColCerrarModal()">Cancelar</button>
+        <button class="pa-btn pa-btn-primary" onclick="proyColGuardarModal()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: nueva/editar fila de una tabla de seguimiento -->
+  <div class="pa-modal-bg" id="proyFilaModal" onclick="if(event.target===this)proyFilaCerrarModal()" style="z-index:4300">
+    <div class="pa-modal" style="max-width:560px">
+      <div class="pa-modal-hd">
+        <div class="pa-modal-title" id="proyFilaModalTitle">Nueva fila</div>
+        <button class="pa-modal-close" onclick="proyFilaCerrarModal()" title="Cerrar">×</button>
+      </div>
+      <div class="pa-modal-body" id="proyFilaModalBody"></div>
+      <div class="pa-modal-ft">
+        <button class="pa-modal-close" style="font-size:13px;padding:8px 16px;border:1px solid var(--border);border-radius:8px" onclick="proyFilaCerrarModal()">Cancelar</button>
+        <button class="pa-btn pa-btn-primary" onclick="proyFilaGuardarModal()">Guardar</button>
+      </div>
     </div>
   </div>
 
@@ -11430,6 +11523,481 @@ function sbiCerrarEjemplos(){
   if(modal) modal.classList.remove('open');
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+//  PROYECTOS — carpetas por proyecto con tablas de seguimiento a la medida.
+//  Espacio exclusivo del rol administrador (igual que Feedback SBI).
+// ═══════════════════════════════════════════════════════════════════════
+const PROY_KEY = 'c3ntro_proyectos_v1';
+const PROY_TAB_KEY = 'c3ntro_proy_tablas_v1';
+let PROY_ITEMS = [];   // carpetas: {id, nombre, descripcion, icono, createdAt}
+let PROY_TABLAS = [];  // tablas de seguimiento: {id, proyectoId, nombre, columnas:[{id,label,tipo,opciones}], filas:[{id,valores:{}}], createdAt}
+let proyCurId = null;         // id del proyecto abierto (null = vista de carpetas)
+let proyEditId = null;        // id de proyecto en edición dentro del modal (null = nuevo)
+let proyTablaEditId = null;   // id de tabla en edición (renombrar)
+let proyTablaProyectoId = null; // proyecto al que se agregará la nueva tabla
+let proyColTablaId = null;    // tabla sobre la que se agrega/edita una columna
+let proyColEditId = null;     // id de columna en edición (null = nueva)
+let proyFilaTablaId = null;   // tabla sobre la que se agrega/edita una fila
+let proyFilaEditId = null;    // id de fila en edición (null = nueva)
+
+const PROY_PALETA = [
+  {bg:'rgba(90,159,240,.12)',  fg:'#5a9ff0',  bd:'rgba(90,159,240,.3)'},
+  {bg:'rgba(61,214,140,.12)',  fg:'#3dd68c',  bd:'rgba(61,214,140,.3)'},
+  {bg:'rgba(245,166,35,.12)',  fg:'#f5a623',  bd:'rgba(245,166,35,.3)'},
+  {bg:'rgba(255,92,92,.12)',   fg:'#ff5c5c',  bd:'rgba(255,92,92,.3)'},
+  {bg:'rgba(154,110,240,.12)', fg:'#9a6ef0',  bd:'rgba(154,110,240,.3)'},
+  {bg:'rgba(0,194,221,.12)',   fg:'#00c2dd',  bd:'rgba(0,194,221,.3)'},
+  {bg:'rgba(212,137,10,.12)',  fg:'#d4890a',  bd:'rgba(212,137,10,.3)'},
+  {bg:'rgba(55,138,221,.12)',  fg:'#378ADD',  bd:'rgba(55,138,221,.3)'},
+];
+
+function proyLoad(){
+  try{ PROY_ITEMS = JSON.parse(localStorage.getItem(PROY_KEY)||'[]'); }catch(e){ PROY_ITEMS=[]; }
+  try{ PROY_TABLAS = JSON.parse(localStorage.getItem(PROY_TAB_KEY)||'[]'); }catch(e){ PROY_TABLAS=[]; }
+}
+function proySave(){
+  localStorage.setItem(PROY_KEY, JSON.stringify(PROY_ITEMS));
+  if(typeof supaSyncProyectos==='function') supaSyncProyectos();
+}
+function proyTablasSave(){
+  localStorage.setItem(PROY_TAB_KEY, JSON.stringify(PROY_TABLAS));
+  if(typeof supaSyncProyTablas==='function') supaSyncProyTablas();
+}
+try{ proyLoad(); }catch(e){}
+
+// ── Render principal: carpetas (grid) o el detalle de un proyecto abierto ──
+function renderProyectos(){
+  proyLoad();
+  const p = proyCurId ? PROY_ITEMS.find(x=>x.id===proyCurId) : null;
+  if(proyCurId && !p) proyCurId = null;
+  if(p){
+    proyRenderTopbarDetalle(p);
+    proyRenderDetalle(p);
+  } else {
+    proyRenderTopbarGrid();
+    proyRenderGrid();
+  }
+}
+
+function proyRenderTopbarGrid(){
+  const tb = document.getElementById('proyTopbar');
+  if(!tb) return;
+  tb.innerHTML = `
+    <div>
+      <h1>Proyectos</h1>
+      <div class="tmeta">Organiza el seguimiento de cada proyecto en sus propias tablas — solo visible para el administrador</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="pa-btn pa-btn-primary" onclick="proyAbrirModal()">+ Nuevo proyecto</button>
+    </div>
+  `;
+}
+
+function proyRenderGrid(){
+  const mount = document.getElementById('proyMount');
+  if(!mount) return;
+  if(!PROY_ITEMS.length){
+    mount.innerHTML = `<div class="proy-empty">Todavía no tienes proyectos. Crea el primero con "+ Nuevo proyecto" para empezar a armar tablas de seguimiento a la medida.</div>`;
+    return;
+  }
+  const cards = PROY_ITEMS.slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'')).map(p=>{
+    const n = PROY_TABLAS.filter(t=>t.proyectoId===p.id).length;
+    const nombreEsc = (p.nombre||'').replace(/"/g,'&quot;');
+    return `
+      <div class="proy-card herr-card" onclick="proyAbrir('${p.id}')" title="Abrir ${nombreEsc}">
+        <div class="proy-card-actions" onclick="event.stopPropagation()">
+          <button class="et-act-btn" onclick="proyAbrirModal('${p.id}')" title="Editar proyecto">✎</button>
+          <button class="et-act-btn" onclick="proyEliminar('${p.id}')" title="Eliminar proyecto">🗑</button>
+        </div>
+        <span class="proy-card-icon">${(p.icono||'📁').replace(/</g,'&lt;')}</span>
+        <div class="proy-card-title">${(p.nombre||'(sin nombre)').replace(/</g,'&lt;')}</div>
+        <div class="proy-card-desc">${(p.descripcion||'').replace(/</g,'&lt;')}</div>
+        <div class="proy-card-count">${n} ${n===1?'tabla':'tablas'} de seguimiento</div>
+      </div>
+    `;
+  }).join('');
+  mount.innerHTML = `<div class="herr-grid">${cards}</div>`;
+}
+
+function proyAbrir(id){
+  proyCurId = id;
+  renderProyectos();
+}
+function proyVolver(){
+  proyCurId = null;
+  renderProyectos();
+}
+
+function proyRenderTopbarDetalle(p){
+  const tb = document.getElementById('proyTopbar');
+  if(!tb) return;
+  tb.innerHTML = `
+    <div>
+      <div class="proy-crumb"><a onclick="proyVolver()">📁 Proyectos</a><span>/</span><span>${(p.nombre||'').replace(/</g,'&lt;')}</span></div>
+      <h1>${(p.icono||'📁').replace(/</g,'&lt;')} ${(p.nombre||'').replace(/</g,'&lt;')}</h1>
+      <div class="tmeta">${(p.descripcion||'').replace(/</g,'&lt;') || 'Tablas de seguimiento de este proyecto'}</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="pa-btn pa-btn-primary" onclick="proyTablaAbrirModal('${p.id}')">+ Nueva tabla de seguimiento</button>
+    </div>
+  `;
+}
+
+function proyRenderDetalle(p){
+  const mount = document.getElementById('proyMount');
+  if(!mount) return;
+  const tablas = PROY_TABLAS.filter(t=>t.proyectoId===p.id);
+  if(!tablas.length){
+    mount.innerHTML = `<div class="proy-empty">Este proyecto todavía no tiene tablas de seguimiento. Crea una con "+ Nueva tabla de seguimiento" y luego define las columnas que necesites (texto, fecha, número, link o estatus).</div>`;
+    return;
+  }
+  mount.innerHTML = tablas.map(t=>proyTablaHTML(t)).join('');
+}
+
+function proyColCellDisplay(col, val){
+  if(val===undefined || val===null || val==='') return '<span style="color:var(--dim)">—</span>';
+  if(col.tipo==='link'){
+    const esc = (val+'').replace(/"/g,'&quot;');
+    return `<a href="${esc}" target="_blank" rel="noopener" style="color:var(--accent);word-break:break-word">Abrir ↗</a>`;
+  }
+  if(col.tipo==='estatus'){
+    const opts = col.opciones||[];
+    const idx = Math.max(0, opts.indexOf(val));
+    const c = PROY_PALETA[idx % PROY_PALETA.length];
+    return `<span class="proy-pill" style="background:${c.bg};color:${c.fg};border:1px solid ${c.bd}">${(val+'').replace(/</g,'&lt;')}</span>`;
+  }
+  if(col.tipo==='fecha'){
+    const parts = (val+'').split('-');
+    return parts.length===3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : (val+'').replace(/</g,'&lt;');
+  }
+  return (val+'').replace(/</g,'&lt;');
+}
+
+function proyTablaHTML(t){
+  const cols = t.columnas||[];
+  const filas = t.filas||[];
+  const thCols = cols.map(c=>`
+    <th>${(c.label||'').replace(/</g,'&lt;')}<span class="proy-th-actions">
+      <button onclick="proyColAbrirModal('${t.id}','${c.id}')" title="Editar columna">✎</button>
+      <button onclick="proyColEliminar('${t.id}','${c.id}')" title="Eliminar columna">🗑</button>
+    </span></th>
+  `).join('');
+  const rowsHTML = filas.length ? filas.map(f=>{
+    const tds = cols.map(c=>`<td>${proyColCellDisplay(c, f.valores?f.valores[c.id]:'')}</td>`).join('');
+    return `<tr>${tds}<td style="width:64px;white-space:nowrap">
+      <button class="et-act-btn" onclick="proyFilaAbrirModal('${t.id}','${f.id}')" title="Editar fila">✎</button>
+      <button class="et-act-btn" onclick="proyFilaEliminar('${t.id}','${f.id}')" title="Eliminar fila">🗑</button>
+    </td></tr>`;
+  }).join('') : `<tr><td colspan="${Math.max(cols.length,1)+1}" style="text-align:center;color:var(--dim);padding:16px">Sin filas todavía</td></tr>`;
+
+  return `
+    <div class="proy-tabla-block">
+      <div class="proy-tabla-hd">
+        <div class="proy-tabla-title">📋 ${(t.nombre||'Tabla de seguimiento').replace(/</g,'&lt;')}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="pa-btn pa-btn-ghost" style="font-size:11px;padding:5px 10px" onclick="proyColAbrirModal('${t.id}')">+ Columna</button>
+          <button class="pa-btn pa-btn-ghost" style="font-size:11px;padding:5px 10px" onclick="proyFilaAbrirModal('${t.id}')" ${cols.length?'':'disabled title="Agrega primero al menos una columna"'}>+ Fila</button>
+          <button class="pa-btn pa-btn-ghost" style="font-size:11px;padding:5px 10px" onclick="proyTablaExportCSV('${t.id}')">⬇ CSV</button>
+          <button class="pa-btn pa-btn-ghost" style="font-size:11px;padding:5px 10px" onclick="proyTablaAbrirModal(null,'${t.id}')" title="Renombrar tabla">✎ Renombrar</button>
+          <button class="pa-btn pa-btn-ghost" style="font-size:11px;padding:5px 10px;color:#ff5c5c" onclick="proyTablaEliminar('${t.id}')">🗑 Eliminar tabla</button>
+        </div>
+      </div>
+      <div class="srv-table-wrap">
+        <table class="srv-table" style="table-layout:auto">
+          <thead><tr>${thCols || '<th>Sin columnas todavía</th>'}<th style="width:64px"></th></tr></thead>
+          <tbody>${rowsHTML}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ── Modal: nuevo/editar proyecto (carpeta) ──
+function proyAbrirModal(id){
+  proyEditId = id || null;
+  const p = proyEditId ? PROY_ITEMS.find(x=>x.id===proyEditId) : null;
+  document.getElementById('proyModalTitle').textContent = p ? 'Editar proyecto' : 'Nuevo proyecto';
+  document.getElementById('proyModalBody').innerHTML = `
+    <div class="srv-field" style="margin-bottom:12px">
+      <label>Nombre del proyecto</label>
+      <input type="text" id="proyNombre" value="${p?(p.nombre||'').replace(/"/g,'&quot;'):''}" placeholder="Ej. Tikva México">
+    </div>
+    <div class="srv-field" style="margin-bottom:12px">
+      <label>Descripción <span style="font-weight:400;color:var(--dim);text-transform:none">(opcional)</span></label>
+      <input type="text" id="proyDescripcion" value="${p?(p.descripcion||'').replace(/"/g,'&quot;'):''}" placeholder="Breve nota sobre este proyecto">
+    </div>
+    <div class="srv-field">
+      <label>Ícono <span style="font-weight:400;color:var(--dim);text-transform:none">(opcional, un emoji)</span></label>
+      <input type="text" id="proyIcono" value="${p?(p.icono||'').replace(/"/g,'&quot;'):''}" placeholder="📁" maxlength="4">
+    </div>
+  `;
+  document.getElementById('proyModal').classList.add('open');
+  setTimeout(()=>document.getElementById('proyNombre')?.focus(), 50);
+}
+function proyCerrarModal(){
+  document.getElementById('proyModal').classList.remove('open');
+  proyEditId = null;
+}
+function proyGuardarModal(){
+  const nombre = (document.getElementById('proyNombre').value||'').trim();
+  if(!nombre){ alert('Ponle un nombre al proyecto.'); return; }
+  const descripcion = (document.getElementById('proyDescripcion').value||'').trim();
+  const icono = (document.getElementById('proyIcono').value||'').trim();
+  if(proyEditId){
+    const p = PROY_ITEMS.find(x=>x.id===proyEditId);
+    if(p){ p.nombre=nombre; p.descripcion=descripcion; p.icono=icono; }
+  } else {
+    PROY_ITEMS.push({id:'proy_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), nombre, descripcion, icono, createdAt:new Date().toISOString()});
+  }
+  proySave();
+  proyCerrarModal();
+  renderProyectos();
+}
+function proyEliminar(id){
+  const p = PROY_ITEMS.find(x=>x.id===id);
+  if(!p) return;
+  const numTablas = PROY_TABLAS.filter(t=>t.proyectoId===id).length;
+  const aviso = numTablas ? `\n\nEsto también eliminará sus ${numTablas} tabla(s) de seguimiento con todo su contenido.` : '';
+  if(!confirm(`¿Eliminar el proyecto "${p.nombre}"? Esta acción no se puede deshacer.${aviso}`)) return;
+  const tablasBorradas = PROY_TABLAS.filter(t=>t.proyectoId===id).map(t=>t.id);
+  PROY_ITEMS = PROY_ITEMS.filter(x=>x.id!==id);
+  PROY_TABLAS = PROY_TABLAS.filter(t=>t.proyectoId!==id);
+  proySave();
+  proyTablasSave();
+  tablasBorradas.forEach(tid=>{ if(typeof supaSyncDeleteProyTabla==='function') supaSyncDeleteProyTabla(tid); });
+  if(typeof supaSyncDeleteProyecto==='function') supaSyncDeleteProyecto(id);
+  if(proyCurId===id) proyCurId=null;
+  renderProyectos();
+}
+
+// ── Modal: nueva tabla de seguimiento / renombrar ──
+function proyTablaAbrirModal(proyectoId, tablaId){
+  proyTablaEditId = tablaId || null;
+  const t = proyTablaEditId ? PROY_TABLAS.find(x=>x.id===proyTablaEditId) : null;
+  proyTablaProyectoId = t ? t.proyectoId : (proyectoId || proyCurId);
+  document.getElementById('proyTablaModalTitle').textContent = t ? 'Renombrar tabla' : 'Nueva tabla de seguimiento';
+  document.getElementById('proyTablaModalBody').innerHTML = `
+    <div class="srv-field">
+      <label>Nombre de la tabla</label>
+      <input type="text" id="proyTablaNombre" value="${t?(t.nombre||'').replace(/"/g,'&quot;'):''}" placeholder="Ej. Seguimiento de entregables">
+    </div>
+    ${t ? '' : '<div style="font-size:11px;color:var(--dim);margin-top:8px;line-height:1.5">Después de crearla podrás agregar las columnas que necesites (texto, fecha, número, link o estatus) con el botón "+ Columna".</div>'}
+  `;
+  document.getElementById('proyTablaModal').classList.add('open');
+  setTimeout(()=>document.getElementById('proyTablaNombre')?.focus(), 50);
+}
+function proyTablaCerrarModal(){
+  document.getElementById('proyTablaModal').classList.remove('open');
+  proyTablaEditId = null;
+}
+function proyTablaGuardarModal(){
+  const nombre = (document.getElementById('proyTablaNombre').value||'').trim();
+  if(!nombre){ alert('Ponle un nombre a la tabla.'); return; }
+  if(proyTablaEditId){
+    const t = PROY_TABLAS.find(x=>x.id===proyTablaEditId);
+    if(t) t.nombre = nombre;
+  } else {
+    PROY_TABLAS.push({id:'ptab_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), proyectoId:proyTablaProyectoId, nombre, columnas:[], filas:[], createdAt:new Date().toISOString()});
+  }
+  proyTablasSave();
+  proyTablaCerrarModal();
+  renderProyectos();
+}
+function proyTablaEliminar(id){
+  const t = PROY_TABLAS.find(x=>x.id===id);
+  if(!t) return;
+  if(!confirm(`¿Eliminar la tabla "${t.nombre}" y todas sus filas? Esta acción no se puede deshacer.`)) return;
+  PROY_TABLAS = PROY_TABLAS.filter(x=>x.id!==id);
+  proyTablasSave();
+  if(typeof supaSyncDeleteProyTabla==='function') supaSyncDeleteProyTabla(id);
+  renderProyectos();
+}
+function proyTablaExportCSV(tablaId){
+  const t = PROY_TABLAS.find(x=>x.id===tablaId);
+  if(!t || !(t.columnas||[]).length){ alert('Esta tabla no tiene columnas todavía.'); return; }
+  const cols = t.columnas;
+  const header = cols.map(c=>c.label||'');
+  const rows = (t.filas||[]).map(f=>cols.map(c=>(f.valores&&f.valores[c.id])||''));
+  const csvLines = [header, ...rows].map(r=>r.map(v=>`"${(v+'').replace(/"/g,'""')}"`).join(','));
+  const csv = csvLines.join('\n');
+  const blob = new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=(t.nombre||'tabla').replace(/[^\w\-]+/g,'_')+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),3000);
+}
+
+// ── Modal: nueva/editar columna ──
+function proyColAbrirModal(tablaId, colId){
+  proyColTablaId = tablaId;
+  proyColEditId = colId || null;
+  const t = PROY_TABLAS.find(x=>x.id===tablaId);
+  const c = (proyColEditId && t) ? (t.columnas||[]).find(x=>x.id===proyColEditId) : null;
+  document.getElementById('proyColModalTitle').textContent = c ? 'Editar columna' : 'Nueva columna';
+  const tipos = [
+    {v:'texto', l:'Texto'}, {v:'fecha', l:'Fecha'}, {v:'numero', l:'Número'},
+    {v:'link', l:'Link'}, {v:'estatus', l:'Estatus (lista de opciones)'}
+  ];
+  const tipoOpts = tipos.map(o=>`<option value="${o.v}" ${c&&c.tipo===o.v?'selected':''}>${o.l}</option>`).join('');
+  document.getElementById('proyColModalBody').innerHTML = `
+    <div class="srv-field" style="margin-bottom:12px">
+      <label>Nombre de la columna</label>
+      <input type="text" id="proyColLabel" value="${c?(c.label||'').replace(/"/g,'&quot;'):''}" placeholder="Ej. Responsable">
+    </div>
+    <div class="srv-field" style="margin-bottom:12px">
+      <label>Tipo de dato</label>
+      <select id="proyColTipo" onchange="proyColTipoChange(this.value)">${tipoOpts}</select>
+    </div>
+    <div class="srv-field" id="proyColOpcionesField" style="display:${c&&c.tipo==='estatus'?'block':'none'}">
+      <label>Opciones <span style="font-weight:400;color:var(--dim);text-transform:none">(separadas por coma)</span></label>
+      <input type="text" id="proyColOpciones" value="${c&&c.opciones?c.opciones.join(', '):''}" placeholder="Ej. Pendiente, En proceso, Terminado">
+    </div>
+  `;
+  document.getElementById('proyColModal').classList.add('open');
+  setTimeout(()=>document.getElementById('proyColLabel')?.focus(), 50);
+}
+function proyColTipoChange(v){
+  const f = document.getElementById('proyColOpcionesField');
+  if(f) f.style.display = v==='estatus' ? 'block' : 'none';
+}
+function proyColCerrarModal(){
+  document.getElementById('proyColModal').classList.remove('open');
+  proyColTablaId = null; proyColEditId = null;
+}
+function proyColGuardarModal(){
+  const label = (document.getElementById('proyColLabel').value||'').trim();
+  if(!label){ alert('Ponle un nombre a la columna.'); return; }
+  const tipo = document.getElementById('proyColTipo').value;
+  const opcionesRaw = document.getElementById('proyColOpciones')?.value||'';
+  const opciones = tipo==='estatus' ? opcionesRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
+  if(tipo==='estatus' && !opciones.length){ alert('Escribe al menos una opción para la columna de estatus.'); return; }
+  const t = PROY_TABLAS.find(x=>x.id===proyColTablaId);
+  if(!t) return;
+  t.columnas = t.columnas||[];
+  if(proyColEditId){
+    const c = t.columnas.find(x=>x.id===proyColEditId);
+    if(c){ c.label=label; c.tipo=tipo; c.opciones=opciones; }
+  } else {
+    t.columnas.push({id:'pcol_'+Date.now()+'_'+Math.random().toString(36).slice(2,5), label, tipo, opciones});
+  }
+  proyTablasSave();
+  proyColCerrarModal();
+  renderProyectos();
+}
+function proyColEliminar(tablaId, colId){
+  const t = PROY_TABLAS.find(x=>x.id===tablaId);
+  if(!t) return;
+  const c = (t.columnas||[]).find(x=>x.id===colId);
+  if(!c) return;
+  if(!confirm(`¿Eliminar la columna "${c.label}"? Se perderá esa información en todas las filas de esta tabla.`)) return;
+  t.columnas = t.columnas.filter(x=>x.id!==colId);
+  (t.filas||[]).forEach(f=>{ if(f.valores) delete f.valores[colId]; });
+  proyTablasSave();
+  renderProyectos();
+}
+
+// ── Modal: nueva/editar fila ──
+function proyFilaAbrirModal(tablaId, filaId){
+  const t = PROY_TABLAS.find(x=>x.id===tablaId);
+  if(!t) return;
+  if(!(t.columnas||[]).length){ alert('Agrega primero al menos una columna a esta tabla.'); return; }
+  proyFilaTablaId = tablaId;
+  proyFilaEditId = filaId || null;
+  const f = proyFilaEditId ? (t.filas||[]).find(x=>x.id===proyFilaEditId) : null;
+  document.getElementById('proyFilaModalTitle').textContent = f ? 'Editar fila' : 'Nueva fila';
+  document.getElementById('proyFilaModalBody').innerHTML = `
+    <div class="srv-form-grid">
+      ${t.columnas.map(c=>{
+        const val = (f && f.valores) ? (f.valores[c.id]||'') : '';
+        const valEsc = (val+'').replace(/"/g,'&quot;');
+        const inputId = 'proyFilaVal_'+c.id;
+        const labelEsc = (c.label||'').replace(/</g,'&lt;');
+        if(c.tipo==='fecha') return `<div class="srv-field"><label>${labelEsc}</label><input type="date" id="${inputId}" value="${valEsc}"></div>`;
+        if(c.tipo==='numero') return `<div class="srv-field"><label>${labelEsc}</label><input type="number" id="${inputId}" value="${valEsc}"></div>`;
+        if(c.tipo==='link') return `<div class="srv-field"><label>${labelEsc}</label><input type="url" id="${inputId}" value="${valEsc}" placeholder="https://…"></div>`;
+        if(c.tipo==='estatus'){
+          const opts = (c.opciones||[]).map(o=>`<option value="${o}" ${val===o?'selected':''}>${o}</option>`).join('');
+          return `<div class="srv-field"><label>${labelEsc}</label><select id="${inputId}"><option value="">— Seleccionar —</option>${opts}</select></div>`;
+        }
+        return `<div class="srv-field"><label>${labelEsc}</label><input type="text" id="${inputId}" value="${valEsc}"></div>`;
+      }).join('')}
+    </div>
+  `;
+  document.getElementById('proyFilaModal').classList.add('open');
+}
+function proyFilaCerrarModal(){
+  document.getElementById('proyFilaModal').classList.remove('open');
+  proyFilaTablaId = null; proyFilaEditId = null;
+}
+function proyFilaGuardarModal(){
+  const t = PROY_TABLAS.find(x=>x.id===proyFilaTablaId);
+  if(!t) return;
+  const valores = {};
+  (t.columnas||[]).forEach(c=>{
+    const el = document.getElementById('proyFilaVal_'+c.id);
+    valores[c.id] = el ? el.value : '';
+  });
+  t.filas = t.filas||[];
+  if(proyFilaEditId){
+    const f = t.filas.find(x=>x.id===proyFilaEditId);
+    if(f) f.valores = valores;
+  } else {
+    t.filas.push({id:'pfila_'+Date.now()+'_'+Math.random().toString(36).slice(2,5), valores});
+  }
+  proyTablasSave();
+  proyFilaCerrarModal();
+  renderProyectos();
+}
+function proyFilaEliminar(tablaId, filaId){
+  const t = PROY_TABLAS.find(x=>x.id===tablaId);
+  if(!t) return;
+  if(!confirm('¿Eliminar esta fila?')) return;
+  t.filas = (t.filas||[]).filter(x=>x.id!==filaId);
+  proyTablasSave();
+  renderProyectos();
+}
+
+// ── Sincronización con Supabase (tablas proy_proyectos / proy_tablas) ──
+async function supaSyncProyectos(){
+  if(!SUPA_ONLINE) return;
+  try{
+    if(!PROY_ITEMS.length) return;
+    const rows = PROY_ITEMS.map(p=>({
+      id:p.id, nombre:p.nombre||null, descripcion:p.descripcion||null, icono:p.icono||null,
+      updated_at:new Date().toISOString(),
+    }));
+    const {error} = await _supa.from('proy_proyectos').upsert(rows,{onConflict:'id'});
+    if(error){
+      console.error('❌ supaSyncProyectos:', error);
+      alert('Se guardó localmente en este navegador, pero NO se pudo guardar en Supabase, así que se puede perder al recargar o no lo va a ver el resto del equipo.\n\nMotivo: '+(error.message||error.code||'desconocido')+'\n\nEsto normalmente pasa si falta crear la tabla "proy_proyectos" en Supabase. Corre el SQL que te dio Claude.');
+    }
+  }catch(e){ console.error('❌ supaSyncProyectos exception:', e); }
+}
+async function supaSyncDeleteProyecto(id){
+  if(!SUPA_ONLINE) return;
+  try{ await _supa.from('proy_proyectos').delete().eq('id',id); }catch(e){}
+}
+async function supaSyncProyTablas(){
+  if(!SUPA_ONLINE) return;
+  try{
+    if(!PROY_TABLAS.length) return;
+    const rows = PROY_TABLAS.map(t=>({
+      id:t.id, proyecto_id:t.proyectoId||null, nombre:t.nombre||null,
+      columnas:t.columnas||[], filas:t.filas||[], updated_at:new Date().toISOString(),
+    }));
+    const {error} = await _supa.from('proy_tablas').upsert(rows,{onConflict:'id'});
+    if(error){
+      console.error('❌ supaSyncProyTablas:', error);
+      alert('Se guardó localmente en este navegador, pero NO se pudo guardar en Supabase, así que se puede perder al recargar o no lo va a ver el resto del equipo.\n\nMotivo: '+(error.message||error.code||'desconocido')+'\n\nEsto normalmente pasa si falta crear la tabla "proy_tablas" en Supabase. Corre el SQL que te dio Claude.');
+    }
+  }catch(e){ console.error('❌ supaSyncProyTablas exception:', e); }
+}
+async function supaSyncDeleteProyTabla(id){
+  if(!SUPA_ONLINE) return;
+  try{ await _supa.from('proy_tablas').delete().eq('id',id); }catch(e){}
+}
+
 function scoreColor(s){return s>=80?'#3dd68c':s>=60?'#f5a623':'#ff5c5c';}
 function scoreLabel(s){return s>=80?'Destacado':s>=60?'Regular':'Atención';}
 
@@ -12466,7 +13034,7 @@ function toggleEval(p){
   renderEvaluaciones();
 }
 
-const VIDS=['overview','team','tasks','detalle','charts','reporteo','calidad','udemy','evaluaciones','panel','equipo','ausencias','dashboards','herramientas','seguimiento','servicios','sbi'];
+const VIDS=['overview','team','tasks','detalle','charts','reporteo','calidad','udemy','evaluaciones','panel','equipo','ausencias','dashboards','herramientas','seguimiento','servicios','sbi','proyectos'];
 function goView(name){
   curView=name;
   VIDS.forEach(v=>{ const el=document.getElementById('v-'+v); if(el) el.style.display=v===name?'':'none'; });
@@ -12490,6 +13058,7 @@ function refresh(){
   else if(curView==='equipo') renderEquipo();
   else if(curView==='ausencias') renderAusencias();
   else if(curView==='sbi') renderSbi();
+  else if(curView==='proyectos') renderProyectos();
   else if(curView==='herramientas') herrRenderGrid();
   else if(curView==='charts' && ROWS.length>0) setTimeout(buildCharts,30);
 }
@@ -17962,6 +18531,11 @@ function applyRole(role, nombre){
   if(sbiBtn) sbiBtn.style.display = (role==='admin') ? '' : 'none';
   if(role !== 'admin' && curView === 'sbi') goView('seguimiento');
 
+  // Proyectos: espacio de carpetas y tablas de seguimiento, solo visible/accesible para admin
+  var proyBtn = document.getElementById('navProyectosBtn');
+  if(proyBtn) proyBtn.style.display = (role==='admin') ? '' : 'none';
+  if(role !== 'admin' && curView === 'proyectos') goView('seguimiento');
+
   // Ahora que ya se conoce el rol/nombre, activar el canal de notificaciones propias
   // del proyectista (no se puede activar antes porque no se conocía _miNombre).
   if(role === 'proyectista' && typeof supaStartProyNotifRealtime==='function') supaStartProyNotifRealtime();
@@ -17983,6 +18557,11 @@ function setupGoViewGuard(){
     // Feedback SBI es un espacio privado del administrador — nadie más puede entrar,
     // ni siquiera el rol "jefe".
     if(name === 'sbi' && _userRole !== 'admin'){
+      _origGoView('seguimiento');
+      return;
+    }
+    // Proyectos también es exclusivo del administrador.
+    if(name === 'proyectos' && _userRole !== 'admin'){
       _origGoView('seguimiento');
       return;
     }
@@ -22032,6 +22611,18 @@ async function supaLoadAll(){
         avObj[r.actividad_id][r.proyectista]={estatus:r.estatus, nota:r.nota, km:r.km};
       });
       localStorage.setItem(AVANCE_KEY, JSON.stringify(avObj));
+    }
+
+    // 18. Proyectos (carpetas + tablas de seguimiento a la medida)
+    const { data: proys } = await _supa.from('proy_proyectos').select('*').order('created_at',{ascending:true});
+    if(proys && proys.length){
+      PROY_ITEMS = proys.map(p=>({ id:p.id, nombre:p.nombre||'', descripcion:p.descripcion||'', icono:p.icono||'', createdAt:p.created_at }));
+      localStorage.setItem(PROY_KEY, JSON.stringify(PROY_ITEMS));
+    }
+    const { data: ptabs } = await _supa.from('proy_tablas').select('*').order('created_at',{ascending:true});
+    if(ptabs && ptabs.length){
+      PROY_TABLAS = ptabs.map(t=>({ id:t.id, proyectoId:t.proyecto_id||'', nombre:t.nombre||'', columnas:t.columnas||[], filas:t.filas||[], createdAt:t.created_at }));
+      localStorage.setItem(PROY_TAB_KEY, JSON.stringify(PROY_TABLAS));
     }
 
     // Refrescar vista actual
