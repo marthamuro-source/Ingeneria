@@ -10187,21 +10187,32 @@ function calGenerarReporteReporteo(){
 
   // Días hábiles transcurridos del rango (no cuenta días futuros que aún no pueden tener reporte)
   let diasHabiles = 0;
+  const diasHabilesLista = [];
   {
     let d = new Date(rangeStart);
     const fin = rangeEnd < now ? rangeEnd : now;
     while(d <= fin){
       const key = repDateKey(d);
-      if(!isWeekend(d) && !(typeof FESTIVOS!=='undefined' && FESTIVOS.includes(key))) diasHabiles++;
+      if(!isWeekend(d) && !(typeof FESTIVOS!=='undefined' && FESTIVOS.includes(key))){ diasHabiles++; diasHabilesLista.push(key); }
       d.setDate(d.getDate()+1);
     }
   }
 
-  // Resumen por persona — solo si se incluyó a todo el equipo (si se filtró a alguien, el detalle ya es suficiente)
+  // Resumen por persona — solo si se incluyó a todo el equipo (si se filtró a alguien, el detalle ya es suficiente).
+  // Días justificados / sin reporte se calculan sobre los días hábiles del período (mismo criterio que el
+  // widget de cumplimiento del dashboard): un día hábil sin reporte cuenta como justificado si hay una
+  // justificación manual o si la persona estaba de vacaciones (justGet); si no, cuenta como "sin reporte".
   const resumenPersonas = (!proyFiltro ? [...PA_MEMBERS] : []).map(nombre=>{
     const repsPersona = reps.filter(r=>r.quien===nombre);
-    const diasReportados = new Set(repsPersona.map(r=>r.fecha)).size;
-    return { nombre, totalReportes: repsPersona.length, diasReportados };
+    const reportadosSet = new Set(repsPersona.map(r=>r.fecha));
+    const diasReportados = reportadosSet.size;
+    let diasJustificados = 0, diasSinReporte = 0;
+    diasHabilesLista.forEach(d=>{
+      if(reportadosSet.has(d)) return;
+      if(typeof justGet==='function' && justGet(d, nombre)) diasJustificados++;
+      else diasSinReporte++;
+    });
+    return { nombre, totalReportes: repsPersona.length, diasReportados, diasJustificados, diasSinReporte };
   }).sort((a,b)=>b.totalReportes-a.totalReportes);
 
   const genStr = now.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
@@ -10248,8 +10259,8 @@ function calGenerarReporteReporteo(){
   </div>
   ${resumenPersonas.length ? `
   <div class="sec">Resumen por proyectista</div>
-  <table class="resumen-table"><thead><tr><th>Proyectista</th><th>Reportes</th><th>Días reportados</th></tr></thead><tbody>
-    ${resumenPersonas.map(p=>`<tr><td>${p.nombre}</td><td>${p.totalReportes}</td><td>${p.diasReportados}</td></tr>`).join('')}
+  <table class="resumen-table"><thead><tr><th>Proyectista</th><th>Reportes</th><th>Días reportados</th><th>Días justificados</th><th>Días sin reporte</th></tr></thead><tbody>
+    ${resumenPersonas.map(p=>`<tr><td>${p.nombre}</td><td>${p.totalReportes}</td><td>${p.diasReportados}</td><td>${p.diasJustificados}</td><td style="${p.diasSinReporte>0?'color:#c0392b;font-weight:700':''}">${p.diasSinReporte}</td></tr>`).join('')}
   </tbody></table>` : ''}
   <div class="sec">Detalle de reportes</div>
   ${fechas.length ? fechas.map(fecha=>{
@@ -14302,9 +14313,12 @@ function paReporteCargaTodos(period){
 
   // Por persona: mismo criterio que el reporte individual — se agrupa únicamente por el
   // nombre real del proyecto (a.proyecto), sin respaldo al propietario y sin lista fija.
+  // No se toma en cuenta "Trabajo Operativo": este reporte es solo carga de Proyecto,
+  // Conectividad e Impresiones.
   const porPersona = nombresEquipo.map(name=>{
     const all = PA_ITEMS.filter(a=>{
       if(a.responsable!==name) return false;
+      if(a.tipo==='Trabajo Operativo') return false;
       if(period==='all') return true;
       const ref = a.fechaAsig ? new Date(a.fechaAsig+'T00:00:00') : new Date(a.createdAt||0);
       return ref >= rangeStart && ref <= rangeEnd;
@@ -14373,6 +14387,7 @@ function paReporteCargaTodos(period){
       <div class="doc-sub" style="color:#aaa;font-size:10px;margin-top:2px">${genStr}</div>
     </div>
   </div>
+  <div style="font-size:10px;color:#888;margin:-14px 0 18px">Incluye actividades de Proyecto, Conectividad e Impresiones · No incluye Trabajo Operativo</div>
 
   ${personasHTML}
 
