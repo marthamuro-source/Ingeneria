@@ -3397,7 +3397,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <!-- Home Office -->
       <div class="panel" style="margin-bottom:18px">
         <div class="ph"><div><div class="pt">Home Office</div><div class="ps">Asignación semanal — quién está en casa y quién en oficina</div></div>
-          <button id="hoEditBtn" class="ho-edit-btn" onclick="hoOpenModal()">✏️ Editar días</button>
+          <div style="display:flex;gap:8px">
+            <button class="ho-edit-btn" onclick="hoAbrirPlaneacionViernes()" title="Ver la planeación del ciclo de viernes con fechas reales">📅 Planeación viernes</button>
+            <button id="hoEditBtn" class="ho-edit-btn" onclick="hoOpenModal()">✏️ Editar días</button>
+          </div>
         </div>
         <div class="pb">
           <div id="ausWeekGrid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px"></div>
@@ -17855,7 +17858,14 @@ function hoMondayOf(date){
   return d;
 }
 const HO_WEEK_ANCHOR_KEY = 'ho_week_anchor_v1';
+// Ancla del ciclo de viernes: se sincroniza en Supabase (tabla home_office, misma fila 'schedule' que
+// ya guarda HO_PATTERN) para que TODOS los navegadores calculen la misma "semana en curso" — antes
+// vivía solo en localStorage y por eso cada navegador podía marcar una semana distinta del ciclo.
+let HO_WEEK_ANCHOR_SYNCED = null; // {date, weekIdx} cargado de Supabase, o null si aún no hay dato ahí
 function hoGetWeekAnchor(){
+  if(HO_WEEK_ANCHOR_SYNCED && HO_WEEK_ANCHOR_SYNCED.date && Number.isInteger(HO_WEEK_ANCHOR_SYNCED.weekIdx)){
+    return HO_WEEK_ANCHOR_SYNCED;
+  }
   try{
     const raw = localStorage.getItem(HO_WEEK_ANCHOR_KEY);
     if(raw){
@@ -17868,7 +17878,24 @@ function hoGetWeekAnchor(){
 function hoSetWeekAnchor(weekIdx){
   const mon = hoMondayOf(new Date());
   const anchor = { date: mon.toISOString().slice(0,10), weekIdx: weekIdx };
+  HO_WEEK_ANCHOR_SYNCED = anchor; // reflejar de inmediato en esta sesión
   try{ localStorage.setItem(HO_WEEK_ANCHOR_KEY, JSON.stringify(anchor)); }catch(e){ console.warn('hoSetWeekAnchor error', e); }
+  if(typeof hoSaveWeekAnchorToSupabase==='function') hoSaveWeekAnchorToSupabase(anchor);
+}
+// Guarda la ancla en la misma fila 'schedule' de la tabla home_office, para que se aplique a todo
+// el equipo y no solo a este navegador. Si las columnas anchor_fecha/anchor_semana todavía no existen
+// en Supabase, el upsert de HO_PATTERN sigue funcionando igual (esas dos columnas van aparte).
+async function hoSaveWeekAnchorToSupabase(anchor){
+  if(!_supa) return;
+  try{
+    const { error } = await _supa.from('home_office').upsert({
+      id:'schedule', anchor_fecha: anchor.date, anchor_semana: anchor.weekIdx, updated_at: new Date().toISOString()
+    }, {onConflict:'id'});
+    if(error){
+      console.error('❌ hoSaveWeekAnchorToSupabase:', error);
+      alert('La corrección de semana se guardó solo en este navegador, no se pudo compartir con el resto del equipo.\n\nMotivo: '+(error.message||error.code||'desconocido')+'\n\nEsto normalmente pasa si faltan las columnas "anchor_fecha"/"anchor_semana" en la tabla "home_office". Corre el SQL que te dio Claude para agregarlas.');
+    }
+  }catch(e){ console.error('❌ hoSaveWeekAnchorToSupabase excepción:', e); }
 }
 function ausGetCycleWeek(date){
   const totalSem = (Array.isArray(HO_PATTERN.viernes) && HO_PATTERN.viernes.length) ? HO_PATTERN.viernes.length : 4;
@@ -21782,6 +21809,9 @@ async function hoLoadSchedule(){
       HO_PATTERN.miercoles = data.miercoles || HO_PATTERN.miercoles;
       HO_PATTERN.jueves    = data.jueves    || HO_PATTERN.jueves;
       HO_PATTERN.viernes   = data.viernes   || HO_PATTERN.viernes;
+      if(data.anchor_fecha && Number.isInteger(data.anchor_semana)){
+        HO_WEEK_ANCHOR_SYNCED = { date: data.anchor_fecha, weekIdx: data.anchor_semana };
+      }
     } else {
       // Primera vez: subir el default
       await hoSaveSchedule();
@@ -21798,6 +21828,46 @@ async function hoSaveSchedule(){
       updated_at: new Date().toISOString()
     }, {onConflict:'id'});
   }catch(e){ console.warn('hoSaveSchedule error',e); }
+}
+// Planeación del ciclo de viernes: siempre calcula los próximos N viernes REALES a partir de hoy
+// (N = número de semanas del ciclo, HO_PATTERN.viernes.length) y para cada uno resuelve qué semana
+// del ciclo le toca con ausGetCycleWeek(). Así, cuando el ciclo se reinicia, la lista automáticamente
+// muestra los siguientes N viernes reales — no hay "Sem 1..Sem N" fijas que se queden desactualizadas.
+function hoAbrirPlaneacionViernes(){
+  hoLoadSchedule().then(()=>{ hoRenderPlaneacionViernes(); }).catch(()=>{ hoRenderPlaneacionViernes(); });
+  hoRenderPlaneacionViernes();
+  document.getElementById('hoPlanBg').classList.add('open');
+}
+function hoRenderPlaneacionViernes(){
+  const totalSem = (Array.isArray(HO_PATTERN.viernes) && HO_PATTERN.viernes.length) ? HO_PATTERN.viernes.length : 4;
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  let d = new Date(hoy);
+  while(d.getDay() !== 5) d.setDate(d.getDate()+1); // próximo viernes (incluye hoy si hoy es viernes)
+  const filas = [];
+  for(let i=0;i<totalSem;i++){
+    const fecha = new Date(d); fecha.setDate(d.getDate()+i*7);
+    const semIdx = ausGetCycleWeek(fecha);
+    const personas = HO_PATTERN.viernes[semIdx] || [];
+    filas.push({fecha, semIdx, personas});
+  }
+  const sub = document.getElementById('hoPlanSub');
+  if(sub) sub.textContent = `Próximos ${totalSem} viernes · se actualiza solo cuando el ciclo se reinicia`;
+  const body = document.getElementById('hoPlanBody');
+  if(body){
+    body.innerHTML = filas.map(f=>{
+      const fechaStr = f.fecha.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
+      const nombres = f.personas.length ? f.personas.map(n=>n.split(' ').slice(0,2).join(' ')).join(', ') : '<span style="color:var(--muted)">Nadie asignado</span>';
+      return `<div style="padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:700;text-transform:capitalize">${fechaStr}</div>
+        <div style="font-size:10px;color:var(--muted);margin:2px 0 6px">Semana ${f.semIdx+1} del ciclo</div>
+        <div style="font-size:12px">🏠 ${nombres}</div>
+      </div>`;
+    }).join('');
+  }
+}
+function hoCerrarPlaneacionViernes(){
+  const el = document.getElementById('hoPlanBg');
+  if(el) el.classList.remove('open');
 }
 let hoActiveViernesSem = 0;
 function hoOpenModal(){
@@ -23231,6 +23301,22 @@ supaTestConnection().then(()=>{
     <div class="ho-modal-footer">
       <button class="ho-btn ho-btn-cancel" onclick="hoCloseModal()">Cancelar</button>
       <button class="ho-btn ho-btn-save" onclick="hoSaveModal()">💾 Guardar cambios</button>
+    </div>
+  </div>
+</div>
+<!-- MODAL: planeación del ciclo de viernes (próximos N viernes con fecha real) -->
+<div class="ho-modal-bg" id="hoPlanBg" onclick="if(event.target===this)hoCerrarPlaneacionViernes()">
+  <div class="ho-modal" style="max-width:460px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">
+      <div>
+        <div class="ho-modal-title">📅 Planeación de Home Office — Viernes</div>
+        <div class="ho-modal-sub" id="hoPlanSub"></div>
+      </div>
+      <button class="ho-btn ho-btn-cancel" style="padding:4px 10px;font-size:11px" onclick="hoCerrarPlaneacionViernes()">✕</button>
+    </div>
+    <div id="hoPlanBody"></div>
+    <div class="ho-modal-footer">
+      <button class="ho-btn ho-btn-cancel" onclick="hoCerrarPlaneacionViernes()">Cerrar</button>
     </div>
   </div>
 </div>
