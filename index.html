@@ -17862,24 +17862,23 @@ const HO_WEEK_ANCHOR_KEY = 'ho_week_anchor_v1';
 // ya guarda HO_PATTERN) para que TODOS los navegadores calculen la misma "semana en curso" — antes
 // vivía solo en localStorage y por eso cada navegador podía marcar una semana distinta del ciclo.
 let HO_WEEK_ANCHOR_SYNCED = null; // {date, weekIdx} cargado de Supabase, o null si aún no hay dato ahí
+// IMPORTANTE: esta función NO debe leer localStorage como respaldo. Si cada navegador pudiera caer
+// de vuelta a su propio valor guardado localmente, dos navegadores con historiales distintos (por
+// ejemplo, uno donde el admin corrigió la semana hace tiempo y otro que nunca la corrigió) terminan
+// calculando semanas distintas — que es exactamente el bug reportado. La única fuente de verdad
+// compartida por todos los roles es Supabase; si todavía no hay nada ahí, TODOS usan el mismo
+// valor por defecto (nunca el localStorage de este navegador en particular).
 function hoGetWeekAnchor(){
   if(HO_WEEK_ANCHOR_SYNCED && HO_WEEK_ANCHOR_SYNCED.date && Number.isInteger(HO_WEEK_ANCHOR_SYNCED.weekIdx)){
     return HO_WEEK_ANCHOR_SYNCED;
   }
-  try{
-    const raw = localStorage.getItem(HO_WEEK_ANCHOR_KEY);
-    if(raw){
-      const p = JSON.parse(raw);
-      if(p && p.date && Number.isInteger(p.weekIdx)) return p;
-    }
-  }catch(e){}
   return { date: '2026-06-15', weekIdx: 0 }; // ancla por defecto: lunes 15 jun 2026 = Semana 1
 }
 function hoSetWeekAnchor(weekIdx){
   const mon = hoMondayOf(new Date());
   const anchor = { date: mon.toISOString().slice(0,10), weekIdx: weekIdx };
-  HO_WEEK_ANCHOR_SYNCED = anchor; // reflejar de inmediato en esta sesión
-  try{ localStorage.setItem(HO_WEEK_ANCHOR_KEY, JSON.stringify(anchor)); }catch(e){ console.warn('hoSetWeekAnchor error', e); }
+  HO_WEEK_ANCHOR_SYNCED = anchor; // reflejar de inmediato en esta sesión (fuente de verdad en memoria)
+  try{ localStorage.setItem(HO_WEEK_ANCHOR_KEY, JSON.stringify(anchor)); }catch(e){ console.warn('hoSetWeekAnchor error', e); } // solo respaldo, ya no se lee
   if(typeof hoSaveWeekAnchorToSupabase==='function') hoSaveWeekAnchorToSupabase(anchor);
 }
 // Guarda la ancla en la misma fila 'schedule' de la tabla home_office, para que se aplique a todo
