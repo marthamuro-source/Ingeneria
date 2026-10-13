@@ -17842,7 +17842,8 @@ const HO_PATTERN = {
   martes:    ['Raquel'],                                                          // fijo todas las semanas
   miercoles: ['Llense Omar Torres Almeraya', 'Edgar Daniel Reyes Vega'],          // fijo todas las semanas
   jueves:    ['Jonathan Isidro Hernandez Hernandez', 'Isabel Adriana Roa Hernandez'], // fijo todas las semanas
-  viernes: [ // varía por semana del ciclo
+  viernes_fijo: [], // Viernes normal: fijo todas las semanas (como lunes a jueves)
+  viernes: [ // "Viernes de 2do día especial": varía por semana del ciclo
     ['Mauricio Garduño Silverio', 'Sergio Daniel Hernández Alvarado'], // semana 1
     ['Isabel Adriana Roa Hernandez'],                                  // semana 2
     ['Edgar Daniel Reyes Vega', 'Llense Omar Torres Almeraya'],        // semana 3
@@ -17917,7 +17918,12 @@ function ausHomeOfficeFor(date){
   if(dow===2) return HO_PATTERN.martes;
   if(dow===3) return HO_PATTERN.miercoles;
   if(dow===4) return HO_PATTERN.jueves;
-  if(dow===5) return HO_PATTERN.viernes[weekIdx];
+  if(dow===5){
+    // Viernes = los del Viernes normal (fijo) + los del "2do día especial" que le toca a esta semana del ciclo
+    const fijo = Array.isArray(HO_PATTERN.viernes_fijo) ? HO_PATTERN.viernes_fijo : [];
+    const esp  = (HO_PATTERN.viernes && HO_PATTERN.viernes[weekIdx]) || [];
+    return [...new Set([...fijo, ...esp])];
+  }
   return [];
 }
 
@@ -21808,6 +21814,7 @@ async function hoLoadSchedule(){
       HO_PATTERN.miercoles = data.miercoles || HO_PATTERN.miercoles;
       HO_PATTERN.jueves    = data.jueves    || HO_PATTERN.jueves;
       HO_PATTERN.viernes   = data.viernes   || HO_PATTERN.viernes;
+      if(Array.isArray(data.viernes_fijo)) HO_PATTERN.viernes_fijo = data.viernes_fijo;
       if(data.anchor_fecha && Number.isInteger(data.anchor_semana)){
         HO_WEEK_ANCHOR_SYNCED = { date: data.anchor_fecha, weekIdx: data.anchor_semana };
       }
@@ -21827,6 +21834,18 @@ async function hoSaveSchedule(){
       updated_at: new Date().toISOString()
     }, {onConflict:'id'});
   }catch(e){ console.warn('hoSaveSchedule error',e); }
+  // Viernes normal (fijo) va en su propia columna: si todavía no existe en Supabase, lo demás se guarda igual.
+  try{
+    const { error } = await _supa.from('home_office').upsert({
+      id:'schedule', viernes_fijo: HO_PATTERN.viernes_fijo || [], updated_at: new Date().toISOString()
+    }, {onConflict:'id'});
+    if(error){
+      console.error('❌ hoSaveSchedule viernes_fijo:', error);
+      if((HO_PATTERN.viernes_fijo||[]).length){
+        alert('El "Viernes" normal se guardó solo en este navegador, no se pudo compartir con el equipo.\n\nMotivo: '+(error.message||error.code||'desconocido')+'\n\nFalta la columna "viernes_fijo" en la tabla "home_office". Corre el SQL que te dio Claude para agregarla.');
+      }
+    }
+  }catch(e){ console.warn('hoSaveSchedule viernes_fijo error',e); }
 }
 // Planeación del ciclo de viernes: siempre calcula los próximos N viernes REALES a partir de hoy
 // (N = número de semanas del ciclo, HO_PATTERN.viernes.length) y para cada uno resuelve qué semana
@@ -21847,10 +21866,10 @@ function hoRenderPlaneacionViernes(){
     const fecha = new Date(d); fecha.setDate(d.getDate()+i*7);
     const semIdx = ausGetCycleWeek(fecha);
     const personas = HO_PATTERN.viernes[semIdx] || [];
-    filas.push({fecha, semIdx, personas});
+    filas.push({fecha, semIdx, personas, fijo: HO_PATTERN.viernes_fijo || []});
   }
   const sub = document.getElementById('hoPlanSub');
-  if(sub) sub.textContent = `Próximos ${totalSem} viernes · se actualiza solo cuando el ciclo se reinicia`;
+  if(sub) sub.textContent = `Próximos ${totalSem} viernes · quién tiene su 2do día especial · se actualiza solo cuando el ciclo se reinicia`;
   const body = document.getElementById('hoPlanBody');
   if(body){
     body.innerHTML = filas.map(f=>{
@@ -21859,7 +21878,8 @@ function hoRenderPlaneacionViernes(){
       return `<div style="padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px">
         <div style="font-size:12px;font-weight:700;text-transform:capitalize">${fechaStr}</div>
         <div style="font-size:10px;color:var(--muted);margin:2px 0 6px">Semana ${f.semIdx+1} del ciclo</div>
-        <div style="font-size:12px">🏠 ${nombres}</div>
+        <div style="font-size:12px">⭐ ${nombres}</div>
+        ${f.fijo.length ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">🏠 Viernes normal: ${f.fijo.map(n=>n.split(' ').slice(0,2).join(' ')).join(', ')}</div>` : ''}
       </div>`;
     }).join('');
   }
@@ -21876,25 +21896,36 @@ function hoOpenModal(){
   document.getElementById('hoModalBg').classList.add('open');
 }
 function hoCloseModal(){ document.getElementById('hoModalBg').classList.remove('open'); }
+// Lista guardada de un panel: 'viernes' = Viernes normal (fijo), 'viernes_esp' = 2do día especial (semana en edición)
+function hoPatList(day){
+  if(day==='viernes') return Array.isArray(HO_PATTERN.viernes_fijo) ? HO_PATTERN.viernes_fijo : [];
+  if(day==='viernes_esp') return (HO_PATTERN.viernes && HO_PATTERN.viernes[hoActiveViernesSem]) || [];
+  return HO_PATTERN[day] || [];
+}
 function hoRenderModal(){
   const days = [
     {key:'lunes',label:'Lunes'},{key:'martes',label:'Martes'},
     {key:'miercoles',label:'Miércoles'},{key:'jueves',label:'Jueves'},{key:'viernes',label:'Viernes'},
+    {key:'viernes_esp',label:'Viernes de 2do día especial'},
   ];
   let html = '';
   days.forEach(day=>{
-    const isV = day.key==='viernes';
-    const currentHO = isV ? (HO_PATTERN.viernes[hoActiveViernesSem]||[]) : (HO_PATTERN[day.key]||[]);
-    const enOf = PA_MEMBERS.length - currentHO.length;
+    const isV = day.key==='viernes_esp';
+    const isFriday = day.key==='viernes' || isV;
+    const currentHO = hoPatList(day.key);
+    // En viernes, el cupo de oficina se calcula con el Viernes normal + el 2do día especial juntos
+    const countList = isFriday ? [...new Set([...hoPatList('viernes'), ...hoPatList('viernes_esp')])] : currentHO;
+    const enOf = PA_MEMBERS.length - countList.length;
     const over = enOf > HO_CAPACITY;
     html += `<div class="ho-day-section">
       <div class="ho-day-head" onclick="hoToggleSection('${day.key}')">
         <span class="ho-day-name">${day.label}</span>
-        <span class="ho-day-count${over?' over':''}">🏠 ${currentHO.length} HO · 🏢 ${enOf} oficina${over?' ⚠️':''}</span>
+        <span class="ho-day-count${over?' over':''}">🏠 ${countList.length} HO · 🏢 ${enOf} oficina${over?' ⚠️':''}</span>
       </div>
       <div class="ho-day-body" id="hoSec-${day.key}">`;
     if(isV){
       if(!Array.isArray(HO_PATTERN.viernes) || !HO_PATTERN.viernes.length) HO_PATTERN.viernes=[[],[],[],[]];
+      html += `<div style="font-size:10px;color:var(--muted);margin-bottom:6px">Este día se suma al Viernes normal: quien esté marcado aquí tiene su 2do día de home ese viernes.</div>`;
       const hoyWeekIdx = ausGetCycleWeek(new Date());
       html += `<div class="ho-week-current">Semana en curso hoy: <b>Sem ${hoyWeekIdx+1}</b> · Estás editando: <b style="color:var(--accent)">Sem ${hoActiveViernesSem+1}</b> <button class="ho-week-fix-btn" onclick="hoToggleFixWeek()">Corregir semana actual</button></div>
       <div id="hoFixWeekBox" class="ho-fix-week-box" style="display:none">
@@ -21956,17 +21987,28 @@ function hoRemoveViernesSem(idx){
 }
 function hoCheckboxChange(chk){
   const day=chk.dataset.day, name=chk.dataset.name;
-  const isV=day==='viernes';
-  let cur = isV ? [...(HO_PATTERN.viernes[hoActiveViernesSem]||[])] : [...(HO_PATTERN[day]||[])];
-  if(chk.checked){ if(!cur.includes(name)) cur.push(name); } else { cur=cur.filter(n=>n!==name); }
+  const isFriday = day==='viernes' || day==='viernes_esp';
+  let cur;
+  if(isFriday){
+    // unión de lo marcado en los dos paneles de viernes (Viernes normal + 2do día especial)
+    cur=[...new Set([...document.querySelectorAll('[data-day="viernes"]:checked, [data-day="viernes_esp"]:checked')].map(c=>c.dataset.name))];
+  } else {
+    cur=[...(HO_PATTERN[day]||[])];
+    if(chk.checked){ if(!cur.includes(name)) cur.push(name); } else { cur=cur.filter(n=>n!==name); }
+  }
   const enOf=PA_MEMBERS.length-cur.length, over=enOf>HO_CAPACITY;
-  const head=chk.closest('.ho-day-section')?.querySelector('.ho-day-count');
-  if(head){ head.textContent=`🏠 ${cur.length} HO · 🏢 ${enOf} oficina${over?' ⚠️':''}`; head.classList.toggle('over',over); }
-  const warn=document.getElementById('hoWarn-'+day);
-  if(warn){ warn.classList.toggle('show',over); warn.textContent=over?`⚠️ ${enOf} personas en oficina — excede el límite de ${HO_CAPACITY}.`:''; }
+  const warnText=over?`⚠️ ${enOf} personas en oficina — excede el límite de ${HO_CAPACITY}.`:'';
+  const secKeys = isFriday ? ['viernes','viernes_esp'] : [day];
+  secKeys.forEach(k=>{
+    const sec=document.getElementById('hoSec-'+k);
+    const head=sec?.parentElement?.querySelector('.ho-day-count');
+    if(head){ head.textContent=`🏠 ${cur.length} HO · 🏢 ${enOf} oficina${over?' ⚠️':''}`; head.classList.toggle('over',over); }
+    const warn=document.getElementById('hoWarn-'+k);
+    if(warn){ warn.classList.toggle('show',over); warn.textContent=warnText; }
+  });
   const lbl=chk.parentElement?.querySelector('span:last-child');
   if(lbl){ lbl.textContent=chk.checked?'🏠 Home':'🏢 Oficina'; lbl.style.color=chk.checked?'var(--accent)':'var(--muted)'; }
-  if(over) hoShowToast(`${enOf} personas en oficina el ${day} — solo hay ${HO_CAPACITY} lugares`);
+  if(over) hoShowToast(`${enOf} personas en oficina el ${day==='viernes_esp'?'viernes':day} — solo hay ${HO_CAPACITY} lugares`);
 }
 function hoSaveModal(){
   ['lunes','martes','miercoles','jueves'].forEach(day=>{
@@ -21974,8 +22016,11 @@ function hoSaveModal(){
     document.querySelectorAll(`[data-day="${day}"]:checked`).forEach(c=>checked.push(c.dataset.name));
     HO_PATTERN[day]=checked;
   });
+  const fijoChecked=[];
+  document.querySelectorAll('[data-day="viernes"]:checked').forEach(c=>fijoChecked.push(c.dataset.name));
+  HO_PATTERN.viernes_fijo=fijoChecked;
   const vChecked=[];
-  document.querySelectorAll('[data-day="viernes"]:checked').forEach(c=>vChecked.push(c.dataset.name));
+  document.querySelectorAll('[data-day="viernes_esp"]:checked').forEach(c=>vChecked.push(c.dataset.name));
   if(!Array.isArray(HO_PATTERN.viernes)) HO_PATTERN.viernes=[[],[],[],[]];
   HO_PATTERN.viernes[hoActiveViernesSem]=vChecked;
   hoSaveSchedule();
@@ -23308,7 +23353,7 @@ supaTestConnection().then(()=>{
   <div class="ho-modal" style="max-width:460px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">
       <div>
-        <div class="ho-modal-title">📅 Planeación de Home Office — Viernes</div>
+        <div class="ho-modal-title">📅 Planeación — Viernes de 2do día especial</div>
         <div class="ho-modal-sub" id="hoPlanSub"></div>
       </div>
       <button class="ho-btn ho-btn-cancel" style="padding:4px 10px;font-size:11px" onclick="hoCerrarPlaneacionViernes()">✕</button>
