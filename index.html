@@ -8893,6 +8893,8 @@ function planBuildHTML() {
           }
           if(vacSet && vacSet.has) isVac = vacSet.has(dayStr);
         }
+        // Día de vacaciones: no se muestran las actividades de ese día, solo "VACACIONES"
+        if(isVac) dayActs = [];
 
         var cellBg0 = isToday?'rgba(42,120,214,.06)':'rgba(255,255,255,.02)';
         var cellBord = isToday?'rgba(42,120,214,.3)':'rgba(255,255,255,.05)';
@@ -9130,6 +9132,7 @@ function planExportPDF() {
         var vs=typeof VACACIONES!=='undefined'&&VACACIONES?VACACIONES[member]:null;
         if(!vs&&typeof VACACIONES!=='undefined'&&VACACIONES){Object.keys(VACACIONES).forEach(function(k){if(member.indexOf(k.split(' ')[0])>=0)vs=VACACIONES[k];});}
         var isVac=vs&&vs.has&&vs.has(ds);
+        if(isVac) acts=[]; // día de vacaciones: solo se marca "Vacaciones", sin actividades
         var isOnly=acts.length===1&&!isVac;
         h+='<td'+(isVac?' class="vc"':'')+' style="min-width:80px;padding:4px;vertical-align:top">';
         h+='<div class="day-cell">';
