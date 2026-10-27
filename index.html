@@ -9048,7 +9048,7 @@ function planExportPDF() {
     +'.cal-table tr{page-break-inside:avoid;break-inside:avoid}'
     +'.cal-table td,.cal-table th{border:1px solid #e5e7eb;padding:4px;vertical-align:top;font-size:9.5px}'
     +'.cal-table th{background:#f0f4f8;color:#0f2744;text-align:center;font-size:10px;font-weight:600;white-space:nowrap}'
-    +'.ncel{width:90px;white-space:nowrap;background:#f9fafb;vertical-align:middle;font-size:10px}'
+    +'.ncel{width:90px;white-space:normal;background:#f9fafb;vertical-align:middle;font-size:10px}'
     +'.day-cell{display:flex;flex-direction:column;gap:4px;height:100%}'
     +'.chip{border-radius:5px;padding:5px 7px;font-size:9.5px;line-height:1.35;word-break:break-word;box-sizing:border-box}'
     +'.chip-solo{flex:1;display:flex;flex-direction:column;justify-content:center;padding:9px 10px;border-radius:6px}'
@@ -9125,7 +9125,7 @@ function planExportPDF() {
     h+='</tr></thead><tbody>';
     PA_MEMBERS.forEach(function(member){
       var col=gc(member),ini=gi(member);
-      h+='<tr><td class="ncel"><span class="av" style="background:'+col+'">'+ini+'</span>'+member.split(' ').slice(0,2).join(' ')+'</td>';
+      h+='<tr><td class="ncel"><span class="av" style="background:'+col+'">'+ini+'</span><span style="display:inline-block;vertical-align:middle;line-height:1.25">'+member.split(' ').slice(0,2).join('<br>')+'</span></td>';
       week.forEach(function(day){
         var ds=day.toISOString().slice(0,10);
         var acts=PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return ds>=a.fechaAsig&&ds<=(a.fechaTermino||a.fechaAsig);});
@@ -9162,7 +9162,7 @@ function planExportPDF() {
   });
 
   // 3. LISTA
-  h+='<div class="sec" style="margin-top:20px">Lista de actividades por proyectista</div>';
+  h+='<div class="sec" style="margin-top:0;page-break-before:always;break-before:page">Lista de actividades por proyectista</div>';
   weeks.forEach(function(week,wi){
     var wS=week[0].toISOString().slice(0,10),wE=week[4].toISOString().slice(0,10);
     h+='<div class="whdr">Semana '+(wi+1)+' - '+fWk(week)+'</div>';
