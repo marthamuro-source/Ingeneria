@@ -14412,7 +14412,8 @@ function paReporteCargaTodos(period){
   *{margin:0;padding:0;box-sizing:border-box;}
   html{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
   body{font-family:'Inter',sans-serif;font-size:11px;color:#1a1a2e;background:#fff;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
-  @media print{ *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;} .page{padding:16px 26px;} }
+  @page{size:letter portrait;margin:8mm;}
+  @media print{ *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;} html,body{height:auto;} .page{padding:0;max-width:none;} }
   .page{max-width:1000px;margin:0 auto;padding:36px 44px;}
   .rpt-header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid #0f2d6b;margin-bottom:22px;}
   .co{font-size:19px;font-weight:700;color:#0f2d6b;} .dep{font-size:11px;color:#666;margin-top:2px;}
@@ -14443,7 +14444,7 @@ function paReporteCargaTodos(period){
     <span>${genStr}</span>
   </div>
 </div>
-<scr`+'ipt>window.onload=()=>window.print();</scr'+'ipt>'+`
+<scr`+'ipt>function fit(){var pg=document.querySelector(".page");pg.style.zoom=1;var h=pg.scrollHeight;var avail=940;if(h>avail)pg.style.zoom=(avail/h).toFixed(3);}window.onbeforeprint=fit;window.onload=function(){fit();window.print();};</scr'+'ipt>'+`
 </body></html>`;
 
   const blob = new Blob([html],{type:'text/html;charset=utf-8'});
