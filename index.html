@@ -14344,25 +14344,66 @@ function paReporteCargaTodos(period){
     return;
   }
 
-  const personasHTML = porPersona.map(p=>{
-    const bloqueBarras = p.total ? p.proySort.map(proy=>{
-      const pct2 = Math.round(p.byProy[proy]/p.total*100);
+  // Porcentaje "cerrado" a decenas (78%/22% → 80%/20%) sin perder el real. Se reparte con el método del
+  // mayor residuo para que los cerrados de una misma persona siempre sumen exactamente 100%.
+  function cerrarPct(byProy, proySort, total){
+    const out = {};
+    if(!total) return out;
+    const items = proySort.map(k=>{
+      const exact = byProy[k]/total*10;           // en "decenas"
+      return { k, base: Math.floor(exact), resto: exact-Math.floor(exact), n: byProy[k] };
+    });
+    let faltan = 10 - items.reduce((a,i)=>a+i.base,0);
+    items.slice().sort((a,b)=> b.resto-a.resto || b.n-a.n).forEach(i=>{ if(faltan>0){ i.base++; faltan--; } });
+    items.forEach(i=>{ out[i.k] = i.base*10; });
+    return out;
+  }
+  function barrasHTML(byProy, proySort, total){
+    if(!total) return '<div style="font-size:11px;color:#9aa5b1;padding:6px 0">Sin actividades registradas en este período.</div>';
+    const cerrado = cerrarPct(byProy, proySort, total);
+    return proySort.map(proy=>{
+      const pct2 = Math.round(byProy[proy]/total*100);
       return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
         +'<div style="font-size:11px;font-weight:500;color:#1a1a2e;width:150px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+proy+'</div>'
         +'<div style="flex:1;height:10px;background:#e5e7eb;border-radius:5px;overflow:hidden">'
         +'<div style="width:'+pct2+'%;height:100%;background:#2a78d6;border-radius:5px"></div></div>'
-        +'<div style="font-size:11px;font-weight:700;color:#2a78d6;min-width:52px;text-align:right">'+pct2+'% ('+p.byProy[proy]+')</div>'
+        +'<div style="font-size:11px;font-weight:700;color:#2a78d6;min-width:62px;text-align:right">'+pct2+'% ('+byProy[proy]+')</div>'
+        +'<div style="font-size:11px;font-weight:700;color:#0f2d6b;min-width:64px;text-align:right;border-left:1px solid #d5dfeb;padding-left:8px">≈ '+cerrado[proy]+'%</div>'
         +'</div>';
-    }).join('') : '<div style="font-size:11px;color:#9aa5b1;padding:6px 0">Sin actividades registradas en este período.</div>';
+    }).join('');
+  }
 
+  const personasHTML = porPersona.map(p=>{
     return `<div style="margin:16px 0;padding:14px 16px;background:#f8fafc;border:1px solid #e2eaf3;border-radius:8px;page-break-inside:avoid">
       <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
         <div style="font-size:11px;font-weight:700;color:#0f2744;text-transform:uppercase;letter-spacing:.06em">${p.name}</div>
         <div style="font-size:10px;color:#888">${p.total} actividad${p.total!==1?'es':''}</div>
       </div>
-      ${bloqueBarras}
+      ${barrasHTML(p.byProy, p.proySort, p.total)}
     </div>`;
   }).join('');
+
+  // Bloque de coordinación: la distribución de la coordinadora es, por definición, la del equipo completo
+  // (suma de las actividades de todos los proyectistas, mismos filtros de período y tipo).
+  const equipoByProy = {};
+  let equipoTotal = 0;
+  porPersona.forEach(p=>{
+    equipoTotal += p.total;
+    Object.keys(p.byProy).forEach(k=>{ equipoByProy[k] = (equipoByProy[k]||0) + p.byProy[k]; });
+  });
+  const equipoSort = Object.keys(equipoByProy).sort((a,b)=>{
+    if(a==='Sin proyecto') return 1;
+    if(b==='Sin proyecto') return -1;
+    return equipoByProy[b]-equipoByProy[a];
+  });
+  const coordHTML = `<div style="margin:16px 0 22px;padding:14px 16px;background:#eef4fc;border:1px solid #b9d0ee;border-left:4px solid #0f2d6b;border-radius:8px;page-break-inside:avoid">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px">
+        <div style="font-size:12px;font-weight:700;color:#0f2d6b;text-transform:uppercase;letter-spacing:.06em">Martha Muro <span style="font-weight:500;letter-spacing:0;text-transform:none;color:#4a6a94">· Coordinación de Ingeniería</span></div>
+        <div style="font-size:10px;color:#666">${equipoTotal} actividad${equipoTotal!==1?'es':''} del equipo</div>
+      </div>
+      <div style="font-size:10px;color:#6b7f99;margin-bottom:10px">Distribución según el trabajo del equipo completo (${nombresEquipo.length} proyectistas)</div>
+      ${barrasHTML(equipoByProy, equipoSort, equipoTotal)}
+    </div>`;
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
 <title>Distribución de carga por proyecto · Todo el equipo · ${periodoLabel}</title>
@@ -14392,8 +14433,10 @@ function paReporteCargaTodos(period){
   </div>
   <div style="font-size:10px;color:#888;margin:-14px 0 18px">Incluye actividades de Proyecto, Conectividad e Impresiones · No incluye Trabajo Operativo</div>
 
+  ${coordHTML}
   ${personasHTML}
 
+  <div style="font-size:9px;color:#aaa;margin-top:10px">El porcentaje en azul es el real; el valor "≈" es el mismo porcentaje cerrado a decenas.</div>
   <div class="rpt-footer">
     <span>C3NTRO Telecom · Coordinación de Ingeniería</span>
     <span>Todo el equipo · ${nombresEquipo.length} proyectistas</span>
