@@ -9105,7 +9105,7 @@ function cronoDesgloseDiario(a){
       const cant = parseFloat(s.cantidad)||0;
       const av = Math.max(0, Math.min(cant, parseFloat(s.avanceAcum)||0));
       const rest = cant - av;
-      r.porDia.forEach((p,i)=>piezas.push({ fecha:p.fecha, nombre:s.nombre, unidad:s.unidad, cant:rest*(p.j/dias), rest, termina:i===r.porDia.length-1 }));
+      r.porDia.forEach((p,i)=>piezas.push({ id:s.id, fecha:p.fecha, nombre:s.nombre, unidad:s.unidad, cant:rest*(p.j/dias), rest, termina:i===r.porDia.length-1 }));
       if(!mejor || dias > mejor.dias) mejor = { dias, r };
     });
     if(mejor){ cursor = mejor.r.cursor; usado = mejor.r.usado; }
@@ -9115,7 +9115,7 @@ function cronoDesgloseDiario(a){
 
 function planExportPDF(detallado) {
   detallado = detallado===true;
-  if(detallado && typeof cronoLoad==='function') cronoLoad();
+  if(typeof cronoLoad==='function') cronoLoad();
   var today = new Date();
   today.setHours(0,0,0,0);
   var todayStr = today.toISOString().slice(0,10);
@@ -9168,6 +9168,10 @@ function planExportPDF(detallado) {
     +'table.lst th{background:#0f2744;color:#fff;padding:5px 7px;text-align:left;font-size:8px}'
     +'table.lst td{padding:5px 7px;border-bottom:1px solid #f0f0f0;vertical-align:top}'
     +'table.lst tr:nth-child(even) td{background:#f9fafb}'
+    +'table.lst tbody{page-break-inside:avoid;break-inside:avoid}'
+    +'table.lst tr.sub td{background:#f4f7fb!important;font-size:8.5px;padding:3px 7px;border-bottom:1px dashed #dfe6ef;color:#374151}'
+    +'.stchip{display:inline-block;border-radius:10px;padding:1px 8px;font-size:8px;font-weight:700;white-space:nowrap}'
+    +'.st-fin{background:#dcfce7;color:#166534}.st-prog{background:#dbeafe;color:#1a4fa0}.st-nuevo{background:#e5e7eb;color:#4b5563}.st-val{background:#fef3c7;color:#92400e}'
     +'.sym{display:flex;gap:14px;flex-wrap:wrap;padding:10px 14px;background:#f8fafc;border:1px solid #e2eaf3;border-radius:6px;margin-top:14px;align-items:center}'
     +'.sb{width:20px;height:12px;border-radius:3px;flex-shrink:0}'
     +'.mini-sym{display:flex;gap:9px;align-items:center;flex-wrap:nowrap;font-size:8px;color:#6b7280;font-weight:400;text-transform:none;letter-spacing:normal}'
@@ -9289,7 +9293,7 @@ function planExportPDF(detallado) {
   weeks.forEach(function(week,wi){
     var wS=week[0].toISOString().slice(0,10),wE=week[4].toISOString().slice(0,10);
     h+='<div class="whdr">Semana '+(wi+1)+' - '+fWk(week)+'</div>';
-    h+='<table class="lst"><thead><tr><th>Proyectista</th><th>Actividad</th><th>Proyecto / Tipo</th><th>Folio</th><th>Inicio</th><th>Termino</th><th>Estatus</th></tr></thead><tbody>';
+    h+='<table class="lst"><thead><tr><th>Proyectista</th><th>Actividad / Subtareas</th><th>Proyecto / Tipo &middot; Avance</th><th>Folio</th><th>Inicio</th><th>Termino</th><th>Estatus</th></tr></thead>';
     PA_MEMBERS.forEach(function(member){
       var acts=PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return a.fechaAsig<=wE&&(a.fechaTermino||a.fechaAsig)>=wS;});
       acts.forEach(function(a){
@@ -9297,17 +9301,39 @@ function planExportPDF(detallado) {
         var isProg=a.estatus==='En progreso';
         var isV=a.fechaTermino&&a.fechaTermino<todayStr&&a.estatus!=='Terminado';
         var ec=isProg?'#1a4fa0':isV?'#b91c1c':'#374151';
-        h+='<tr><td style="white-space:nowrap"><span class="av" style="background:'+col+'">'+ini+'</span>'+member.split(' ').slice(0,2).join(' ')+'</td>';
-        h+='<td>'+(a.actividad||'--')+'</td>';
+        var crItem=(typeof CRONO_ITEMS!=='undefined')?CRONO_ITEMS.find(function(x){return x.actividadId===a.id;}):null;
+        var subs=(crItem&&crItem.subtareas)||[];
+        h+='<tbody><tr><td style="white-space:nowrap"><span class="av" style="background:'+col+'">'+ini+'</span>'+member.split(' ').slice(0,2).join(' ')+'</td>';
+        h+='<td><b>'+(a.actividad||'--')+'</b>'+(subs.length?'':'<br><span style="font-size:8px;color:#9ca3af;font-style:italic">Sin subtareas definidas</span>')+'</td>';
         var isConLst=(a.tipo==='Conectividad (Bobinas)'||a.tipo==='Planos de Conectividad');
         h+='<td><b>'+(a.proyecto||'--')+'</b><br><b style="font-size:9px;color:#374151">'+(a.tipo||'--')+'</b>'+(isConLst&&a.numBobina?' &nbsp;Bna #'+a.numBobina:'')+'</td>';
         h+='<td style="font-family:monospace;font-size:8px;color:#1a4fa0">'+(a.folio||'--')+'</td>';
         h+='<td style="white-space:nowrap">'+fd(a.fechaAsig)+'</td>';
         h+='<td style="white-space:nowrap">'+fd(a.fechaTermino)+'</td>';
         h+='<td style="color:'+ec+';font-weight:600">'+a.estatus+'</td></tr>';
+        if(subs.length){
+          var dg=getDesg(a);
+          subs.forEach(function(st){
+            var cant=parseFloat(st.cantidad)||0, av=Math.max(0,Math.min(cant,parseFloat(st.avanceAcum)||0));
+            var pct=cant?Math.round(av/cant*100):0;
+            var pend=!!st.pendienteValidacion;
+            var fin=!pend&&(st.estatus==='completada'||(cant>0&&av>=cant));
+            var prog=!pend&&!fin&&(st.estatus==='en_progreso'||av>0);
+            var chip=pend?'<span class="stchip st-val">Pend. validaci&oacute;n</span>':fin?'<span class="stchip st-fin">&#10003; Terminada</span>':prog?'<span class="stchip st-prog">En proceso</span>':'<span class="stchip st-nuevo">Sin iniciar</span>';
+            var ps=dg.piezas.filter(function(pz){return pz.id===st.id;});
+            var fIni=ps.length?fd(ps[0].fecha):'&mdash;', fFin=ps.length?fd(ps[ps.length-1].fecha):'&mdash;';
+            h+='<tr class="sub"><td></td>';
+            h+='<td style="padding-left:18px"><span style="color:#9ca3af">&#8627;</span> '+(st.nombre||'--')+'</td>';
+            h+='<td>'+(fin?fq(cant)+' '+(st.unidad||'')+' &middot; 100%':fq(av)+' de '+fq(cant)+' '+(st.unidad||'')+' &middot; '+pct+'%')+'</td>';
+            h+='<td></td><td style="white-space:nowrap">'+fIni+'</td><td style="white-space:nowrap">'+fFin+'</td>';
+            h+='<td>'+chip+'</td></tr>';
+          });
+        }
+        h+='</tbody>';
       });
     });
-    h+='</tbody></table>';
+    h+='</table>';
+    h+='<div style="font-size:8px;color:#6b7280;margin:-2px 0 8px">Las fechas de cada subtarea son la programaci&oacute;n del trabajo que falta (seg&uacute;n su rendimiento, desde hoy); las ya terminadas no tienen fecha.</div>';
   });
 
   h+='<div class="sym"><b style="font-size:10px;color:#0f2744">Simbologia:</b>';
