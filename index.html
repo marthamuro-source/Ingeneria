@@ -9235,13 +9235,6 @@ function planExportPDF(detallado) {
       week.forEach(function(day){
         var ds=day.toISOString().slice(0,10);
         var acts=PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return ds>=a.fechaAsig&&ds<=(a.fechaTermino||a.fechaAsig);});
-        if(detallado){
-          // También las actividades fuera de su rango de fechas pero con subtarea programada ese día (el trabajo se corrió)
-          PA_ITEMS.forEach(function(a){
-            if(a.responsable!==member||!a.fechaAsig||a.estatus==='Terminado'||acts.indexOf(a)>=0) return;
-            if(getDesg(a).piezas.some(function(pz){return pz.fecha===ds;})) acts.push(a);
-          });
-        }
         var vs=typeof VACACIONES!=='undefined'&&VACACIONES?VACACIONES[member]:null;
         if(!vs&&typeof VACACIONES!=='undefined'&&VACACIONES){Object.keys(VACACIONES).forEach(function(k){if(member.indexOf(k.split(' ')[0])>=0)vs=VACACIONES[k];});}
         var isVac=vs&&vs.has&&vs.has(ds);
@@ -9263,20 +9256,6 @@ function planExportPDF(detallado) {
           if(isConPDF&&a.numBobina) h+='<span class="sec-line"><b>Bna #'+a.numBobina+'</b></span>';
           if(a.folio) h+='<span class="sec-line" style="font-family:monospace">'+a.folio+'</span>';
           if(a.actividad) h+='<span class="sec-line">'+a.actividad+'</span>';
-          if(detallado){
-            var dg=getDesg(a);
-            if(dg.sinSubtareas){
-              h+='<span class="sec-line" style="font-style:italic;opacity:.75">Sin subtareas definidas</span>';
-            } else {
-              var delDia=dg.piezas.filter(function(pz){return pz.fecha===ds;});
-              if(!dg.piezas.length) h+='<span class="sec-line" style="font-style:italic;opacity:.75">Subtareas completas</span>';
-              else if(!delDia.length) h+='<span class="sec-line" style="font-style:italic;opacity:.75">Sin subtarea programada</span>';
-              delDia.forEach(function(pz){
-                h+='<span class="sec-line" style="margin-top:3px;padding-top:2px;border-top:1px solid rgba(128,128,128,.35)">&#9656; <b>'+pz.nombre+'</b><br>'+fq(pz.cant)+' de '+fq(pz.rest)+' '+(pz.unidad||'')+(pz.termina?' &middot; <b>&#10003; se termina</b>':'')+'</span>';
-              });
-              if(a.fechaTermino && ds>a.fechaTermino) h+='<span class="sec-line" style="font-weight:700">&#9888; Pasa de la fecha de entrega ('+fd(a.fechaTermino)+')</span>';
-            }
-          }
           h+='</div>';
           h+='</div>';
         });
@@ -9293,7 +9272,7 @@ function planExportPDF(detallado) {
   weeks.forEach(function(week,wi){
     var wS=week[0].toISOString().slice(0,10),wE=week[4].toISOString().slice(0,10);
     h+='<div class="whdr">Semana '+(wi+1)+' - '+fWk(week)+'</div>';
-    h+='<table class="lst"><thead><tr><th>Proyectista</th><th>Actividad / Subtareas</th><th>Proyecto / Tipo &middot; Avance</th><th>Folio</th><th>Inicio</th><th>Termino</th><th>Estatus</th></tr></thead>';
+    h+='<table class="lst"><thead><tr><th>Proyectista</th><th>'+(detallado?'Actividad / Subtareas':'Actividad')+'</th><th>'+(detallado?'Proyecto / Tipo &middot; Avance':'Proyecto / Tipo')+'</th><th>Folio</th><th>Inicio</th><th>Termino</th><th>Estatus</th></tr></thead>';
     PA_MEMBERS.forEach(function(member){
       var acts=PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return a.fechaAsig<=wE&&(a.fechaTermino||a.fechaAsig)>=wS;});
       acts.forEach(function(a){
@@ -9302,9 +9281,9 @@ function planExportPDF(detallado) {
         var isV=a.fechaTermino&&a.fechaTermino<todayStr&&a.estatus!=='Terminado';
         var ec=isProg?'#1a4fa0':isV?'#b91c1c':'#374151';
         var crItem=(typeof CRONO_ITEMS!=='undefined')?CRONO_ITEMS.find(function(x){return x.actividadId===a.id;}):null;
-        var subs=(crItem&&crItem.subtareas)||[];
+        var subs=detallado?((crItem&&crItem.subtareas)||[]):[];
         h+='<tbody><tr><td style="white-space:nowrap"><span class="av" style="background:'+col+'">'+ini+'</span>'+member.split(' ').slice(0,2).join(' ')+'</td>';
-        h+='<td><b>'+(a.actividad||'--')+'</b>'+(subs.length?'':'<br><span style="font-size:8px;color:#9ca3af;font-style:italic">Sin subtareas definidas</span>')+'</td>';
+        h+='<td><b>'+(a.actividad||'--')+'</b>'+((detallado&&!subs.length)?'<br><span style="font-size:8px;color:#9ca3af;font-style:italic">Sin subtareas definidas</span>':'')+'</td>';
         var isConLst=(a.tipo==='Conectividad (Bobinas)'||a.tipo==='Planos de Conectividad');
         h+='<td><b>'+(a.proyecto||'--')+'</b><br><b style="font-size:9px;color:#374151">'+(a.tipo||'--')+'</b>'+(isConLst&&a.numBobina?' &nbsp;Bna #'+a.numBobina:'')+'</td>';
         h+='<td style="font-family:monospace;font-size:8px;color:#1a4fa0">'+(a.folio||'--')+'</td>';
@@ -9333,7 +9312,7 @@ function planExportPDF(detallado) {
       });
     });
     h+='</table>';
-    h+='<div style="font-size:8px;color:#6b7280;margin:-2px 0 8px">Las fechas de cada subtarea son la programaci&oacute;n del trabajo que falta (seg&uacute;n su rendimiento, desde hoy); las ya terminadas no tienen fecha.</div>';
+    if(detallado) h+='<div style="font-size:8px;color:#6b7280;margin:-2px 0 8px">Las fechas de cada subtarea son la programaci&oacute;n del trabajo que falta (seg&uacute;n su rendimiento, desde hoy); las ya terminadas no tienen fecha.</div>';
   });
 
   h+='<div class="sym"><b style="font-size:10px;color:#0f2744">Simbologia:</b>';
