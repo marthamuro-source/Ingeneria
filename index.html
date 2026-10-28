@@ -5666,14 +5666,29 @@ function cronoEnsureOrden(){
   });
   CRONO_CATALOGO.sort((a,b)=>a.orden-b.orden);
 }
+// Una subtarea del catálogo puede ser GENERAL (sin campo proyecto) o de UN solo proyecto (c.proyecto = nombre del proyecto).
+function cronoProyectoDeActividad(actId){
+  const pa = (typeof PA_ITEMS!=='undefined') ? PA_ITEMS.find(x=>x.id===actId) : null;
+  return ((pa && pa.proyecto) || '').trim();
+}
+function cronoCatVisible(c, proyecto){ return !c.proyecto || c.proyecto===proyecto; }
 function cronoSaveCatalogo(){
   localStorage.setItem(CRONO_CAT_KEY, JSON.stringify(CRONO_CATALOGO));
   if(!_supa) return;
+  const hayDeProyecto = CRONO_CATALOGO.some(c=>c.proyecto);
   _supa.from('crono_catalogo').upsert(CRONO_CATALOGO, {onConflict:'id'})
-    .then(({error})=>{
+    .then(async ({error})=>{
+      if(error && hayDeProyecto && /proyecto/i.test(error.message||'')){
+        // Falta la columna "proyecto" en Supabase: se guardan las generales como siempre y las de proyecto quedan solo en este navegador.
+        console.error('❌ cronoSaveCatalogo (falta columna proyecto):', error);
+        const { error: e2 } = await _supa.from('crono_catalogo').upsert(CRONO_CATALOGO.filter(c=>!c.proyecto).map(c=>{ const o={...c}; delete o.proyecto; return o; }), {onConflict:'id'});
+        if(e2) console.error('❌ cronoSaveCatalogo reintento:', e2);
+        alert('La subtarea de proyecto se guardó solo en este navegador, no se pudo compartir con el equipo.\n\nFalta la columna "proyecto" en la tabla "crono_catalogo". Corre el SQL que te dio Claude para agregarla.');
+        return;
+      }
       if(error){
         console.error('❌ cronoSaveCatalogo:', error);
-        alert('Se guardó localmente, pero no se pudo guardar en Supabase, así que podría perderse al recargar o no verlo el resto del equipo.\n\nMotivo: '+(error.message||error.code||'desconocido')+'\n\nEsto normalmente pasa si falta la columna "orden" en la tabla "crono_catalogo" o hay un problema de permisos. Pídele a Claude que te ayude a revisarla.');
+        alert('Se guardó localmente, pero no se pudo guardar en Supabase, así que podría perderse al recargar o no verlo el resto del equipo.\n\nMotivo: '+(error.message||error.code||'desconocido'));
       }
     })
     .catch(e=>{
@@ -6715,10 +6730,10 @@ function cronoRenderCatTabs(){
       </div>`).join('') : `<div style="font-size:11px;color:var(--dim);padding:8px 0">Sin paquetes en el catálogo todavía.</div>`;
   }
   if(listSuel){
-    listSuel.innerHTML = CRONO_CATALOGO.map(c=>`
+    listSuel.innerHTML = CRONO_CATALOGO.filter(c=>cronoCatVisible(c, cronoProyectoDeActividad(cronoModalActId))).map(c=>`
       <div onclick="cronoPickSuelta('${c.id}')" style="padding:8px 10px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;background:var(--surface2);border:1px solid var(--border)"
         onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-        <span style="font-size:12px;color:var(--text)">${c.nombre}</span>
+        <span style="font-size:12px;color:var(--text)">${c.nombre}${c.proyecto?` <span style="font-size:9.5px;color:var(--accent);border:1px solid var(--accent);border-radius:8px;padding:0 5px;margin-left:4px">📁 solo ${escapeHtml(c.proyecto)}</span>`:''}</span>
         <span style="font-size:10.5px;color:var(--dim)">${c.unidad} · ${c.rendimiento}/día</span>
       </div>`).join('');
   }
@@ -6861,7 +6876,8 @@ function cronoCorrNvRenderListas(){
       </div>`).join('') : `<div style="font-size:11px;color:var(--dim);padding:8px 0">Sin paquetes en el catálogo todavía.</div>`;
   }
   if(listSuel){
-    listSuel.innerHTML = (CRONO_CATALOGO||[]).length ? CRONO_CATALOGO.map(c=>`
+    const _catVis = (CRONO_CATALOGO||[]).filter(c=>cronoCatVisible(c, cronoProyectoDeActividad(cronoModalActId)));
+    listSuel.innerHTML = _catVis.length ? _catVis.map(c=>`
       <div onclick="cronoCorrNvPickSuel('${c.id}')" style="padding:8px 10px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;background:${cronoCorrNvSelCatId===c.id?'rgba(90,159,240,.12)':'var(--surface)'};border:1px solid ${cronoCorrNvSelCatId===c.id?'var(--accent)':'var(--border)'}">
         <span style="font-size:12px;color:var(--text)">${escapeHtml(c.nombre)}</span>
         <span style="font-size:10.5px;color:var(--dim)">${escapeHtml(c.unidad)} · ${c.rendimiento}/día</span>
@@ -7316,7 +7332,24 @@ function cronoValSetTipo(tipo){
   }
 }
 
-function cronoConfirmarValidacion(actId, stId){
+async function cronoPreguntarAlcanceSubtarea(nombre, proyecto){
+  return new Promise(resolve=>{
+    const bg = document.createElement('div');
+    bg.id = 'cronoAlcanceBg';
+    bg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10050;display:flex;align-items:center;justify-content:center;padding:16px';
+    const btn = 'width:100%;text-align:left;padding:10px 12px;margin-top:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;font-size:12px;font-family:inherit';
+    bg.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;max-width:420px;width:100%;padding:18px">
+      <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">¿Dónde aplica esta subtarea?</div>
+      <div style="font-size:11.5px;color:var(--dim)">"${escapeHtml(nombre)}"</div>
+      <button data-a="actividad" style="${btn}"><b>Solo esta actividad</b><br><span style="color:var(--dim);font-size:11px">No se agrega a ningún catálogo.</span></button>
+      <button data-a="proyecto" ${proyecto?'':'disabled'} style="${btn}${proyecto?'':';opacity:.4;cursor:not-allowed'}"><b>Todo el proyecto${proyecto?': '+escapeHtml(proyecto):''}</b><br><span style="color:var(--dim);font-size:11px">${proyecto?'Disponible solo en las actividades de este proyecto.':'Esta actividad no tiene nombre de proyecto.'}</span></button>
+      <button data-a="general" style="${btn}"><b>Catálogo general</b><br><span style="color:var(--dim);font-size:11px">Disponible para todos los proyectos.</span></button>
+    </div>`;
+    bg.querySelectorAll('button[data-a]').forEach(b=>{ b.onclick = ()=>{ if(b.disabled) return; bg.remove(); resolve(b.dataset.a); }; });
+    document.body.appendChild(bg);
+  });
+}
+async function cronoConfirmarValidacion(actId, stId){
   cronoLoad();
   const item = CRONO_ITEMS.find(x=>x.actividadId===actId);
   const st = item?.subtareas?.find(s=>s.id===stId);
@@ -7344,22 +7377,26 @@ function cronoConfirmarValidacion(actId, stId){
 
   document.getElementById('cronoValidarModalBg')?.remove();
 
-  // Ofrecer agregar al catálogo general
-  if(confirm(`¿Agregar "${st.nombre}" al catálogo general para uso futuro?`)){
+  // ¿Hasta dónde aplica esta subtarea? (solo esta actividad / todo el proyecto / catálogo general)
+  const proyectoAct = cronoProyectoDeActividad(actId);
+  const alcance = await cronoPreguntarAlcanceSubtarea(st.nombre, proyectoAct);
+  if(alcance==='proyecto' || alcance==='general'){
     cronoLoadCatalogo();
-    const yaExiste = CRONO_CATALOGO.find(c=>c.nombre.toLowerCase()===st.nombre.toLowerCase());
+    const yaExiste = CRONO_CATALOGO.find(c=>c.nombre.toLowerCase()===st.nombre.toLowerCase() && (alcance==='general' ? !c.proyecto : c.proyecto===proyectoAct));
     if(!yaExiste){
-      CRONO_CATALOGO.push({
+      const nueva = {
         id:'cat_'+Date.now(),
         nombre:st.nombre,
         unidad:st.unidad,
         rendimiento:rend,
         tipo:st.tipo||'unidades_por_dia'
-      });
+      };
+      if(alcance==='proyecto') nueva.proyecto = proyectoAct;
+      CRONO_CATALOGO.push(nueva);
       cronoSaveCatalogo();
-      alert(`✓ "${st.nombre}" agregado al catálogo.`);
+      alert(alcance==='proyecto' ? `✓ "${st.nombre}" disponible solo para las actividades de ${proyectoAct}.` : `✓ "${st.nombre}" agregado al catálogo general.`);
     } else {
-      alert(`"${st.nombre}" ya existe en el catálogo.`);
+      alert(`"${st.nombre}" ya existe ${alcance==='proyecto'?'en '+proyectoAct:'en el catálogo general'}.`);
     }
   }
 
@@ -8073,7 +8110,7 @@ function cronoRenderLooseTable(){
   const esAdmin = _userRole!=='proyectista';
   tbody.innerHTML = CRONO_CATALOGO.map((c,i)=>`
     <tr style="border-bottom:1px solid var(--border)">
-      <td style="padding:6px;font-size:11.5px;color:var(--text);white-space:normal;line-height:1.4">${c.nombre}</td>
+      <td style="padding:6px;font-size:11.5px;color:var(--text);white-space:normal;line-height:1.4">${c.nombre}${c.proyecto?` <span style="font-size:9.5px;color:var(--accent);border:1px solid var(--accent);border-radius:8px;padding:0 5px;margin-left:4px;white-space:nowrap">📁 solo ${escapeHtml(c.proyecto)}</span>`:''}</td>
       <td style="padding:6px;font-size:11px;color:var(--dim);text-align:center">${c.unidad}</td>
       <td style="padding:6px;font-size:11px;color:var(--dim);text-align:center">${c.tipo==='dias_por_unidad'?`${c.rendimiento}d/u`:`${c.rendimiento}/día`}</td>
       <td style="padding:6px;text-align:right;white-space:nowrap">
@@ -8277,7 +8314,7 @@ function cronoCatExportPDF(){
         const rendStr = c.tipo==='dias_por_unidad' ? c.rendimiento+' días/'+c.unidad : c.rendimiento+' '+c.unidad+'/día';
         return `<tr>
           <td style="color:#999">${i+1}</td>
-          <td><b>${c.nombre}</b></td>
+          <td><b>${c.nombre}</b>${c.proyecto?' <span style="color:#2a78d6;font-size:9px">(solo '+c.proyecto+')</span>':''}</td>
           <td>${c.unidad}</td>
           <td>${rendStr}</td>
           <td><span class="badge ${badgeCls}">${tipo}</span></td>
@@ -8831,7 +8868,8 @@ function planBuildHTML() {
   h += '<div style="display:flex;gap:4px">'+[[1,'1 sem'],[2,'2 sem'],[3,'3 sem'],[4,'1 mes']].map(function(o){var a=numWeeks===o[0];return '<button onclick="planSetWeeks('+o[0]+')" style="font-size:11px;padding:5px 12px;border-radius:20px;border:0.5px solid '+(a?'var(--accent)':'rgba(255,255,255,.15)')+';background:'+(a?'rgba(74,143,212,.15)':'transparent')+';color:'+(a?'var(--accent)':'var(--dim)')+';cursor:pointer;font-family:var(--font)">'+o[1]+'</button>';}).join('')+'</div>';
   h += '</div>';
   h += '<button onclick="planOpenProyectos()" style="font-size:11px;padding:6px 14px;border-radius:7px;border:0.5px solid rgba(27,175,122,.3);background:transparent;color:#1baf7a;cursor:pointer;font-family:var(--font)">📋 Proyectos del período</button>';
-  h += '<button onclick="planExportPDF()" style="font-size:11px;padding:6px 14px;border-radius:7px;border:0.5px solid rgba(255,92,92,.3);background:transparent;color:#ff7a7a;cursor:pointer;font-family:var(--font)">⬇ Exportar PDF</button>';
+  h += '<button onclick="planExportPDF()" title="Plan por actividad, como siempre" style="font-size:11px;padding:6px 14px;border-radius:7px;border:0.5px solid rgba(255,92,92,.3);background:transparent;color:#ff7a7a;cursor:pointer;font-family:var(--font)">⬇ PDF básico</button>';
+  h += '<button onclick="planExportPDF(true)" title="Desglose día por día de lo que toca terminar según las subtareas" style="font-size:11px;padding:6px 14px;border-radius:7px;border:0.5px solid rgba(42,120,214,.4);background:rgba(42,120,214,.1);color:#5a9ff0;cursor:pointer;font-family:var(--font)">⬇ PDF detallado</button>';
   h += '<button onclick="document.getElementById(\'planModalBg\').remove()" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer;padding:0 4px;line-height:1">×</button>';
   h += '</div></div>';
   h += '<div style="padding:16px 20px;overflow-x:auto">';
@@ -9016,7 +9054,68 @@ function planCellClick(member, dateStr) {
   }, 300);
 }
 
-function planExportPDF() {
+// ── Desglose día por día de una actividad según sus subtareas ──
+// Misma lógica de cadena del pronóstico (subtareas en orden, las de un paquete en paralelo, viernes de 6/9 de jornada),
+// pero: (1) solo lo que FALTA (usa avanceAcum) y desde hoy como muy pronto; (2) se saltan los días de vacaciones de la persona.
+function cronoEsVacacionPersona(nombre, key){
+  if(typeof VACACIONES==='undefined' || !VACACIONES) return false;
+  let vs = VACACIONES[nombre];
+  if(!vs){ Object.keys(VACACIONES).forEach(function(k){ if(nombre && (nombre.indexOf(k.split(' ')[0])>=0 || k.indexOf(nombre.split(' ')[0])>=0)) vs = VACACIONES[k]; }); }
+  return !!(vs && vs.has && vs.has(key));
+}
+function cronoAsignarPorDia(cursor, usado, dias, capFn){
+  const EPS = 1e-9;
+  const porDia = [];
+  let restante = dias, uso = usado||0, guard = 0;
+  let d = new Date(cursor+'T00:00:00');
+  while(guard++ < 800){
+    const key = repDateKey(d);
+    const disp = Math.max(0, capFn(d) - uso);
+    if(restante <= disp + EPS){
+      if(restante > EPS) porDia.push({fecha:key, j:restante});
+      return { porDia, cursor:key, usado:uso+restante };
+    }
+    if(disp > EPS){ porDia.push({fecha:key, j:disp}); restante -= disp; }
+    do{ d.setDate(d.getDate()+1); }while(capFn(d)===0 && guard++ < 800);
+    uso = 0;
+  }
+  return { porDia, cursor:repDateKey(d), usado:0 };
+}
+function cronoDesgloseDiario(a){
+  const item = (typeof CRONO_ITEMS!=='undefined') ? CRONO_ITEMS.find(x=>x.actividadId===a.id) : null;
+  const subs = ((item && item.subtareas) || []).filter(st=>!st.pendienteValidacion);
+  if(!subs.length) return { piezas:[], sinSubtareas:true };
+  const hoy = repDateKey(new Date());
+  let base = cronoFechaEfectiva(a, a.fechaAsig || item.fechaInicio) || hoy;
+  if(base < hoy) base = hoy;
+  const capFn = d => cronoEsVacacionPersona(a.responsable, repDateKey(d)) ? 0 : cronoCapacidadDia(d);
+  let d0 = new Date(base+'T00:00:00'), g = 0;
+  while(capFn(d0)===0 && g++ < 800) d0.setDate(d0.getDate()+1);
+  let cursor = repDateKey(d0), usado = 0;
+  const piezas = [], procesados = new Set();
+  subs.forEach(st=>{
+    if(procesados.has(st.id)) return;
+    const grupo = st.paqueteId ? subs.filter(s=>s.paqueteId===st.paqueteId) : [st];
+    grupo.forEach(s=>procesados.add(s.id));
+    let mejor = null;
+    grupo.forEach(s=>{
+      const dias = cronoDiasRestantesSubtarea(s);
+      if(dias <= 0) return;
+      const r = cronoAsignarPorDia(cursor, usado, dias, capFn);
+      const cant = parseFloat(s.cantidad)||0;
+      const av = Math.max(0, Math.min(cant, parseFloat(s.avanceAcum)||0));
+      const rest = cant - av;
+      r.porDia.forEach((p,i)=>piezas.push({ fecha:p.fecha, nombre:s.nombre, unidad:s.unidad, cant:rest*(p.j/dias), rest, termina:i===r.porDia.length-1 }));
+      if(!mejor || dias > mejor.dias) mejor = { dias, r };
+    });
+    if(mejor){ cursor = mejor.r.cursor; usado = mejor.r.usado; }
+  });
+  return { piezas, sinSubtareas:false };
+}
+
+function planExportPDF(detallado) {
+  detallado = detallado===true;
+  if(detallado && typeof cronoLoad==='function') cronoLoad();
   var today = new Date();
   today.setHours(0,0,0,0);
   var todayStr = today.toISOString().slice(0,10);
@@ -9033,6 +9132,9 @@ function planExportPDF() {
   function fDay(d){return d.toLocaleDateString('es-MX',{weekday:'short',day:'numeric'}).replace('.','');}
   function fWk(w){var o={day:'numeric',month:'short'};return w[0].toLocaleDateString('es-MX',o)+' - '+w[4].toLocaleDateString('es-MX',o);}
 
+  var desgCache={};
+  function getDesg(a){ if(!desgCache[a.id]) desgCache[a.id]=cronoDesgloseDiario(a); return desgCache[a.id]; }
+  function fq(n){ n=Math.round(n*100)/100; return (n>=10?Math.round(n*10)/10:n).toString(); }
   var css='*{box-sizing:border-box;margin:0;padding:0}'
     +'body{font-family:Arial,sans-serif;font-size:11px;color:#1a1a2e;background:#fff;padding:14px 18px}'
     +'.hdr{display:flex;justify-content:space-between;border-bottom:3px solid #0f2744;padding-bottom:8px;margin-bottom:8px}'
@@ -9075,10 +9177,10 @@ function planExportPDF() {
     +'@media print{.pbt{display:none}@page{margin:.6cm;size:landscape}}';
   css += '*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}';
 
-  var h='<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Plan de Trabajo C3NTRO</title><style>'+css+'</style></head><body>';
+  var h='<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Plan de Trabajo C3NTRO'+(detallado?' - Detallado':'')+'</title><style>'+css+'</style></head><body>';
 
   h+='<div class="hdr"><div><div class="logo">C3NTRO Telecom</div><div style="font-size:10px;color:#6b7280;margin-top:2px">Coordinacion de Ingenieria</div></div>';
-  h+='<div class="rtitle"><h1>Plan de Trabajo del Equipo</h1><p>Proximas '+pLabel+' - '+genStr+'<br>Martha Raquel Muro Morales</p></div></div>';
+  h+='<div class="rtitle"><h1>Plan de Trabajo del Equipo'+(detallado?' - Detallado por dia':'')+'</h1><p>Proximas '+pLabel+' - '+genStr+'<br>Martha Raquel Muro Morales</p></div></div>';
   h+='<div class="pbt"><button onclick="window.print()">Exportar PDF / Imprimir</button></div>';
 
   // 1. PROYECTOS
@@ -9129,6 +9231,13 @@ function planExportPDF() {
       week.forEach(function(day){
         var ds=day.toISOString().slice(0,10);
         var acts=PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return ds>=a.fechaAsig&&ds<=(a.fechaTermino||a.fechaAsig);});
+        if(detallado){
+          // También las actividades fuera de su rango de fechas pero con subtarea programada ese día (el trabajo se corrió)
+          PA_ITEMS.forEach(function(a){
+            if(a.responsable!==member||!a.fechaAsig||a.estatus==='Terminado'||acts.indexOf(a)>=0) return;
+            if(getDesg(a).piezas.some(function(pz){return pz.fecha===ds;})) acts.push(a);
+          });
+        }
         var vs=typeof VACACIONES!=='undefined'&&VACACIONES?VACACIONES[member]:null;
         if(!vs&&typeof VACACIONES!=='undefined'&&VACACIONES){Object.keys(VACACIONES).forEach(function(k){if(member.indexOf(k.split(' ')[0])>=0)vs=VACACIONES[k];});}
         var isVac=vs&&vs.has&&vs.has(ds);
@@ -9150,6 +9259,20 @@ function planExportPDF() {
           if(isConPDF&&a.numBobina) h+='<span class="sec-line"><b>Bna #'+a.numBobina+'</b></span>';
           if(a.folio) h+='<span class="sec-line" style="font-family:monospace">'+a.folio+'</span>';
           if(a.actividad) h+='<span class="sec-line">'+a.actividad+'</span>';
+          if(detallado){
+            var dg=getDesg(a);
+            if(dg.sinSubtareas){
+              h+='<span class="sec-line" style="font-style:italic;opacity:.75">Sin subtareas definidas</span>';
+            } else {
+              var delDia=dg.piezas.filter(function(pz){return pz.fecha===ds;});
+              if(!dg.piezas.length) h+='<span class="sec-line" style="font-style:italic;opacity:.75">Subtareas completas</span>';
+              else if(!delDia.length) h+='<span class="sec-line" style="font-style:italic;opacity:.75">Sin subtarea programada</span>';
+              delDia.forEach(function(pz){
+                h+='<span class="sec-line" style="margin-top:3px;padding-top:2px;border-top:1px solid rgba(128,128,128,.35)">&#9656; <b>'+pz.nombre+'</b><br>'+fq(pz.cant)+' de '+fq(pz.rest)+' '+(pz.unidad||'')+(pz.termina?' &middot; <b>&#10003; se termina</b>':'')+'</span>';
+              });
+              if(a.fechaTermino && ds>a.fechaTermino) h+='<span class="sec-line" style="font-weight:700">&#9888; Pasa de la fecha de entrega ('+fd(a.fechaTermino)+')</span>';
+            }
+          }
           h+='</div>';
           h+='</div>';
         });
