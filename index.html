@@ -5811,10 +5811,12 @@ function cronoDiasRestantesSubtarea(st){
 // viernes solo alcanza para 6/9 de ese ritmo — por eso el pronóstico debe avanzar el calendario
 // más lento cuando el trabajo cae en viernes.
 const CRONO_CAPACIDAD_VIERNES = 6/9;
-function cronoCapacidadDia(fechaOrDate){
+function cronoCapacidadDia(fechaOrDate, persona){
   const d = (fechaOrDate instanceof Date) ? fechaOrDate : new Date(fechaOrDate+'T00:00:00');
   if(isWeekend(d)) return 0;
   if(FESTIVOS.includes(repDateKey(d))) return 0;
+  // Si se indica la persona, sus días de vacaciones no son laborables para ella: el trabajo se recorre.
+  if(persona && cronoEsVacacionPersona(persona, repDateKey(d))) return 0;
   return d.getDay()===5 ? CRONO_CAPACIDAD_VIERNES : 1;
 }
 
@@ -5825,10 +5827,10 @@ function cronoCapacidadDia(fechaOrDate){
 // diasNecesarios: cuánto (en jornadas estándar, puede ser fracción) necesita la subtarea actual.
 // Devuelve {inicio, fin, cursor, usado} — inicio/fin son las fechas a mostrar para ESTA subtarea,
 // y cursor/usado ya quedan listos para la siguiente llamada (encadenado).
-function cronoAvanzarCursorDia(cursor, usado, diasNecesarios){
+function cronoAvanzarCursorDia(cursor, usado, diasNecesarios, persona){
   const EPS = 1e-9;
   let restante = Math.max(0, diasNecesarios||0);
-  const capacidadHoy = cronoCapacidadDia(cursor);
+  const capacidadHoy = cronoCapacidadDia(cursor, persona);
   const disponibleHoy = Math.max(0, capacidadHoy - (usado||0));
   if(restante <= disponibleHoy + EPS){
     // Se resuelve el mismo día "cursor", sin mover el calendario (así varias subtareas chicas
@@ -5840,18 +5842,20 @@ function cronoAvanzarCursorDia(cursor, usado, diasNecesarios){
   restante -= disponibleHoy;
   let d = new Date(cursor + 'T00:00:00');
   let fin = cursor;
+  let ini = (persona && capacidadHoy===0) ? null : cursor; // si arranca en vacaciones, el trabajo empieza el primer día disponible
   while(restante > EPS){
     d.setDate(d.getDate()+1);
     const key = repDateKey(d);
     if(isWeekend(d) || FESTIVOS.includes(key)) continue; // día no laborable, no cuenta
     fin = key;
-    const cap = cronoCapacidadDia(d);
+    const cap = cronoCapacidadDia(d, persona);
+    if(ini===null && cap>0) ini = key;
     if(restante <= cap + EPS){
-      return { inicio: cursor, fin, cursor: fin, usado: restante };
+      return { inicio: ini||cursor, fin, cursor: fin, usado: restante };
     }
     restante -= cap;
   }
-  return { inicio: cursor, fin, cursor: fin, usado: 0 };
+  return { inicio: ini||cursor, fin, cursor: fin, usado: 0 };
 }
 
 // ── Rendimiento diario esperado de una subtarea (unidades/día, sin importar el tipo capturado) ──
@@ -5949,7 +5953,7 @@ function cronoFechaEfectiva(a, fechaBase){
 // y es una fecha fija que solo se mueve si cambian las fechas/cantidades/rendimientos del catálogo,
 // o si la actividad estuvo en pausa (ver cronoFechaEfectiva). El avance real reportado se compara
 // aparte (fuera de esta función) contra esta fecha para decidir si hay retraso.
-function cronoCalcPronostico(subtareas, fechaInicio){
+function cronoCalcPronostico(subtareas, fechaInicio, persona){
   if(!subtareas||!subtareas.length||!fechaInicio) return null;
   let cursor = fechaInicio;
   let usado = 0; // fracción del día "cursor" ya ocupada
@@ -5964,16 +5968,32 @@ function cronoCalcPronostico(subtareas, fechaInicio){
       const delGrupo = validas.filter(s=>s.paqueteId===st.paqueteId);
       const diasMax = Math.max(...delGrupo.map(s=>cronoDiasParaSubtarea(s)));
       delGrupo.forEach(s=>procesados.add(s.id));
-      const r = cronoAvanzarCursorDia(cursor, usado, diasMax);
+      const r = cronoAvanzarCursorDia(cursor, usado, diasMax, persona);
       cursor = r.cursor; usado = r.usado;
     } else {
       const dias = cronoDiasParaSubtarea(st);
-      const r = cronoAvanzarCursorDia(cursor, usado, dias);
+      const r = cronoAvanzarCursorDia(cursor, usado, dias, persona);
       cursor = r.cursor; usado = r.usado;
       procesados.add(st.id);
     }
   });
   return cursor;
+}
+
+// ── Pronóstico de una actividad considerando las vacaciones de su responsable ──
+// fecha = pronóstico ya recorrido por vacaciones; sinVac = el que habría sin ellas; diasVac = cuántos
+// días hábiles se recorrió la entrega por vacaciones (0 si no les afectó).
+function cronoPronosticoInfo(a, crono){
+  if(!a) return null;
+  crono = crono || ((typeof CRONO_ITEMS!=='undefined') ? CRONO_ITEMS.find(x=>x.actividadId===a.id) : null);
+  const subs = (crono && Array.isArray(crono.subtareas)) ? crono.subtareas.filter(x=>!x.pendienteValidacion) : [];
+  if(!subs.length) return null;
+  const base = cronoFechaEfectiva(a, a.fechaAsig || crono.fechaInicio);
+  const fecha = cronoCalcPronostico(subs, base, a.responsable);
+  const sinVac = cronoCalcPronostico(subs, base);
+  let diasVac = 0;
+  if(fecha && sinVac && fecha > sinVac) diasVac = Math.max(1, (paWorkdays(sinVac, fecha)||1) - 1);
+  return {fecha, sinVac, diasVac};
 }
 
 // ── Días hábiles restantes entre hoy y fecha ──
@@ -6159,7 +6179,7 @@ function renderReporteoView(){
   let enTiempo=0, conRetraso=0;
   actConCrono.forEach(({a,crono})=>{
     if(!crono||!crono.subtareas||!crono.subtareas.length) return;
-    const pron = cronoCalcPronostico(crono.subtareas, cronoFechaEfectiva(a, a.fechaAsig||crono.fechaInicio));
+    const pron = cronoCalcPronostico(crono.subtareas, cronoFechaEfectiva(a, a.fechaAsig||crono.fechaInicio), a.responsable);
     const hoy = repDateKey(new Date());
     const termino = a.fechaTermino;
     const avanceKpi = cronoAvance(crono.subtareas);
@@ -6221,7 +6241,8 @@ function renderReporteoView(){
     const subtareas = crono?.subtareas||[];
     const reportes = crono?.reportes||[];
     const avance = cronoAvance(subtareas);
-    const pron = crono ? cronoCalcPronostico(subtareas, cronoFechaEfectiva(a, a.fechaAsig||crono.fechaInicio)) : null;
+    const pron = crono ? cronoCalcPronostico(subtareas, cronoFechaEfectiva(a, a.fechaAsig||crono.fechaInicio), a.responsable) : null;
+    const _pinfo = crono ? cronoPronosticoInfo(a, crono) : null;
     const diasRest = pron ? cronoDiasRestantes(pron) : null;
     const hoy = repDateKey(new Date());
     let semaforo = 'neutral';
@@ -6317,7 +6338,7 @@ function renderReporteoView(){
               const delGrupo = subtareas.filter(s=>s.paqueteId===st.paqueteId);
               const diasMax = Math.max(...delGrupo.map(s=>cronoDiasParaSubtarea(s)));
               const inicioGrupo = cursor;
-              const r = cronoAvanzarCursorDia(cursor, usado, diasMax);
+              const r = cronoAvanzarCursorDia(cursor, usado, diasMax, a.responsable);
               const finGrupo = r.fin;
               _paqCache[st.paqueteId] = {inicio:inicioGrupo, fin:finGrupo};
               cursor = r.cursor; usado = r.usado; // el cursor global avanza UNA sola vez por todo el grupo (paralelo)
@@ -6325,7 +6346,7 @@ function renderReporteoView(){
             stInicio = _paqCache[st.paqueteId].inicio;
             stFin = _paqCache[st.paqueteId].fin;
           } else {
-            const r = cronoAvanzarCursorDia(cursor, usado, diasTotal);
+            const r = cronoAvanzarCursorDia(cursor, usado, diasTotal, a.responsable);
             stInicio = r.inicio;
             stFin = r.fin;
             cursor = r.cursor; usado = r.usado;
@@ -6373,6 +6394,7 @@ function renderReporteoView(){
             <span style="font-size:11px;padding:4px 12px;border-radius:20px;background:${semaforo==='warn'?'rgba(245,166,35,.1)':'rgba(61,214,140,.1)'};color:${pronColor}">
               📅 Pronóstico de entrega: ${cronoFmtDate(pron)} ${diasR!==null?'· '+diasR+' días hábiles restantes':''}
             </span>
+            ${_pinfo&&_pinfo.diasVac?`<span style="font-size:11px;padding:4px 12px;border-radius:20px;background:rgba(192,132,252,.14);color:#a56cf0" title="Sin vacaciones se habría entregado el ${cronoFmtDate(_pinfo.sinVac)}. Los días de vacaciones de ${segIndEsc(a.responsable||'')} que caen durante la actividad ya recorrieron la fecha.">🌴 +${_pinfo.diasVac} día${_pinfo.diasVac===1?'':'s'} por vacaciones (original ${cronoFmtDate(_pinfo.sinVac)})</span>`:''}
             ${a.fechaTermino?`<span style="font-size:11px;color:var(--dim)">Fecha límite: ${cronoFmtDate(a.fechaTermino)}</span>`:''}
             <span style="font-size:10px;color:var(--dim);display:flex;align-items:center;gap:4px" title="Lunes a jueves se cuentan como jornada completa (9h efectivas) y el viernes como 6/9 de jornada (6h efectivas) — el cálculo ya reparte el trabajo con menos avance esperado para el viernes.">🕐 Ya considera jornada reducida de viernes (6h vs 9h)</span>
           </div>`;
@@ -9289,6 +9311,7 @@ function planExportPDF(detallado) {
     +'table.lst tbody{page-break-inside:avoid;break-inside:avoid}'
     +'table.lst tr.sub td{background:#f4f7fb!important;font-size:8.5px;padding:3px 7px;border-bottom:1px dashed #dfe6ef;color:#374151}'
     +'table.lst tr.act-fin td{background:#d1fae5!important;color:#14532d}'
+    +'table.lst tr.pnota.vac td{background:#f5f0ff!important;color:#5b21b6;border-bottom:1px dashed #c4b5fd}'
     +'table.lst tr.pnota td{background:#fffbeb!important;color:#92400e;font-size:8px;padding:3px 7px;border-bottom:1px dashed #fcd34d}'
     +'table.lst tr.sub.sub-fin td{background:#ecfdf3!important}'
     +'.stchip{display:inline-block;border-radius:10px;padding:1px 8px;font-size:8px;font-weight:700;white-space:nowrap}'
@@ -9413,6 +9436,10 @@ function planExportPDF(detallado) {
         h+='<td style="white-space:nowrap">'+fd(a.fechaAsig)+'</td>';
         h+='<td style="white-space:nowrap">'+fd(a.fechaTermino)+'</td>';
         h+='<td style="color:'+ec+';font-weight:600">'+a.estatus+'</td></tr>';
+        var pinf=(typeof cronoPronosticoInfo==='function')?cronoPronosticoInfo(a,crItem):null;
+        if(pinf&&pinf.diasVac){
+          h+='<tr class="pnota vac"><td></td><td colspan="6"><b>&#127796; Vacaciones:</b> la fecha pron&oacute;stico se recorri&oacute; <b>+'+pinf.diasVac+' d&iacute;a'+(pinf.diasVac===1?'':'s')+' por vacaciones</b>: de '+fd(pinf.sinVac)+' a <b>'+fd(pinf.fecha)+'</b>.</td></tr>';
+        }
         var pr=(typeof paPausaResumen==='function')?paPausaResumen(a):null;
         if(pr){
           var esc=function(t){return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
@@ -14231,14 +14258,13 @@ function paRenderTipo(tipo){
 
     // Calcular pronóstico de subtareas (disponible para todos los tipos)
     const _cronoItem = CRONO_ITEMS.find(x=>x.actividadId===a.id);
-    const _pronSub = _cronoItem && _cronoItem.subtareas && _cronoItem.subtareas.filter(s=>!s.pendienteValidacion).length
-      ? cronoCalcPronostico(_cronoItem.subtareas, cronoFechaEfectiva(a, a.fechaAsig||_cronoItem.fechaInicio))
-      : null;
+    const _pronInfo = _cronoItem ? cronoPronosticoInfo(a, _cronoItem) : null;
+    const _pronSub = _pronInfo ? _pronInfo.fecha : null;
     const _pronSubFmt = _pronSub ? (()=>{ const d=new Date(_pronSub+'T00:00:00'); return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`; })() : '—';
     const _pronColor = _pronSub && a.fechaTermino
       ? (_pronSub <= a.fechaTermino ? 'var(--green)' : 'var(--amber)')
       : 'var(--dim)';
-    const pronSubTd = `<td style="text-align:center;white-space:nowrap;font-size:11px;color:${_pronColor};font-weight:${_pronSub?'500':'400'}">${_pronSubFmt}</td>`;
+    const pronSubTd = `<td style="text-align:center;white-space:nowrap;font-size:11px;color:${_pronColor};font-weight:${_pronSub?'500':'400'}">${_pronSubFmt}${_pronInfo&&_pronInfo.diasVac?`<div style="font-size:9.5px;color:#a56cf0;font-weight:500" title="Sin vacaciones: ${_pronInfo.sinVac}">🌴 +${_pronInfo.diasVac} por vacaciones</div>`:''}</td>`;
 
     if(tipo==='Proyecto'||tipo==='Planos de Conectividad'){
       const numBobinaTd = tipo==='Planos de Conectividad'
@@ -16053,8 +16079,8 @@ function paPausaResumen(a){
   const c = (typeof CRONO_ITEMS!=='undefined') ? CRONO_ITEMS.find(x=>x.actividadId===a.id) : null;
   if(c && Array.isArray(c.subtareas) && c.subtareas.some(x=>!x.pendienteValidacion)){
     const base = a.fechaAsig || c.fechaInicio;
-    original = cronoCalcPronostico(c.subtareas, base) || original;
-    nueva = cronoCalcPronostico(c.subtareas, cronoFechaEfectiva(a, base));
+    original = cronoCalcPronostico(c.subtareas, base, a.responsable) || original;
+    nueva = cronoCalcPronostico(c.subtareas, cronoFechaEfectiva(a, base), a.responsable);
   } else if(original && totalDias){
     nueva = cronoAddWorkdays(original, totalDias);
   }
@@ -22021,7 +22047,7 @@ function segIndPrevWorkday(fechaStr){
 function segIndMeta(a){
   const c = (typeof CRONO_ITEMS!=='undefined') ? CRONO_ITEMS.find(x=>x.actividadId===a.id) : null;
   if(c && Array.isArray(c.subtareas) && c.subtareas.some(s=>!s.pendienteValidacion)){
-    const p = cronoCalcPronostico(c.subtareas, cronoFechaEfectiva(a, a.fechaAsig||c.fechaInicio));
+    const p = cronoCalcPronostico(c.subtareas, cronoFechaEfectiva(a, a.fechaAsig||c.fechaInicio), a.responsable);
     if(p) return {fecha:p, origen:'Pronóstico del cronograma'};
   }
   if(a.fechaTermino){
