@@ -6496,6 +6496,10 @@ async function cronoRecargarDeSupabase(){
       console.warn('⚠ Supabase devolvió 0 rows de cronograma');
     }
   }catch(e){ console.error('❌ cronoRecargarDeSupabase exception:', e); }
+  finally{
+    window._cronoRecargado = true;
+    try{ if(typeof curView!=='undefined' && curView==='panel' && typeof paRenderAlerts==='function') paRenderAlerts(); }catch(e){}
+  }
 }
 
 async function cronoSetSubTab(tab){
@@ -14420,6 +14424,24 @@ function paCalcularEnRiesgo(){
 }
 
 // ── Red flags discretas ──
+// Actividades abiertas que aún no tienen subtareas asignadas (no hay cronograma, así que tampoco pronóstico).
+// Se excluyen Impresiones y las que ya se entregaron/terminaron.
+function paActividadesSinSubtareas(){
+  const TIPOS = ['Proyecto','Planos de Conectividad','Trabajo Operativo'];
+  const ABIERTA = ['Sin iniciar','En progreso','En pausa'];
+  return PA_ITEMS.filter(a=>{
+    if(!a.responsable || !TIPOS.includes(a.tipo) || !ABIERTA.includes(a.estatus)) return false;
+    const c = CRONO_ITEMS.find(x=>x.actividadId===a.id);
+    return !c || !Array.isArray(c.subtareas) || !c.subtareas.length;
+  });
+}
+// Clic en la alerta: si es una sola, directo a agregar sus subtareas; si son varias, lista para elegir.
+function paAlertSubtareas(){
+  const lista = paActividadesSinSubtareas();
+  if(!lista.length) return;
+  if(lista.length===1){ paIrAsignarSubtareas(lista[0].id); return; }
+  paRecordarAsignacionSubtareas(lista.map(a=>a.id), null);
+}
 function paRenderAlerts(){
   const bar = document.getElementById('paAlertsBar');
   if(!bar) return;
@@ -14458,6 +14480,10 @@ function paRenderAlerts(){
   const enRiesgo = paCalcularEnRiesgo();
 
   const chips = [];
+  // Falta asignación de subtareas: actividades abiertas (con responsable) que todavía no tienen subtareas,
+  // por lo que no tienen fecha pronóstico. Se espera a que el cronograma esté cargado para no dar falsos avisos.
+  const sinSub = (window._cronoRecargado || (typeof CRONO_ITEMS!=='undefined' && CRONO_ITEMS.length)) ? paActividadesSinSubtareas() : [];
+  if(sinSub.length) chips.push({type:'amber', icon:'📋', label:`Falta asignación de subtareas (${sinSub.length})`, action:`paAlertSubtareas()`});
   if(sinResp.length) chips.push({type:'red', icon:'👤', label:`${sinResp.length} sin responsable`, action:`paAlertFilter('sinResp')`});
   if(vencidas.length) chips.push({type:'red', icon:'⏰', label:`${vencidas.length} vencida${vencidas.length!==1?'s':''}`, action:`paAlertFilter('vencidas')`});
   if(enRiesgo.length) chips.push({type:'red', icon:'🚩', label:`${enRiesgo.length} en riesgo de retraso`, action:`paAlertFilter('enRiesgo')`});
@@ -16186,8 +16212,12 @@ function paRecordarAsignacionSubtareas(ids, pausada){
   bg.id = 'paRecordarSubBg'; bg.className = 'pa-modal-bg open'; bg.style.zIndex = '100001';
   bg.innerHTML = `<div class="pa-modal" style="max-width:460px;padding:20px 22px" onclick="event.stopPropagation()">
     <div class="pa-modal-title" style="margin-bottom:10px">📋 Falta asignar subtareas</div>
-    <div style="font-size:12px;color:var(--text);margin-bottom:10px">Para calcular cuánto se recorre la entrega de <b>${segIndEsc((pausada&&(pausada.folio||pausada.actividad))||'la actividad pausada')}</b> necesito el pronóstico de ${acts.length===1?'esta actividad':'estas actividades'}, y todavía no ${acts.length===1?'tiene':'tienen'} subtareas asignadas. En cuanto las agregues, el ajuste se calcula solo.</div>
-    ${acts.map(b=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:0.5px solid var(--border);border-radius:8px;margin-bottom:6px"><span style="font-size:12px;color:var(--text)">${segIndEsc(b.folio||b.actividad||'—')} <span style="color:var(--dim);font-size:10.5px">${segIndEsc(b.proyecto||'')}</span></span><button type="button" class="et-act-btn" data-go="${segIndEsc(b.id)}" style="background:rgba(74,143,212,.15);color:var(--accent)">Asignar subtareas →</button></div>`).join('')}
+    <div style="font-size:12px;color:var(--text);margin-bottom:10px">${pausada
+      ? `Para calcular cuánto se recorre la entrega de <b>${segIndEsc(pausada.folio||pausada.actividad||'la actividad pausada')}</b> necesito el pronóstico de ${acts.length===1?'esta actividad':'estas actividades'}, y todavía no ${acts.length===1?'tiene':'tienen'} subtareas asignadas. En cuanto las agregues, el ajuste se calcula solo.`
+      : `${acts.length===1?'Esta actividad todavía no tiene':'Estas '+acts.length+' actividades todavía no tienen'} subtareas asignadas, por eso no ${acts.length===1?'tiene':'tienen'} fecha pronóstico. Elige una y te llevo directo a agregarlas.`}</div>
+    <div style="max-height:52vh;overflow:auto">
+    ${acts.map(b=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:0.5px solid var(--border);border-radius:8px;margin-bottom:6px"><span style="font-size:12px;color:var(--text)">${segIndEsc(b.folio||b.actividad||'—')} <span style="color:var(--dim);font-size:10.5px">${segIndEsc(b.proyecto||'')}${b.responsable?' · '+segIndEsc(segIndCorto(b.responsable)):''}</span></span><button type="button" class="et-act-btn" data-go="${segIndEsc(b.id)}" style="background:rgba(74,143,212,.15);color:var(--accent);white-space:nowrap">Asignar subtareas →</button></div>`).join('')}
+    </div>
     <div style="display:flex;justify-content:flex-end;margin-top:12px"><button type="button" class="et-act-btn" id="paRecordarCerrar">Después</button></div></div>`;
   document.body.appendChild(bg);
   bg.addEventListener('click',()=>bg.remove());
