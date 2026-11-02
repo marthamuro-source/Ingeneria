@@ -1439,7 +1439,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
       Panel de Seguimiento
     </button>
-    <button class="ni" onclick="goView(&#39;segind&#39;)">
+    <button class="ni" id="navSegIndBtn" onclick="goView(&#39;segind&#39;)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/><path d="M16 3.5l1.5 1.5L21 1.5" transform="translate(-1 1)"/></svg>
       Seguimiento individual
     </button>
@@ -2363,7 +2363,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
         <h1>Panel de seguimiento individual</h1>
         <div class="tmeta">Cumplimiento de entregas por integrante, contra la fecha pronóstico</div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+        <button id="segIndVisBtn" class="et-act-btn" onclick="segIndToggleVisibilidad()" style="display:none;font-size:11px"></button>
         <label for="segIndPeriodo" style="font-size:11px;color:var(--dim)">Periodo (entregas)</label>
         <select id="segIndPeriodo" onchange="segIndSetPeriodo(this.value)" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font);font-size:12px;padding:5px 8px">
           <option value="todo">Todo el historial</option>
@@ -6407,7 +6408,18 @@ function renderReporteoView(){
           }
         }
         if(a.estatus==='En pausa' && a.pausaInicio){
-          html += `<div style="margin-bottom:12px;padding:8px 12px;border-radius:8px;background:rgba(245,166,35,.1);border:0.5px solid rgba(245,166,35,.35);font-size:11px;color:var(--text)">⏸ <b>En pausa desde ${cronoFmtDate(a.pausaInicio)}</b> · ${a.pausaMotivo?'Motivo: '+segIndEsc(a.pausaMotivo):'<i style="color:var(--dim)">sin justificación registrada</i>'}</div>`;
+          let _prio = '';
+          if(a.pausaPrioridad && Array.isArray(a.pausaPrioridad.ids) && a.pausaPrioridad.ids.length){
+            const _r = paPrioridadDias(a.pausaPrioridad.ids, a.pausaPrioridad.modo);
+            const _todas = a.pausaPrioridad.ids.map(id=>PA_ITEMS.find(x=>x.id===id)).filter(Boolean);
+            const _abiertas = _todas.filter(b=>!['En revisión','Terminado (máximo avance)','Terminado'].includes(b.estatus));
+            _prio = `<div style="margin-top:6px;font-size:11px;color:var(--text)">🔀 <b>Cambio de prioridad:</b> atiende ${segIndEsc(paPrioridadEtiquetas(a.pausaPrioridad).join(', '))} (${a.pausaPrioridad.modo==='paralelo'?'en paralelo':'en secuencia'}) · estimado pendiente: <b>${_r.dias} día${_r.dias===1?'':'s'} háb.</b> <span style="color:var(--dim)">(se ajusta solo; al reanudar cuentan los días reales)</span></div>`;
+            if(_r.sinPron.length){
+              _prio += `<div style="margin-top:6px;font-size:11px;color:var(--amber)">⚠ Falta el pronóstico de ${_r.sinPron.map(b=>`<b>${segIndEsc(b.folio||b.actividad||'—')}</b> <button type="button" class="et-act-btn" style="font-size:10px;background:rgba(74,143,212,.15);color:var(--accent)" onclick="event.stopPropagation();paIrAsignarSubtareas('${b.id}')">Asignar subtareas →</button>`).join(' ')} para calcular cuánto se recorre esta actividad.</div>`;
+            }
+            if(!_abiertas.length) _prio += `<div style="margin-top:6px;font-size:11px;color:var(--green)">✓ Ya se atendió lo que tenía prioridad: puedes reanudar esta actividad.</div>`;
+          }
+          html += `<div style="margin-bottom:12px;padding:8px 12px;border-radius:8px;background:rgba(245,166,35,.1);border:0.5px solid rgba(245,166,35,.35);font-size:11px;color:var(--text)">⏸ <b>En pausa desde ${cronoFmtDate(a.pausaInicio)}</b> · ${a.pausaMotivo?'Motivo: '+segIndEsc(a.pausaMotivo):'<i style="color:var(--dim)">sin justificación registrada</i>'}${_prio}</div>`;
         }
         if(Array.isArray(a.pausasHistorial) && a.pausasHistorial.length){
           html += `<div style="margin-bottom:16px">
@@ -6415,7 +6427,7 @@ function renderReporteoView(){
             <div style="border:0.5px solid var(--border);border-radius:8px;overflow:hidden">`;
           [...a.pausasHistorial].reverse().forEach(p=>{
             html += `<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 12px;font-size:11px;border-bottom:0.5px solid var(--border)">
-              <span style="color:var(--text)">${cronoFmtDate(p.inicio)} → ${cronoFmtDate(p.fin)}<div style="font-size:10.5px;color:var(--dim);margin-top:2px">${p.motivo?'Motivo: '+segIndEsc(p.motivo):'<i>Sin justificación registrada</i>'}</div></span>
+              <span style="color:var(--text)">${cronoFmtDate(p.inicio)} → ${cronoFmtDate(p.fin)}<div style="font-size:10.5px;color:var(--dim);margin-top:2px">${p.motivo?'Motivo: '+segIndEsc(p.motivo):'<i>Sin justificación registrada</i>'}${p.prioridad&&p.prioridad.items&&p.prioridad.items.length?' · 🔀 atendió '+segIndEsc(paPrioridadEtiquetas(p.prioridad).join(', ')):''}</div></span>
               <span style="color:var(--amber);font-weight:500;white-space:nowrap">${p.dias} día${p.dias===1?'':'s'} hábil${p.dias===1?'':'es'}</span>
             </div>`;
           });
@@ -9445,7 +9457,8 @@ function planExportPDF(detallado) {
           var esc=function(t){return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
           var nota='<b>&#9208; Pausa:</b> ';
           nota+=pr.pausas.map(function(p){
-            return (p.abierta?'en pausa desde '+fd(p.inicio)+' ('+p.dias+' d&iacute;as h&aacute;b. a la fecha)':'del '+fd(p.inicio)+' al '+fd(p.fin)+' ('+p.dias+' d&iacute;a'+(p.dias===1?'':'s')+' h&aacute;b.)')+' &mdash; <i>'+(p.motivo?esc(p.motivo):'sin justificaci&oacute;n registrada')+'</i>';
+            var pri=(p.prioridad&&p.prioridad.items&&p.prioridad.items.length)?' (se atendi&oacute; '+esc(paPrioridadEtiquetas(p.prioridad).join(', '))+')':'';
+            return (p.abierta?'en pausa desde '+fd(p.inicio)+' ('+p.dias+' d&iacute;as h&aacute;b. estimados)':'del '+fd(p.inicio)+' al '+fd(p.fin)+' ('+p.dias+' d&iacute;a'+(p.dias===1?'':'s')+' h&aacute;b.)')+' &mdash; <i>'+(p.motivo?esc(p.motivo):'sin justificaci&oacute;n registrada')+'</i>'+pri;
           }).join('; ');
           if(pr.original&&pr.nueva&&pr.nueva!==pr.original) nota+='. Entrega original: <b>'+fd(pr.original)+'</b> &rarr; nueva fecha por la pausa: <b>'+fd(pr.nueva)+'</b> (+'+pr.totalDias+' d&iacute;a'+(pr.totalDias===1?'':'s')+' h&aacute;b.)';
           else if(pr.totalDias) nota+='. Total pausado: '+pr.totalDias+' d&iacute;a'+(pr.totalDias===1?'':'s')+' h&aacute;b.';
@@ -13724,6 +13737,9 @@ function dashShowGaleria(){
 const DASH_VIS_KEY = 'dash_visibility_v1'; // solo como caché local mientras carga Supabase
 let DASH_VISIBILITY = {};
 async function dashLoadVisibility(){
+  try{ await dashLoadVisibilityCore(); } finally { if(typeof segIndApplyAccess==='function') segIndApplyAccess(); }
+}
+async function dashLoadVisibilityCore(){
   // Caché local primero, para pintar rápido mientras llega Supabase
   try{
     const raw = localStorage.getItem(DASH_VIS_KEY);
@@ -16035,6 +16051,7 @@ function paPausaElapsed(desde, hasta){
 // mientras dura la pausa y, al reanudar, se guarda en pausasHistorial junto con las fechas.
 function paPedirMotivoPausa(a){
   return new Promise(resolve=>{
+    window._paPrioridadTmp = null;
     const old = document.getElementById('paPausaMotivoBg'); if(old) old.remove();
     const bg = document.createElement('div');
     bg.id = 'paPausaMotivoBg';
@@ -16042,27 +16059,155 @@ function paPedirMotivoPausa(a){
     bg.style.zIndex = '100000';
     const nombre = (a && (a.folio || a.actividad)) || 'esta actividad';
     const sug = ['Esperando información del cliente','Cambio de prioridad','Falta de insumos / datos','Pendiente de revisión externa'];
-    bg.innerHTML = `<div class="pa-modal" style="max-width:460px;padding:20px 22px" onclick="event.stopPropagation()">
+    const hoy = repDateKey(new Date());
+    const ABIERTA = e=>!['En revisión','Terminado (máximo avance)','Terminado','En pausa'].includes(e);
+    const cands = PA_ITEMS.filter(x=>a && x.id!==a.id && x.responsable===a.responsable && ABIERTA(x.estatus)).map(x=>{
+      const info = cronoPronosticoInfo(x);
+      return {x, fecha: info&&info.fecha ? info.fecha : null};
+    }).sort((p,q)=> (p.fecha?0:1)-(q.fecha?0:1) || String(p.fecha||'').localeCompare(String(q.fecha||'')));
+    const filas = cands.map(c=>{
+      const dias = c.fecha ? (()=>{ const cr=CRONO_ITEMS.find(y=>y.actividadId===c.x.id); const ini=c.x.fechaAsig||(cr&&cr.fechaInicio)||hoy; const d=ini>hoy?ini:hoy; return c.fecha<d?0:(paWorkdays(d,c.fecha)||0); })() : null;
+      return `<label style="display:flex;gap:8px;align-items:flex-start;padding:7px 8px;border-bottom:0.5px solid var(--border);cursor:pointer">
+        <input type="checkbox" class="paPrioChk" value="${segIndEsc(c.x.id)}" style="margin-top:3px">
+        <span style="flex:1;min-width:0"><span style="font-size:12px;font-weight:500;color:var(--text)">${segIndEsc(c.x.folio||c.x.actividad||'—')}</span> <span style="font-size:10.5px;color:var(--dim)">${segIndEsc(c.x.proyecto||'')} · ${segIndEsc(c.x.estatus||'')}</span>
+        <div style="font-size:10.5px;color:${c.fecha?'var(--accent)':'var(--amber)'}">${c.fecha?('📅 Pronóstico '+segIndFmt(c.fecha)+' · '+dias+' día'+(dias===1?'':'s')+' háb.'):'⚠ Sin pronóstico — faltan subtareas por asignar'}</div></span></label>`;
+    }).join('');
+    bg.innerHTML = `<div class="pa-modal" style="max-width:520px;padding:20px 22px;max-height:92vh;overflow:auto" onclick="event.stopPropagation()">
       <div class="pa-modal-title" style="margin-bottom:10px">⏸ Pausar actividad</div>
       <div style="font-size:12px;color:var(--text);margin-bottom:4px"><b>${segIndEsc(nombre)}</b>${a&&a.proyecto?' · '+segIndEsc(a.proyecto):''}</div>
       <div style="font-size:11px;color:var(--dim);margin-bottom:12px">Escribe el motivo de la pausa. Quedará registrado junto con los días pausados y aparecerá en el plan de trabajo como justificación del cambio de fecha de entrega.</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">${sug.map(t=>`<button type="button" class="et-act-btn" data-sug="${segIndEsc(t)}" style="font-size:10.5px">${segIndEsc(t)}</button>`).join('')}</div>
       <textarea id="paPausaMotivoTxt" rows="3" placeholder="Motivo de la pausa (obligatorio)…" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font);font-size:12px;padding:8px;resize:vertical"></textarea>
+      <div id="paPrioBox" style="display:none;margin-top:12px;border:0.5px solid rgba(74,143,212,.4);border-radius:8px;padding:10px 12px;background:rgba(74,143,212,.06)">
+        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px">¿Qué actividad(es) va a atender en su lugar?</div>
+        <div style="font-size:10.5px;color:var(--dim);margin-bottom:8px">Los días de la pausa se estiman con el pronóstico de lo que elijas y se suman al pronóstico de esta actividad. No es fijo: se va ajustando y, al reanudarla, cuentan los días reales.</div>
+        <div style="max-height:170px;overflow:auto;border:0.5px solid var(--border);border-radius:6px;background:var(--surface2)">${filas || '<div style="padding:10px;font-size:11px;color:var(--dim)">Este proyectista no tiene otras actividades abiertas.</div>'}</div>
+        <div id="paPrioModo" style="display:none;gap:14px;margin-top:8px;font-size:11px;color:var(--text);flex-wrap:wrap">
+          <label style="cursor:pointer"><input type="radio" name="paPrioModo" value="secuencia" checked> En secuencia (una tras otra)</label>
+          <label style="cursor:pointer"><input type="radio" name="paPrioModo" value="paralelo"> En paralelo (termina la más tardada)</label>
+        </div>
+        <div id="paPrioEst" style="margin-top:8px;font-size:11.5px;color:var(--text)"></div>
+      </div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
         <button type="button" class="et-act-btn" id="paPausaCancel">Cancelar</button>
         <button type="button" class="et-act-btn" id="paPausaOk" disabled style="background:rgba(245,166,35,.18);color:var(--amber);opacity:.5">⏸ Pausar</button>
       </div></div>`;
     document.body.appendChild(bg);
     const txt = bg.querySelector('#paPausaMotivoTxt'), ok = bg.querySelector('#paPausaOk');
+    const box = bg.querySelector('#paPrioBox'), modoBox = bg.querySelector('#paPrioModo'), est = bg.querySelector('#paPrioEst');
+    let esPrio = false;
+    const sel = ()=>[...bg.querySelectorAll('.paPrioChk:checked')].map(c=>c.value);
+    const modo = ()=>{ const r = bg.querySelector('input[name=paPrioModo]:checked'); return r?r.value:'secuencia'; };
     const valida = ()=>{ const v = txt.value.trim().length>=5; ok.disabled = !v; ok.style.opacity = v?'1':'.5'; };
+    const calc = ()=>{
+      const ids = sel();
+      modoBox.style.display = ids.length>1 ? 'flex' : 'none';
+      if(!ids.length){ est.innerHTML = '<span style="color:var(--dim)">Sin actividades seleccionadas: la pausa contará solo los días reales.</span>'; return; }
+      const r = paPrioridadDias(ids, modo());
+      let h = '';
+      if(r.dias>0){
+        h += `Estimado de la pausa: <b>+${r.dias} día${r.dias===1?'':'s'} háb.</b>`;
+        const info = cronoPronosticoInfo(a);
+        if(info && info.fecha){
+          const cr = CRONO_ITEMS.find(y=>y.actividadId===a.id);
+          const subs = ((cr&&cr.subtareas)||[]).filter(y=>!y.pendienteValidacion);
+          const nueva = cronoCalcPronostico(subs, cronoAddWorkdays(a.fechaAsig||cr.fechaInicio, paDiasEnPausa(a)+r.dias), a.responsable);
+          h += ` · entrega de esta actividad: ${segIndFmt(info.fecha)} → <b>${segIndFmt(nueva)}</b>`;
+        }
+      } else h += '<span style="color:var(--dim)">Todavía no hay días que estimar.</span>';
+      if(r.sinPron.length) h += `<div style="margin-top:4px;color:var(--amber)">⚠ ${r.sinPron.map(b=>segIndEsc(b.folio||b.actividad)).join(', ')} no ${r.sinPron.length===1?'tiene':'tienen'} pronóstico. Al guardar te llevo a asignar sus subtareas para poder calcular los días.</div>`;
+      est.innerHTML = h;
+    };
     txt.addEventListener('input', valida);
-    bg.querySelectorAll('[data-sug]').forEach(b=>b.addEventListener('click',()=>{ txt.value = b.getAttribute('data-sug'); valida(); txt.focus(); }));
+    bg.querySelectorAll('.paPrioChk, input[name=paPrioModo]').forEach(e=>e.addEventListener('change', calc));
+    bg.querySelectorAll('[data-sug]').forEach(b=>b.addEventListener('click',()=>{
+      txt.value = b.getAttribute('data-sug'); valida(); txt.focus();
+      esPrio = (b.getAttribute('data-sug')==='Cambio de prioridad');
+      box.style.display = esPrio ? '' : 'none';
+      bg.querySelectorAll('[data-sug]').forEach(x=>{ x.style.outline = (x===b && esPrio) ? '1.5px solid var(--accent)' : ''; });
+      if(esPrio) calc();
+    }));
     const cerrar = v=>{ bg.remove(); resolve(v); };
-    bg.querySelector('#paPausaCancel').addEventListener('click',()=>cerrar(null));
-    bg.addEventListener('click',()=>cerrar(null));
-    ok.addEventListener('click',()=>{ const v = txt.value.trim(); if(v.length>=5) cerrar(v); });
+    bg.querySelector('#paPausaCancel').addEventListener('click',()=>{ window._paPrioridadTmp=null; cerrar(null); });
+    bg.addEventListener('click',()=>{ window._paPrioridadTmp=null; cerrar(null); });
+    ok.addEventListener('click',()=>{
+      const v = txt.value.trim(); if(v.length<5) return;
+      const ids = esPrio ? sel() : [];
+      window._paPrioridadTmp = ids.length ? {ids, modo: ids.length>1 ? modo() : 'secuencia'} : null;
+      if(ids.length){
+        const sinPron = paPrioridadDias(ids, modo()).sinPron;
+        if(sinPron.length) setTimeout(()=>paRecordarAsignacionSubtareas(sinPron.map(b=>b.id), a), 350);
+      }
+      cerrar(v);
+    });
     setTimeout(()=>txt.focus(),30);
   });
+}
+// ── Cambio de prioridad: días que tardarán las actividades que pasan por delante ──
+// Para cada una: días hábiles desde hoy (o desde su inicio, si arranca después) hasta su fecha pronóstico.
+// En secuencia se suman; en paralelo cuenta la que termina más tarde. Las que aún no tienen pronóstico
+// (sin subtareas asignadas) se devuelven en sinPron y no suman hasta que lo tengan.
+function paPrioridadDias(ids, modo){
+  const hoy = repDateKey(new Date());
+  const arr = [], sinPron = [];
+  (ids||[]).forEach(id=>{
+    const b = PA_ITEMS.find(x=>x.id===id); if(!b) return;
+    if(['En revisión','Terminado (máximo avance)','Terminado'].includes(b.estatus)) return; // ya entregada: no ocupa tiempo
+    const info = cronoPronosticoInfo(b);
+    if(!info || !info.fecha){ sinPron.push(b); return; }
+    const cr = CRONO_ITEMS.find(y=>y.actividadId===b.id);
+    const ini = b.fechaAsig || (cr && cr.fechaInicio) || hoy;
+    const desde = ini>hoy ? ini : hoy;
+    arr.push(info.fecha < desde ? 0 : (paWorkdays(desde, info.fecha)||0));
+  });
+  const dias = !arr.length ? 0 : (modo==='paralelo' ? Math.max.apply(null,arr) : arr.reduce((t,x)=>t+x,0));
+  return {dias, sinPron};
+}
+let _paPrioEnCurso = {};
+function paPausaPrioridadRestante(a){
+  if(!a || a.estatus!=='En pausa' || !a.pausaPrioridad || !Array.isArray(a.pausaPrioridad.ids) || !a.pausaPrioridad.ids.length) return 0;
+  if(_paPrioEnCurso[a.id]) return 0; // evita ciclos (A espera a B y B espera a A)
+  _paPrioEnCurso[a.id] = true;
+  try{ return paPrioridadDias(a.pausaPrioridad.ids, a.pausaPrioridad.modo).dias; }
+  finally{ delete _paPrioEnCurso[a.id]; }
+}
+function paPrioridadEtiquetas(pri){
+  if(!pri) return [];
+  if(Array.isArray(pri.items)) return pri.items.map(i=>i.folio||i.actividad||'—');
+  return (pri.ids||[]).map(id=>{ const b=PA_ITEMS.find(x=>x.id===id); return b ? (b.folio||b.actividad||'—') : '—'; });
+}
+// Recordatorio: llevar a asignar subtareas de las actividades que aún no tienen pronóstico
+function paRecordarAsignacionSubtareas(ids, pausada){
+  const old = document.getElementById('paRecordarSubBg'); if(old) old.remove();
+  const acts = (ids||[]).map(id=>PA_ITEMS.find(x=>x.id===id)).filter(Boolean);
+  if(!acts.length) return;
+  const bg = document.createElement('div');
+  bg.id = 'paRecordarSubBg'; bg.className = 'pa-modal-bg open'; bg.style.zIndex = '100001';
+  bg.innerHTML = `<div class="pa-modal" style="max-width:460px;padding:20px 22px" onclick="event.stopPropagation()">
+    <div class="pa-modal-title" style="margin-bottom:10px">📋 Falta asignar subtareas</div>
+    <div style="font-size:12px;color:var(--text);margin-bottom:10px">Para calcular cuánto se recorre la entrega de <b>${segIndEsc((pausada&&(pausada.folio||pausada.actividad))||'la actividad pausada')}</b> necesito el pronóstico de ${acts.length===1?'esta actividad':'estas actividades'}, y todavía no ${acts.length===1?'tiene':'tienen'} subtareas asignadas. En cuanto las agregues, el ajuste se calcula solo.</div>
+    ${acts.map(b=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:0.5px solid var(--border);border-radius:8px;margin-bottom:6px"><span style="font-size:12px;color:var(--text)">${segIndEsc(b.folio||b.actividad||'—')} <span style="color:var(--dim);font-size:10.5px">${segIndEsc(b.proyecto||'')}</span></span><button type="button" class="et-act-btn" data-go="${segIndEsc(b.id)}" style="background:rgba(74,143,212,.15);color:var(--accent)">Asignar subtareas →</button></div>`).join('')}
+    <div style="display:flex;justify-content:flex-end;margin-top:12px"><button type="button" class="et-act-btn" id="paRecordarCerrar">Después</button></div></div>`;
+  document.body.appendChild(bg);
+  bg.addEventListener('click',()=>bg.remove());
+  bg.querySelector('#paRecordarCerrar').addEventListener('click',()=>bg.remove());
+  bg.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{ const id=b.getAttribute('data-go'); bg.remove(); paIrAsignarSubtareas(id); }));
+}
+async function paIrAsignarSubtareas(actId){
+  const a = PA_ITEMS.find(x=>x.id===actId); if(!a) return;
+  try{ pdmClose(); }catch(e){}
+  try{ paCloseModal(); }catch(e){}
+  goView('seguimiento');
+  if(typeof segSetTab==='function') segSetTab('reporteo');
+  cronoFiltroProyectista = a.responsable || '';
+  await cronoSetSubTab('cronograma');
+  cronoExpandedId = actId;
+  renderReporteoView();
+  setTimeout(()=>{
+    const el = document.querySelector(`[onclick="cronoToggle('${actId}')"]`);
+    if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+    if(typeof cronoAddSubtareaModal==='function') cronoAddSubtareaModal(actId);
+  }, 300);
 }
 // ¿Este cambio de estatus es "entrar a pausa"?
 function paEsEntradaPausa(a, nuevo){ return !!a && nuevo==='En pausa' && a.estatus!=='En pausa'; }
@@ -16071,7 +16216,7 @@ function paEsEntradaPausa(a, nuevo){ return !!a && nuevo==='En pausa' && a.estat
 function paPausaResumen(a){
   if(!a) return null;
   const hist = Array.isArray(a.pausasHistorial) ? a.pausasHistorial.slice() : [];
-  const abierta = (a.estatus==='En pausa' && a.pausaInicio) ? {inicio:a.pausaInicio, fin:null, dias:paPausaElapsed(a.pausaInicio, repDateKey(new Date())), motivo:a.pausaMotivo||'', abierta:true} : null;
+  const abierta = (a.estatus==='En pausa' && a.pausaInicio) ? {inicio:a.pausaInicio, fin:null, dias:paPausaElapsed(a.pausaInicio, repDateKey(new Date()))+paPausaPrioridadRestante(a), motivo:a.pausaMotivo||'', abierta:true, prioridad:(a.pausaPrioridad&&a.pausaPrioridad.ids&&a.pausaPrioridad.ids.length)?{modo:a.pausaPrioridad.modo, items:a.pausaPrioridad.ids.map(id=>{const b=PA_ITEMS.find(x=>x.id===id);return {id, folio:b?(b.folio||''):'', actividad:b?(b.actividad||''):''};})}:null} : null;
   if(!hist.length && !abierta) return null;
   const pausas = abierta ? hist.concat([abierta]) : hist;
   const totalDias = pausas.reduce((t,p)=>t+(p.dias||0),0);
@@ -16095,15 +16240,19 @@ function paAplicarEstatus(a, newEstatus){
     const diasEstePausa = paPausaElapsed(a.pausaInicio, hoy);
     a.diasEnPausaAcum = (a.diasEnPausaAcum||0) + diasEstePausa;
     if(!Array.isArray(a.pausasHistorial)) a.pausasHistorial = [];
-    a.pausasHistorial.push({ inicio: a.pausaInicio, fin: hoy, dias: diasEstePausa, motivo: a.pausaMotivo||'' });
+    const _pri = a.pausaPrioridad ? {modo:a.pausaPrioridad.modo, items:(a.pausaPrioridad.ids||[]).map(id=>{ const b=PA_ITEMS.find(x=>x.id===id); return {id, folio:b?(b.folio||''):'', actividad:b?(b.actividad||''):''}; })} : null;
+    a.pausasHistorial.push({ inicio: a.pausaInicio, fin: hoy, dias: diasEstePausa, motivo: a.pausaMotivo||'', prioridad: _pri });
     a.pausaInicio = null;
     a.pausaMotivo = null;
+    a.pausaPrioridad = null;
   }
   if(newEstatus === 'En pausa'){
     a.pausaInicio = hoy;
     a.pausaMotivo = (window._paMotivoTmp||'').trim() || null; // justificación capturada en el modal de pausa
+    a.pausaPrioridad = window._paPrioridadTmp || null;       // actividades que pasan por delante (cambio de prioridad)
   }
   window._paMotivoTmp = null;
+  window._paPrioridadTmp = null;
   // ── Entrega del proyectista (para Seguimiento individual) ──
   // "En revisión" / "Terminado" = el proyectista ya entregó. La fecha de entrega es la del momento en
   // que pasó a revisión. Si el administrador la regresa a proceso (hubo cambios), esa entrega se
@@ -16150,6 +16299,7 @@ function paDiasEnPausa(a){
   let dias = a.diasEnPausaAcum||0;
   if(a.estatus==='En pausa' && a.pausaInicio){
     dias += paPausaElapsed(a.pausaInicio, new Date().toISOString().slice(0,10));
+    dias += paPausaPrioridadRestante(a); // cambio de prioridad: lo que falta por atender las actividades de delante
   }
   return dias;
 }
@@ -16420,6 +16570,7 @@ function paGuardar(){
       data.diasEnPausaAcum = prev.diasEnPausaAcum || 0;
       data.pausasHistorial = Array.isArray(prev.pausasHistorial) ? prev.pausasHistorial.slice() : [];
       data.pausaMotivo = prev.pausaMotivo || null;
+      data.pausaPrioridad = prev.pausaPrioridad || null;
       data.fechaEntregaProy = prev.fechaEntregaProy || null;
       data.devoluciones = prev.devoluciones || 0;
       const nuevoEstatus = data.estatus;
@@ -19100,6 +19251,9 @@ function applyRole(role, nombre){
   if(proyBtn) proyBtn.style.display = (role==='admin') ? '' : 'none';
   if(role !== 'admin' && curView === 'proyectos') goView('seguimiento');
 
+  // Seguimiento individual: oculto a proyectistas hasta que el administrador lo active
+  if(typeof segIndApplyAccess==='function') segIndApplyAccess();
+
   // Ahora que ya se conoce el rol/nombre, activar el canal de notificaciones propias
   // del proyectista (no se puede activar antes porque no se conocía _miNombre).
   if(role === 'proyectista' && typeof supaStartProyNotifRealtime==='function') supaStartProyNotifRealtime();
@@ -19121,6 +19275,11 @@ function setupGoViewGuard(){
     // Feedback SBI es un espacio privado del administrador — nadie más puede entrar,
     // ni siquiera el rol "jefe".
     if(name === 'sbi' && _userRole !== 'admin'){
+      _origGoView('seguimiento');
+      return;
+    }
+    // Seguimiento individual: proyectistas solo si el administrador lo activó.
+    if(name === 'segind' && !segIndPuedeVer()){
       _origGoView('seguimiento');
       return;
     }
@@ -22032,6 +22191,33 @@ const _segMounted = {};
 // "Entregada" = En revisión / Terminado. Fecha de entrega = fechaEntregaProy (se borra si el admin
 // la regresa a proceso); en actividades anteriores sin ese dato se usa F. Final Real.
 // ═══════════════════════════════════════════════════════════════════════════
+// Acceso: el administrador y los jefes siempre lo ven. Los proyectistas solo cuando el administrador lo
+// activa (se guarda en la tabla dash_visibility con id "seg_individual", así aplica para todo el equipo).
+const SEGIND_VIS_ID = 'seg_individual';
+function segIndPuedeVer(){
+  if(_userRole!=='proyectista') return true;
+  return !!(typeof DASH_VISIBILITY!=='undefined' && DASH_VISIBILITY[SEGIND_VIS_ID]===true);
+}
+function segIndApplyAccess(){
+  const btn = document.getElementById('navSegIndBtn');
+  const ok = segIndPuedeVer();
+  if(btn){
+    btn.style.display = ok ? '' : 'none';
+    if(_userRole==='admin'){
+      const vis = (typeof DASH_VISIBILITY!=='undefined' && DASH_VISIBILITY[SEGIND_VIS_ID]===true);
+      btn.title = vis ? 'Visible para proyectistas' : 'Oculto para proyectistas (solo tú y los jefes lo ven)';
+    }
+  }
+  if(!ok && curView==='segind') goView('seguimiento');
+}
+function segIndToggleVisibilidad(){
+  if(_userRole!=='admin') return;
+  const vis = DASH_VISIBILITY[SEGIND_VIS_ID]===true;
+  if(!vis && !confirm('¿Mostrar el Panel de seguimiento individual a los proyectistas?\n\nCada proyectista solo verá su propio resumen y detalle.')) return;
+  dashSetVisibility(SEGIND_VIS_ID, !vis);
+  segIndApplyAccess();
+  renderSegInd();
+}
 let segIndPeriodo = 'todo';
 let segIndPersona = null;
 function segIndEsc(t){ return String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -22180,6 +22366,17 @@ function segIndDetalle(st){
 }
 function renderSegInd(){
   const host = document.getElementById('segIndBody'); if(!host) return;
+  const vBtn = document.getElementById('segIndVisBtn');
+  if(vBtn){
+    if(_userRole==='admin'){
+      const vis = DASH_VISIBILITY[SEGIND_VIS_ID]===true;
+      vBtn.style.display = '';
+      vBtn.textContent = vis ? '👁️ Visible para proyectistas' : '🙈 Oculto para proyectistas';
+      vBtn.title = vis ? 'Clic para ocultarlo a los proyectistas' : 'Clic para mostrarlo a los proyectistas';
+      vBtn.style.color = vis ? 'var(--green)' : 'var(--amber)';
+    } else vBtn.style.display = 'none';
+  }
+  if(!segIndPuedeVer()){ host.innerHTML = ''; return; }
   try{ if(typeof cronoLoad==='function') cronoLoad(); }catch(e){}
   const selP = document.getElementById('segIndPeriodo'); if(selP && selP.value!==segIndPeriodo) selP.value = segIndPeriodo;
   const hoy = repDateKey(new Date());
@@ -22251,7 +22448,7 @@ async function paRefreshFromSupabase(){
         fechaAsig:a.fecha_asig||'', fechaTermino:a.fecha_termino||'',
         fechaReal:a.fecha_real||'', numBobina:a.num_bobina||'',
         juegos:a.juegos||'', planosJuego:a.planos_juego||'',
-        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[], pausaMotivo:a.pausa_motivo||null,
+        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[], pausaMotivo:a.pausa_motivo||null, pausaPrioridad:a.pausa_prioridad||null,
         fechaEntregaProy:a.fecha_entrega_proy||null, devoluciones:a.devoluciones||0,
         createdAt:a.created_at, updatedAt:a.updated_at,
       }));
@@ -23277,7 +23474,7 @@ async function supaLoadAll(){
         fechaAsig:a.fecha_asig||'', fechaTermino:a.fecha_termino||'',
         fechaReal:a.fecha_real||'', numBobina:a.num_bobina||'',
         juegos:a.juegos||'', planosJuego:a.planos_juego||'',
-        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[], pausaMotivo:a.pausa_motivo||null,
+        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[], pausaMotivo:a.pausa_motivo||null, pausaPrioridad:a.pausa_prioridad||null,
         fechaEntregaProy:a.fecha_entrega_proy||null, devoluciones:a.devoluciones||0,
         createdAt:a.created_at, updatedAt:a.updated_at,
       }));
@@ -23834,7 +24031,7 @@ async function supaSyncActividad(a){
   // Columnas opcionales (se agregan con los SQL de Seguimiento individual / motivo de pausa). Si alguna
   // todavía no existe en Supabase, se omite solo esa y el guardado sigue funcionando.
   window._supaColsFaltan = window._supaColsFaltan || {};
-  const _opt = {fecha_entrega_proy:a.fechaEntregaProy||null, devoluciones:a.devoluciones||0, pausa_motivo:a.pausaMotivo||null};
+  const _opt = {fecha_entrega_proy:a.fechaEntregaProy||null, devoluciones:a.devoluciones||0, pausa_motivo:a.pausaMotivo||null, pausa_prioridad:a.pausaPrioridad||null};
   Object.keys(_opt).forEach(k=>{ if(!window._supaColsFaltan[k]) payload[k] = _opt[k]; });
   try{
     let {error} = await _supa.from('actividades').upsert(payload, {onConflict:'id'});
