@@ -9055,7 +9055,8 @@ function planBuildHTML() {
           if (!a.fechaAsig) return false;
           var start = a.fechaAsig;
           var end = a.fechaTermino || a.fechaAsig;
-          return dayStr >= start && dayStr <= end;
+          if(dayStr < start || dayStr > end) return false;
+          return !paEnPausaEnFecha(a, dayStr); // en pausa ese día: no se va a trabajar, no se pinta en el calendario
         });
         // Verificar vacaciones usando VACACIONES[nombre].has(fecha)
         var isVac = false;
@@ -9390,7 +9391,7 @@ function planExportPDF(detallado) {
       h+='<tr><td class="ncel"><span class="av" style="background:'+col+'">'+ini+'</span><span style="display:inline-block;vertical-align:middle;line-height:1.25">'+member.split(' ').slice(0,2).join('<br>')+'</span></td>';
       week.forEach(function(day){
         var ds=day.toISOString().slice(0,10);
-        var acts=PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return ds>=a.fechaAsig&&ds<=(a.fechaTermino||a.fechaAsig);});
+        var acts=PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return ds>=a.fechaAsig&&ds<=(a.fechaTermino||a.fechaAsig)&&!paEnPausaEnFecha(a,ds);});
         var vs=typeof VACACIONES!=='undefined'&&VACACIONES?VACACIONES[member]:null;
         if(!vs&&typeof VACACIONES!=='undefined'&&VACACIONES){Object.keys(VACACIONES).forEach(function(k){if(member.indexOf(k.split(' ')[0])>=0)vs=VACACIONES[k];});}
         var isVac=vs&&vs.has&&vs.has(ds);
@@ -16208,6 +16209,28 @@ async function paIrAsignarSubtareas(actId){
     if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
     if(typeof cronoAddSubtareaModal==='function') cronoAddSubtareaModal(actId);
   }, 300);
+}
+// ¿La actividad estaba (o está) en pausa en esa fecha? Se usa en el calendario del plan de trabajo:
+// un día pausado no se pinta, porque se leería como "ese día se trabaja". En la lista sí se mantiene.
+// Pausas cerradas: desde el día que se pausó hasta el día anterior a reanudar. Pausa vigente: desde que
+// se pausó; si es por cambio de prioridad con estimado, hasta el día en que se calcula que se retoma.
+function paEnPausaEnFecha(a, ds){
+  if(!a || !ds) return false;
+  const hist = Array.isArray(a.pausasHistorial) ? a.pausasHistorial : [];
+  for(let i=0;i<hist.length;i++){
+    const p = hist[i];
+    if(p && p.inicio && p.fin && ds>=p.inicio && ds<p.fin) return true;
+  }
+  if(a.estatus==='En pausa' && a.pausaInicio){
+    if(ds < a.pausaInicio) return false;
+    const rest = paPausaPrioridadRestante(a);
+    if(rest>0){
+      const total = paPausaElapsed(a.pausaInicio, repDateKey(new Date())) + rest;
+      return ds < cronoAddWorkdays(a.pausaInicio, total);
+    }
+    return true;
+  }
+  return false;
 }
 // ¿Este cambio de estatus es "entrar a pausa"?
 function paEsEntradaPausa(a, nuevo){ return !!a && nuevo==='En pausa' && a.estatus!=='En pausa'; }
