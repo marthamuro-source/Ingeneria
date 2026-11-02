@@ -5739,6 +5739,7 @@ function cronoLoad(){
 }
 function cronoSave(itemsToSync){
   localStorage.setItem(CRONO_KEY, JSON.stringify(CRONO_ITEMS));
+  try{ if(typeof paAjustarTerminosReapertura==='function') paAjustarTerminosReapertura(); }catch(e){ console.warn('reapertura ajuste', e); }
   if(!_supa) return; // Sin verificar SUPA_ONLINE — _supa es suficiente
   const toSync = itemsToSync ? (Array.isArray(itemsToSync)?itemsToSync:[itemsToSync]) : CRONO_ITEMS;
   toSync.forEach(item=>{
@@ -5943,6 +5944,8 @@ function cronoFmtDiasHoras(dias){
 // solo que arrancando más tarde — no se le da crédito de más ni de menos por el avance real.
 function cronoFechaEfectiva(a, fechaBase){
   if(!fechaBase || !a) return fechaBase;
+  // Actividad reabierta desde "Terminado (máximo avance)": el nuevo ciclo arranca el día de la reapertura.
+  if(a.reapertura && a.reapertura.inicio) fechaBase = a.reapertura.inicio;
   const diasPausa = (typeof paDiasEnPausa==='function') ? paDiasEnPausa(a) : 0;
   if(!diasPausa) return fechaBase;
   return cronoAddWorkdays(fechaBase, diasPausa);
@@ -5954,7 +5957,8 @@ function cronoFechaEfectiva(a, fechaBase){
 // y es una fecha fija que solo se mueve si cambian las fechas/cantidades/rendimientos del catálogo,
 // o si la actividad estuvo en pausa (ver cronoFechaEfectiva). El avance real reportado se compara
 // aparte (fuera de esta función) contra esta fecha para decidir si hay retraso.
-function cronoCalcPronostico(subtareas, fechaInicio, persona){
+function cronoCalcPronostico(subtareas, fechaInicio, persona, usarRestante){
+  const _dFn = usarRestante ? cronoDiasRestantesSubtarea : cronoDiasParaSubtarea; // ciclo de reapertura: solo lo que falta
   if(!subtareas||!subtareas.length||!fechaInicio) return null;
   let cursor = fechaInicio;
   let usado = 0; // fracción del día "cursor" ya ocupada
@@ -5967,12 +5971,12 @@ function cronoCalcPronostico(subtareas, fechaInicio, persona){
     if(procesados.has(st.id)) return;
     if(st.paqueteId){
       const delGrupo = validas.filter(s=>s.paqueteId===st.paqueteId);
-      const diasMax = Math.max(...delGrupo.map(s=>cronoDiasParaSubtarea(s)));
+      const diasMax = Math.max(...delGrupo.map(s=>_dFn(s)));
       delGrupo.forEach(s=>procesados.add(s.id));
       const r = cronoAvanzarCursorDia(cursor, usado, diasMax, persona);
       cursor = r.cursor; usado = r.usado;
     } else {
-      const dias = cronoDiasParaSubtarea(st);
+      const dias = _dFn(st);
       const r = cronoAvanzarCursorDia(cursor, usado, dias, persona);
       cursor = r.cursor; usado = r.usado;
       procesados.add(st.id);
@@ -5987,14 +5991,19 @@ function cronoCalcPronostico(subtareas, fechaInicio, persona){
 function cronoPronosticoInfo(a, crono){
   if(!a) return null;
   crono = crono || ((typeof CRONO_ITEMS!=='undefined') ? CRONO_ITEMS.find(x=>x.actividadId===a.id) : null);
-  const subs = (crono && Array.isArray(crono.subtareas)) ? crono.subtareas.filter(x=>!x.pendienteValidacion) : [];
+  let subs = (crono && Array.isArray(crono.subtareas)) ? crono.subtareas.filter(x=>!x.pendienteValidacion) : [];
   if(!subs.length) return null;
-  const base = cronoFechaEfectiva(a, a.fechaAsig || crono.fechaInicio);
-  const fecha = cronoCalcPronostico(subs, base, a.responsable);
-  const sinVac = cronoCalcPronostico(subs, base);
+  // Reabierta: el pronóstico del nuevo ciclo cuenta solo el trabajo que falta (las ya terminadas no suman).
+  const reab = !!(a.reapertura && a.reapertura.inicio);
+  if(reab){ subs = subs.filter(x=>cronoDiasRestantesSubtarea(x)>0); if(!subs.length) return null; }
+  const baseSin = reab ? a.reapertura.inicio : (a.fechaAsig || crono.fechaInicio);
+  const base = cronoFechaEfectiva(a, baseSin);
+  const fecha = cronoCalcPronostico(subs, base, a.responsable, reab);
+  const sinVac = cronoCalcPronostico(subs, base, undefined, reab);
+  const sinPausa = cronoCalcPronostico(subs, baseSin, a.responsable, reab);
   let diasVac = 0;
   if(fecha && sinVac && fecha > sinVac) diasVac = Math.max(1, (paWorkdays(sinVac, fecha)||1) - 1);
-  return {fecha, sinVac, diasVac};
+  return {fecha, sinVac, diasVac, sinPausa};
 }
 
 // ── Días hábiles restantes entre hoy y fecha ──
@@ -6180,7 +6189,8 @@ function renderReporteoView(){
   let enTiempo=0, conRetraso=0;
   actConCrono.forEach(({a,crono})=>{
     if(!crono||!crono.subtareas||!crono.subtareas.length) return;
-    const pron = cronoCalcPronostico(crono.subtareas, cronoFechaEfectiva(a, a.fechaAsig||crono.fechaInicio), a.responsable);
+    const _pi0 = cronoPronosticoInfo(a, crono);
+    const pron = _pi0 ? _pi0.fecha : null;
     const hoy = repDateKey(new Date());
     const termino = a.fechaTermino;
     const avanceKpi = cronoAvance(crono.subtareas);
@@ -6242,8 +6252,8 @@ function renderReporteoView(){
     const subtareas = crono?.subtareas||[];
     const reportes = crono?.reportes||[];
     const avance = cronoAvance(subtareas);
-    const pron = crono ? cronoCalcPronostico(subtareas, cronoFechaEfectiva(a, a.fechaAsig||crono.fechaInicio), a.responsable) : null;
     const _pinfo = crono ? cronoPronosticoInfo(a, crono) : null;
+    const pron = _pinfo ? _pinfo.fecha : null;
     const diasRest = pron ? cronoDiasRestantes(pron) : null;
     const hoy = repDateKey(new Date());
     let semaforo = 'neutral';
@@ -6262,7 +6272,9 @@ function renderReporteoView(){
       : '';
 
     const esConectSub = a.tipo==='Planos de Conectividad'||a.tipo==='Conectividad (Bobinas)';
-    const listaParaRevision = avancePct===100 && a.estatus!=='Terminado' && a.estatus!=='Terminado (máximo avance)';
+    const _reab = !!(a.reapertura && a.reapertura.inicio);
+    const _reabEspera = _reab && paReabEsperaSubtareas(a);
+    const listaParaRevision = avancePct===100 && a.estatus!=='Terminado' && a.estatus!=='Terminado (máximo avance)' && !_reabEspera;
     const revisionLabel = listaParaRevision
       ? (_userRole==='proyectista'
           ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(74,143,212,.12);color:var(--accent);font-weight:600">⏳ En proceso de revisión</span>`
@@ -6294,6 +6306,8 @@ function renderReporteoView(){
             ${estadoChip}
             ${revisionLabel || semaforoLabel}
             ${pausaHeaderBadge}
+            ${_reab ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(192,132,252,.14);color:#a56cf0;font-weight:600;white-space:nowrap" title="Se cerró en máximo avance y se retomó para completar lo pendiente. Cuenta como una sola entrega.">🔄 Reabierta · ${((a.reapertura.cerrados||[]).length)+1}º tramo</span>` : ''}
+            ${_reabEspera ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(245,166,35,.12);color:var(--amber);font-weight:600;white-space:nowrap">📋 Falta asignar subtareas</span>` : ''}
           </div>
           <div style="font-size:11px;color:var(--dim);margin-top:2px">${a.proyecto||''} · ${a.responsable?.split(' ').slice(0,2).join(' ')||'—'} · Inicio: ${cronoFmtShort(a.fechaAsig||crono?.fechaInicio)} ${pron?'· Pronóstico: '+cronoFmtShort(pron):''}</div>
         </div>
@@ -6322,6 +6336,7 @@ function renderReporteoView(){
             <th style="width:80px"></th>
           </tr></thead><tbody>`;
 
+        const _reabTab = _reab;
         let cursor = cronoFechaEfectiva(a, a.fechaAsig||crono.fechaInicio);
         let usado = 0; // fracción del día "cursor" ya ocupada por subtareas anteriores
         const _paqCache = {}; // paqueteId -> {inicio, fin} ya calculado (para que corran en paralelo)
@@ -6333,11 +6348,16 @@ function renderReporteoView(){
           // se vea cuánto trabajo real falta, pero no mueve el cursor ni la fecha pronóstico.
           const diasTotal = cronoDiasParaSubtarea(st);
           const dias = cronoDiasRestantesSubtarea(st);
+          // Ciclo reabierto: solo lo que falta consume calendario; lo ya terminado pertenece al ciclo anterior
+          const _cicloAnt = _reabTab && dias<=0;
+          const _dCur = _reabTab ? dias : diasTotal;
           let stInicio, stFin;
-          if(st.paqueteId){
+          if(_cicloAnt){
+            stInicio = null; stFin = null;
+          } else if(st.paqueteId){
             if(!_paqCache[st.paqueteId]){
               const delGrupo = subtareas.filter(s=>s.paqueteId===st.paqueteId);
-              const diasMax = Math.max(...delGrupo.map(s=>cronoDiasParaSubtarea(s)));
+              const diasMax = Math.max(...delGrupo.map(s=>_reabTab ? cronoDiasRestantesSubtarea(s) : cronoDiasParaSubtarea(s)));
               const inicioGrupo = cursor;
               const r = cronoAvanzarCursorDia(cursor, usado, diasMax, a.responsable);
               const finGrupo = r.fin;
@@ -6347,7 +6367,7 @@ function renderReporteoView(){
             stInicio = _paqCache[st.paqueteId].inicio;
             stFin = _paqCache[st.paqueteId].fin;
           } else {
-            const r = cronoAvanzarCursorDia(cursor, usado, diasTotal, a.responsable);
+            const r = cronoAvanzarCursorDia(cursor, usado, _dCur, a.responsable);
             stInicio = r.inicio;
             stFin = r.fin;
             cursor = r.cursor; usado = r.usado;
@@ -6367,7 +6387,7 @@ function renderReporteoView(){
             <td style="padding:8px;text-align:center;color:var(--text)">${st.cantidad} <span style="color:var(--dim);font-size:10.5px">${st.unidad}</span></td>
             <td style="padding:8px;text-align:center;color:var(--text)" title="Duración total configurada, sin restar avance">${cronoFmtDiasHoras(diasTotal)}</td>
             <td style="padding:8px;text-align:center;color:var(--dim)" title="${dias < 1 ? 'Menos de una jornada — puede compartir el día con otras subtareas' : ''}">${cronoFmtDiasHoras(dias)}</td>
-            <td style="padding:8px;font-size:11px;color:var(--dim)">${cronoFmtShort(stInicio)}→${cronoFmtShort(fechaFin)}</td>
+            <td style="padding:8px;font-size:11px;color:var(--dim)">${_cicloAnt ? '<i title="Ya se terminó en el tramo anterior (antes del máximo avance)">tramo anterior</i>' : cronoFmtShort(stInicio)+'→'+cronoFmtShort(fechaFin)}</td>
             <td style="padding:8px;text-align:center">
               <div style="font-size:11px;font-weight:500;color:${stColor}">${avanceSt}/${st.cantidad}</div>
               <div style="width:50px;height:3px;background:rgba(255,255,255,.08);border-radius:2px;margin:3px auto 0">
@@ -6406,6 +6426,16 @@ function renderReporteoView(){
           } else {
             html += `<div style="margin-bottom:14px"></div>`;
           }
+        }
+        if(_reab){
+          const _cer = a.reapertura.cerrados||[];
+          const _lbl = c=> c.resultado==='a_tiempo' ? '<span style="color:var(--green)">a tiempo</span>' : c.resultado==='retraso' ? `<span style="color:var(--red)">con retraso (+${c.dias||0} d)</span>` : '<span style="color:var(--dim)">sin fecha meta</span>';
+          html += `<div style="margin-bottom:14px;padding:10px 12px;border-radius:8px;background:rgba(192,132,252,.08);border:0.5px solid rgba(192,132,252,.35);font-size:11px;color:var(--text)">
+            <div style="font-weight:600;margin-bottom:4px">🔄 Reabierta desde “Terminado (máximo avance)” — ${cronoFmtDate(a.reapertura.inicio)}</div>
+            ${_cer.map((c,i)=>`<div style="color:var(--dim);margin-top:2px">${i+1}ª entrega: ${c.entrega?cronoFmtDate(c.entrega):'—'} · ${_lbl(c)}${c.nota?' · Nota: <span style="color:var(--text)">'+segIndEsc(c.nota)+'</span>':''}</div>`).join('')}
+            <div style="margin-top:6px;color:var(--dim)">Cuenta como <b style="color:var(--text)">una sola entrega</b>, sin devolución ni penalización. Si alguna de las entregas (tramos) tuvo retraso, la actividad queda con retraso. El pronóstico y la fecha límite (pronóstico + 1 día de revisión) se calculan con las subtareas nuevas${a.reapertura.ajustar===false?' <i>(la fecha límite se fijó a mano)</i>':''}.</div>
+            ${_reabEspera ? `<div style="margin-top:8px;color:var(--amber)">⚠ Todavía no hay subtareas nuevas, por eso no hay pronóstico. <button type="button" class="et-act-btn" style="font-size:10px;background:rgba(74,143,212,.15);color:var(--accent)" onclick="event.stopPropagation();cronoAddSubtareaModal('${a.id}')">+ Agregar subtarea</button></div>` : ''}
+          </div>`;
         }
         if(a.estatus==='En pausa' && a.pausaInicio){
           let _prio = '';
@@ -9456,6 +9486,15 @@ function planExportPDF(detallado) {
         var pinf=(typeof cronoPronosticoInfo==='function')?cronoPronosticoInfo(a,crItem):null;
         if(pinf&&pinf.diasVac){
           h+='<tr class="pnota vac"><td></td><td colspan="6"><b>&#127796; Vacaciones:</b> la fecha pron&oacute;stico se recorri&oacute; <b>+'+pinf.diasVac+' d&iacute;a'+(pinf.diasVac===1?'':'s')+' por vacaciones</b>: de '+fd(pinf.sinVac)+' a <b>'+fd(pinf.fecha)+'</b>.</td></tr>';
+        }
+        if(a.reapertura&&a.reapertura.inicio){
+          var escR=function(t){return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+          var tR='<b>&#128260; Reabierta</b> el '+fd(a.reapertura.inicio)+' desde &ldquo;Terminado (m&aacute;ximo avance)&rdquo;: ';
+          tR+=(a.reapertura.cerrados||[]).map(function(c,i){
+            return (i+1)+'&ordf; entrega '+(c.entrega?fd(c.entrega):'--')+' ('+(c.resultado==='a_tiempo'?'a tiempo':c.resultado==='retraso'?'con retraso +'+(c.dias||0)+' d':'sin fecha meta')+')'+(c.nota?' &mdash; <i>'+escR(c.nota)+'</i>':'');
+          }).join('; ');
+          tR+='. Nuevo pron&oacute;stico'+(pinf&&pinf.fecha?' <b>'+fd(pinf.fecha)+'</b>':' pendiente (faltan subtareas)')+'; el t&eacute;rmino incluye 1 d&iacute;a de revisi&oacute;n.';
+          h+='<tr class="pnota vac"><td></td><td colspan="6">'+tR+'</td></tr>';
         }
         var pr=(typeof paPausaResumen==='function')?paPausaResumen(a):null;
         if(pr){
@@ -14432,8 +14471,21 @@ function paActividadesSinSubtareas(){
   return PA_ITEMS.filter(a=>{
     if(!a.responsable || !TIPOS.includes(a.tipo) || !ABIERTA.includes(a.estatus)) return false;
     const c = CRONO_ITEMS.find(x=>x.actividadId===a.id);
-    return !c || !Array.isArray(c.subtareas) || !c.subtareas.length;
+    if(!c || !Array.isArray(c.subtareas) || !c.subtareas.length) return true;
+    // Reabierta: las subtareas del ciclo anterior ya están completas; falta asignar las nuevas
+    if(a.reapertura && a.reapertura.inicio) return paReabEsperaSubtareas(a);
+    return false;
   });
+}
+// Reabierta desde máximo avance, todavía sin subtareas nuevas (y sin trabajo reportado en el nuevo tramo)
+function paReabEsperaSubtareas(a){
+  if(!a || !a.reapertura || !a.reapertura.inicio) return false;
+  if(['En revisión','Terminado (máximo avance)','Terminado'].includes(a.estatus)) return false;
+  const c = (typeof CRONO_ITEMS!=='undefined') ? CRONO_ITEMS.find(x=>x.actividadId===a.id) : null;
+  const subs = (c && c.subtareas) || [];
+  if(subs.some(x=>!x.pendienteValidacion && cronoDiasRestantesSubtarea(x)>0)) return false;
+  const rep = (c && c.reportes) || [];
+  return !rep.some(r=>r && r.fecha && String(r.fecha).slice(0,10) >= a.reapertura.inicio);
 }
 // Clic en la alerta: si es una sola, directo a agregar sus subtareas; si son varias, lista para elegir.
 function paAlertSubtareas(){
@@ -16204,7 +16256,8 @@ function paPrioridadEtiquetas(pri){
   return (pri.ids||[]).map(id=>{ const b=PA_ITEMS.find(x=>x.id===id); return b ? (b.folio||b.actividad||'—') : '—'; });
 }
 // Recordatorio: llevar a asignar subtareas de las actividades que aún no tienen pronóstico
-function paRecordarAsignacionSubtareas(ids, pausada){
+function paRecordarAsignacionSubtareas(ids, pausada, opts){
+  opts = opts||{};
   const old = document.getElementById('paRecordarSubBg'); if(old) old.remove();
   const acts = (ids||[]).map(id=>PA_ITEMS.find(x=>x.id===id)).filter(Boolean);
   if(!acts.length) return;
@@ -16212,7 +16265,9 @@ function paRecordarAsignacionSubtareas(ids, pausada){
   bg.id = 'paRecordarSubBg'; bg.className = 'pa-modal-bg open'; bg.style.zIndex = '100001';
   bg.innerHTML = `<div class="pa-modal" style="max-width:460px;padding:20px 22px" onclick="event.stopPropagation()">
     <div class="pa-modal-title" style="margin-bottom:10px">📋 Falta asignar subtareas</div>
-    <div style="font-size:12px;color:var(--text);margin-bottom:10px">${pausada
+    <div style="font-size:12px;color:var(--text);margin-bottom:10px">${opts.reapertura
+      ? `La actividad regresó de <b>máximo avance</b> a trabajo. Para darle al proyectista su tiempo nuevo, asigna las subtareas de lo que falta: con eso se calcula el pronóstico del segundo tramo y la fecha de término se actualiza sola (pronóstico + 1 día de revisión).`
+      : pausada
       ? `Para calcular cuánto se recorre la entrega de <b>${segIndEsc(pausada.folio||pausada.actividad||'la actividad pausada')}</b> necesito el pronóstico de ${acts.length===1?'esta actividad':'estas actividades'}, y todavía no ${acts.length===1?'tiene':'tienen'} subtareas asignadas. En cuanto las agregues, el ajuste se calcula solo.`
       : `${acts.length===1?'Esta actividad todavía no tiene':'Estas '+acts.length+' actividades todavía no tienen'} subtareas asignadas, por eso no ${acts.length===1?'tiene':'tienen'} fecha pronóstico. Elige una y te llevo directo a agregarlas.`}</div>
     <div style="max-height:52vh;overflow:auto">
@@ -16251,6 +16306,12 @@ function paEnPausaEnFecha(a, ds){
     const p = hist[i];
     if(p && p.inicio && p.fin && ds>=p.inicio && ds<p.fin) return true;
   }
+  // Reabierta desde máximo avance: del día siguiente a la entrega hasta antes de reabrir no se trabajó
+  const _cer = (a.reapertura && Array.isArray(a.reapertura.cerrados)) ? a.reapertura.cerrados : [];
+  for(let i=0;i<_cer.length;i++){
+    const c = _cer[i];
+    if(c && c.entrega && c.reabierto && ds>c.entrega && ds<c.reabierto) return true;
+  }
   if(a.estatus==='En pausa' && a.pausaInicio){
     if(ds < a.pausaInicio) return false;
     const rest = paPausaPrioridadRestante(a);
@@ -16277,8 +16338,8 @@ function paPausaResumen(a){
   const c = (typeof CRONO_ITEMS!=='undefined') ? CRONO_ITEMS.find(x=>x.actividadId===a.id) : null;
   if(c && Array.isArray(c.subtareas) && c.subtareas.some(x=>!x.pendienteValidacion)){
     const base = a.fechaAsig || c.fechaInicio;
-    original = cronoCalcPronostico(c.subtareas, base, a.responsable) || original;
-    nueva = cronoCalcPronostico(c.subtareas, cronoFechaEfectiva(a, base), a.responsable);
+    const _pi = cronoPronosticoInfo(a, c);
+    if(_pi){ original = _pi.sinPausa || original; nueva = _pi.fecha; }
   } else if(original && totalDias){
     nueva = cronoAddWorkdays(original, totalDias);
   }
@@ -16315,10 +16376,86 @@ function paAplicarEstatus(a, newEstatus){
   if(!_eraEntregada && _seraEntregada){
     a.fechaEntregaProy = hoy;
   } else if(_eraEntregada && !_seraEntregada){
-    a.fechaEntregaProy = null;
-    a.devoluciones = (a.devoluciones||0) + 1;
+    if(a.estatus === 'Terminado (máximo avance)'){
+      // Reapertura: la actividad se había cerrado "al máximo avance" y se retoma para completar lo pendiente.
+      // NO es una devolución (no hay penalización). Se guarda un corte del ciclo cerrado para no perder
+      // si esa primera entrega fue a tiempo o con retraso; el ciclo nuevo arranca hoy con subtareas nuevas.
+      let snap;
+      try{ const r = segIndClasificaCiclo(a, hoy); snap = {entrega:r.entrega||null, meta:r.meta||null, resultado:r.estado, dias:r.dias||0}; }
+      catch(e){ snap = {entrega:a.fechaEntregaProy||null, meta:null, resultado:'sin_dato', dias:0}; }
+      const nota = (window._paNotaReabTmp||'').trim() || null;
+      snap.nota = nota; snap.reabierto = hoy; snap.terminoAnterior = a.fechaTermino || null;
+      const cerr = (a.reapertura && Array.isArray(a.reapertura.cerrados)) ? a.reapertura.cerrados.slice() : [];
+      cerr.push(snap);
+      a.reapertura = {inicio:hoy, ajustar:true, cerrados:cerr, nota:nota};
+      a.fechaEntregaProy = null;
+      window._paReabPendiente = a.id;
+    } else {
+      a.fechaEntregaProy = null;
+      a.devoluciones = (a.devoluciones||0) + 1;
+    }
   }
+  window._paNotaReabTmp = null;
   a.estatus = newEstatus;
+}
+
+// ── Reapertura desde "Terminado (máximo avance)" ──
+// ¿Este cambio regresa la actividad a trabajo desde "Terminado (máximo avance)"?
+function paEsReapertura(a, nuevo){
+  return !!a && a.estatus==='Terminado (máximo avance)' && !['En revisión','Terminado (máximo avance)','Terminado'].includes(nuevo);
+}
+// Pide una nota obligatoria (qué falta / por qué se reabre). Promesa: texto, o null si se cancela.
+function paPedirNotaReapertura(a){
+  return new Promise(resolve=>{
+    const old = document.getElementById('paReabNotaBg'); if(old) old.remove();
+    const bg = document.createElement('div');
+    bg.id = 'paReabNotaBg'; bg.className = 'pa-modal-bg open'; bg.style.zIndex = '100000';
+    const nombre = (a && (a.folio || a.actividad)) || 'esta actividad';
+    const sug = ['Se completó lo pendiente del máximo avance','Llegó la información que faltaba','Ajuste solicitado por el cliente'];
+    bg.innerHTML = `<div class="pa-modal" style="max-width:500px;padding:20px 22px;max-height:92vh;overflow:auto" onclick="event.stopPropagation()">
+      <div class="pa-modal-title" style="margin-bottom:10px">🔄 Reabrir actividad</div>
+      <div style="font-size:12px;color:var(--text);margin-bottom:4px"><b>${segIndEsc(nombre)}</b>${a&&a.proyecto?' · '+segIndEsc(a.proyecto):''}</div>
+      <div style="font-size:11px;color:var(--dim);margin-bottom:12px">Regresa de <b>Terminado (máximo avance)</b> a trabajo. No cuenta como devolución ni penaliza al proyectista: es una sola entrega, con un segundo tramo. La primera entrega queda registrada tal como fue (a tiempo o con retraso) y el nuevo pronóstico se calcula con las subtareas que asignes a partir de hoy.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">${sug.map(t=>`<button type="button" class="et-act-btn" data-sug="${segIndEsc(t)}" style="font-size:10.5px">${segIndEsc(t)}</button>`).join('')}</div>
+      <textarea id="paReabNotaTxt" rows="3" placeholder="Nota de la reapertura (obligatoria)…" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font);font-size:12px;padding:8px;resize:vertical"></textarea>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+        <button type="button" class="et-act-btn" id="paReabCancel">Cancelar</button>
+        <button type="button" class="et-act-btn" id="paReabOk" disabled style="background:rgba(74,143,212,.18);color:var(--accent);opacity:.5">🔄 Reabrir</button>
+      </div></div>`;
+    document.body.appendChild(bg);
+    const txt = bg.querySelector('#paReabNotaTxt'), ok = bg.querySelector('#paReabOk');
+    const upd = ()=>{ const v = txt.value.trim().length>=3; ok.disabled=!v; ok.style.opacity = v?'1':'.5'; };
+    txt.addEventListener('input', upd);
+    bg.querySelectorAll('[data-sug]').forEach(b=>b.addEventListener('click',()=>{ txt.value = b.getAttribute('data-sug'); upd(); txt.focus(); }));
+    const fin = v=>{ bg.remove(); resolve(v); };
+    bg.querySelector('#paReabCancel').addEventListener('click',()=>fin(null));
+    bg.addEventListener('click',()=>fin(null));
+    ok.addEventListener('click',()=>{ const v=txt.value.trim(); if(v.length>=3) fin(v); });
+    setTimeout(()=>txt.focus(),30);
+  });
+}
+// Tras reabrir: recordatorio de asignar las subtareas nuevas (el tiempo del proyectista es nuevo)
+function paPostReapertura(){
+  const id = window._paReabPendiente; window._paReabPendiente = null;
+  if(!id) return;
+  setTimeout(()=>{ const a=PA_ITEMS.find(x=>x.id===id); if(a) paRecordarAsignacionSubtareas([id], null, {reapertura:true}); }, 80);
+}
+// La fecha de término del admin = pronóstico del ciclo reabierto + 1 día hábil de revisión.
+// Se mantiene sincronizada mientras la actividad siga abierta y no se edite la fecha a mano.
+function paAjustarTerminoReapertura(a){
+  if(!a || !a.reapertura || !a.reapertura.inicio || a.reapertura.ajustar===false) return false;
+  if(['En revisión','Terminado (máximo avance)','Terminado'].includes(a.estatus)) return false;
+  const info = cronoPronosticoInfo(a);
+  if(!info || !info.fecha) return false;
+  const nueva = cronoAddWorkdays(info.fecha, 1);
+  if(nueva === a.fechaTermino) return false;
+  a.fechaTermino = nueva;
+  a.updatedAt = new Date().toISOString();
+  return true;
+}
+function paAjustarTerminosReapertura(){
+  if(!Array.isArray(PA_ITEMS)) return;
+  PA_ITEMS.forEach(a=>{ if(a.reapertura && a.reapertura.inicio && paAjustarTerminoReapertura(a)) paSave(a); });
 }
 
 // Auto-corrige actividades que quedaron marcadas "En pausa" sin fecha de inicio de pausa
@@ -16349,7 +16486,9 @@ function paHealPausasLegacy(){
 function paDiasEnPausa(a){
   if(!a) return 0;
   paEnsurePausaInicio(a);
-  let dias = a.diasEnPausaAcum||0;
+  const _ini = a.reapertura && a.reapertura.inicio;
+  // Reabierta: solo cuentan las pausas del ciclo actual (las anteriores ya quedaron en el ciclo cerrado)
+  let dias = _ini ? (a.pausasHistorial||[]).filter(p=>p.inicio>=_ini).reduce((t,p)=>t+(p.dias||0),0) : (a.diasEnPausaAcum||0);
   if(a.estatus==='En pausa' && a.pausaInicio){
     dias += paPausaElapsed(a.pausaInicio, new Date().toISOString().slice(0,10));
     dias += paPausaPrioridadRestante(a); // cambio de prioridad: lo que falta por atender las actividades de delante
@@ -16364,7 +16503,7 @@ function paInlineDate(id, field, currentVal, td){
   inp.type='date'; inp.value=currentVal||'';
   inp.style.cssText='background:var(--surface2);border:1px solid rgba(74,143,212,.4);border-radius:4px;color:var(--text);font-family:var(--font);font-size:11px;padding:2px 5px;width:110px;';
   td.innerHTML=''; td.appendChild(inp); inp.focus(); inp.showPicker&&inp.showPicker();
-  function save(){ const v=inp.value; const a=PA_ITEMS.find(x=>x.id===id); if(a){a[field]=v;paSave(a);} renderPanel(); }
+  function save(){ const v=inp.value; const a=PA_ITEMS.find(x=>x.id===id); if(a){ if(field==='fechaTermino' && a.reapertura && a[field]!==v) a.reapertura.ajustar=false; a[field]=v;paSave(a);} renderPanel(); }
   inp.addEventListener('change', save);
   inp.addEventListener('blur', ()=>setTimeout(save,100));
 }
@@ -16382,6 +16521,11 @@ function paInlineStatus(id, currentVal, td){
     if(a && paEsEntradaPausa(a,v)){
       sel.removeEventListener('change', save);
       paPedirMotivoPausa(a).then(m=>{ if(m!==null){ window._paMotivoTmp=m; paAplicarEstatus(a,v); paSave(a); } renderPanel(); });
+      return;
+    }
+    if(a && paEsReapertura(a,v)){
+      sel.removeEventListener('change', save);
+      paPedirNotaReapertura(a).then(n=>{ if(n!==null){ window._paNotaReabTmp=n; paAplicarEstatus(a,v); paSave(a); renderPanel(); paPostReapertura(); } else renderPanel(); });
       return;
     }
     if(a){paAplicarEstatus(a,v);paSave(a);} renderPanel();
@@ -16591,6 +16735,14 @@ function paGuardar(){
       return;
     }
   }
+  if(paModalEditId && !window._paNotaReabTmp){
+    const _prev2 = PA_ITEMS.find(x=>x.id===paModalEditId);
+    const _nuevo2 = document.getElementById('paFEstatus').value;
+    if(paEsReapertura(_prev2,_nuevo2)){
+      paPedirNotaReapertura(_prev2).then(n=>{ if(n===null) return; window._paNotaReabTmp=n; paGuardar(); });
+      return;
+    }
+  }
 
   const data = {
     id: paModalEditId || paNextId(),
@@ -16626,6 +16778,9 @@ function paGuardar(){
       data.pausaPrioridad = prev.pausaPrioridad || null;
       data.fechaEntregaProy = prev.fechaEntregaProy || null;
       data.devoluciones = prev.devoluciones || 0;
+      data.reapertura = prev.reapertura ? JSON.parse(JSON.stringify(prev.reapertura)) : null;
+      // Si el admin cambia a mano la fecha de término, se deja de ajustar sola
+      if(data.reapertura && data.fechaTermino !== prev.fechaTermino) data.reapertura.ajustar = false;
       const nuevoEstatus = data.estatus;
       data.estatus = prev.estatus; // para que paAplicarEstatus detecte la transición real de estatus
       paAplicarEstatus(data, nuevoEstatus);
@@ -16647,6 +16802,7 @@ function paGuardar(){
   paSave(data);
   paCloseModal();
   renderPanel();
+  paPostReapertura();
 
   // Auto-expand the section so the saved activity is immediately visible
   if(paSectionState[data.tipo] === false){
@@ -17117,10 +17273,18 @@ function pdmUpdateStatus(id, newEstatus, selEl){
     });
     return;
   }
+  if(paEsReapertura(a,newEstatus) && !window._paNotaReabTmp){
+    paPedirNotaReapertura(a).then(n=>{
+      if(n===null){ if(selEl) selEl.value = a.estatus; return; }
+      window._paNotaReabTmp = n; pdmUpdateStatus(id,newEstatus,selEl);
+    });
+    return;
+  }
   paAplicarEstatus(a, newEstatus);
   paSave(a);
   paRenderTipo(a.tipo);
   renderPanel();
+  paPostReapertura();
 }
 
 // ── Go to full edit modal from PDM ──
@@ -20473,6 +20637,13 @@ function avanceSetField(id, field, value){
       return;
     }
   }
+  if(field==='estatus' && !window._paNotaReabTmp){
+    const _a2 = PA_ITEMS.find(x=>x.id===id);
+    if(paEsReapertura(_a2,value)){
+      paPedirNotaReapertura(_a2).then(n=>{ if(n===null){ renderSegAvance(); return; } window._paNotaReabTmp=n; avanceSetField(id,field,value); });
+      return;
+    }
+  }
   const data = avanceLoad();
   if(!data[id]) data[id] = {};
   data[id][field] = value;
@@ -20501,6 +20672,7 @@ function avanceSetField(id, field, value){
   }
 
   renderSegAvance();
+  paPostReapertura();
 }
 
 // Inline edit estatus — usa modal flotante para evitar conflictos con innerHTML
@@ -22286,9 +22458,10 @@ function segIndPrevWorkday(fechaStr){
 function segIndMeta(a){
   const c = (typeof CRONO_ITEMS!=='undefined') ? CRONO_ITEMS.find(x=>x.actividadId===a.id) : null;
   if(c && Array.isArray(c.subtareas) && c.subtareas.some(s=>!s.pendienteValidacion)){
-    const p = cronoCalcPronostico(c.subtareas, cronoFechaEfectiva(a, a.fechaAsig||c.fechaInicio), a.responsable);
-    if(p) return {fecha:p, origen:'Pronóstico del cronograma'};
+    const _pi = cronoPronosticoInfo(a, c);
+    if(_pi && _pi.fecha) return {fecha:_pi.fecha, origen:'Pronóstico del cronograma'+((a.reapertura&&a.reapertura.inicio)?' (ciclo reabierto)':'')};
   }
+  if(a.reapertura && a.reapertura.inicio) return {fecha:null, origen:'Reabierta: falta asignar subtareas'};
   if(a.fechaTermino){
     const dp = (typeof paDiasEnPausa==='function') ? paDiasEnPausa(a) : 0;
     const base = segIndPrevWorkday(a.fechaTermino);
@@ -22296,7 +22469,7 @@ function segIndMeta(a){
   }
   return {fecha:null, origen:'Sin fecha meta'};
 }
-function segIndClasifica(a, hoy){
+function segIndClasificaCiclo(a, hoy){
   const m = segIndMeta(a);
   const entregada = (a.estatus==='En revisión' || a.estatus==='Terminado (máximo avance)' || a.estatus==='Terminado');
   const entrega = entregada ? (a.fechaEntregaProy || a.fechaReal || '') : '';
@@ -22309,6 +22482,24 @@ function segIndClasifica(a, hoy){
     if(!m.fecha) r.estado = 'sin_meta';
     else if(m.fecha < hoy){ r.estado = 'vencida'; r.dias = Math.max(1,(paWorkdays(m.fecha, hoy)||1)-1); }
     else { r.estado = 'en_curso'; r.dias = cronoDiasRestantes(m.fecha)||0; }
+  }
+  return r;
+}
+// Una actividad cuenta como UNA sola entrega, pero si en cualquiera de sus entregas (ciclos) hubo retraso,
+// queda con retraso: una entrega a tiempo no compensa ni "borra" la otra.
+function segIndClasifica(a, hoy){
+  const r = segIndClasificaCiclo(a, hoy);
+  const prev = (a.reapertura && Array.isArray(a.reapertura.cerrados)) ? a.reapertura.cerrados : [];
+  r.ciclo = prev.length + 1;
+  r.prevLate = prev.filter(c=>c.resultado==='retraso');
+  if(prev.length && r.entregada){
+    if(r.prevLate.length){
+      r.estado = 'retraso';
+      r.dias = Math.max(r.estado==='retraso' ? (r.dias||0) : 0, ...r.prevLate.map(c=>c.dias||0));
+      r.detalle = '1ª entrega con retraso';
+    } else if(r.estado==='a_tiempo' && prev.some(c=>c.resultado==='sin_dato')){
+      r.estado = 'sin_dato';
+    }
   }
   return r;
 }
@@ -22352,7 +22543,7 @@ function segIndChip(r){
   const mk=(t,c,bg)=>`<span style="font-size:10.5px;padding:2px 9px;border-radius:20px;background:${bg};color:${c};white-space:nowrap">${t}</span>`;
   switch(r.estado){
     case 'a_tiempo': return mk('✓ A tiempo','var(--green)','rgba(61,214,140,.12)');
-    case 'retraso': return mk('⚠ Retraso +'+r.dias+' d','var(--red)','rgba(255,92,92,.12)');
+    case 'retraso': return mk('⚠ Retraso +'+r.dias+' d'+(r.detalle?' · '+r.detalle.replace('1ª entrega con retraso','1ª entrega'):''),'var(--red)','rgba(255,92,92,.12)');
     case 'sin_dato': return mk('Entregada · sin fecha','var(--dim)','rgba(255,255,255,.06)');
     case 'vencida': return mk('⏰ Vencida hace '+r.dias+' d','var(--red)','rgba(255,92,92,.12)');
     case 'en_curso': return mk(r.dias===0?'Entrega hoy':'En curso · '+r.dias+' d háb.','var(--accent)','rgba(74,143,212,.12)');
@@ -22395,6 +22586,14 @@ function segIndCard(st, sel){
     <div style="border-top:0.5px solid var(--border);padding-top:9px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--dim);margin-bottom:3px">Próxima entrega</div>${prox}</div>
   </div>`;
 }
+// Línea de detalle para actividades reabiertas desde máximo avance (una sola entrega, dos tramos)
+function segIndReabLinea(r){
+  const re = r.a.reapertura; if(!re || !re.inicio) return '';
+  const cer = Array.isArray(re.cerrados) ? re.cerrados : [];
+  const t = cer.map((c,i)=>(i+1)+'ª entrega '+(c.entrega?segIndFmt(c.entrega):'—')+' '+(c.resultado==='a_tiempo'?'a tiempo':c.resultado==='retraso'?'con retraso +'+(c.dias||0)+' d':'sin fecha meta')).join(' · ');
+  const tip = cer.map(c=>c.nota).filter(Boolean).join(' | ');
+  return `<div style="font-size:10.5px;color:#a56cf0;margin-top:2px" title="${segIndEsc(tip)}">🔄 Reabierta (cuenta como 1 entrega, sin devolución) · ${segIndEsc(t)}${r.estado==='retraso'&&r.detalle?' → queda con retraso':''}</div>`;
+}
 function segIndDetalle(st){
   const ordenP = {vencida:0,en_curso:1,sin_meta:2};
   const pend = st.rows.filter(r=>!r.entregada).sort((x,y)=> (ordenP[x.estado]-ordenP[y.estado]) || ((x.meta||'9')<(y.meta||'9')?-1:1));
@@ -22402,7 +22601,7 @@ function segIndDetalle(st){
   const esAdm = _userRole!=='proyectista';
   const th = (t,al)=>`<th style="text-align:${al||'left'};padding:7px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">${t}</th>`;
   const tr = r=>`<tr style="border-bottom:0.5px solid var(--border)">
-    <td style="padding:8px"><div style="font-weight:500;color:var(--text)">${segIndEsc(r.a.folio||r.a.actividad||'—')}</div><div style="font-size:10.5px;color:var(--dim)">${segIndEsc([r.a.proyecto, r.a.tipo].filter(Boolean).join(' · '))}</div></td>
+    <td style="padding:8px"><div style="font-weight:500;color:var(--text)">${segIndEsc(r.a.folio||r.a.actividad||'—')}</div><div style="font-size:10.5px;color:var(--dim)">${segIndEsc([r.a.proyecto, r.a.tipo].filter(Boolean).join(' · '))}</div>${segIndReabLinea(r)}</td>
     <td style="padding:8px;color:var(--dim);white-space:nowrap">${segIndEsc(r.a.estatus||'')}</td>
     <td style="padding:8px;white-space:nowrap;color:var(--text)" title="${segIndEsc(r.origen)}">${segIndFmt(r.meta)}${r.origen.startsWith('Sin cron')?' <span style="color:var(--dim);font-size:10px">*</span>':''}</td>
     ${esAdm?`<td style="padding:8px;white-space:nowrap;color:var(--dim)">${segIndFmt(r.a.fechaTermino)}</td>`:''}
@@ -22501,7 +22700,7 @@ async function paRefreshFromSupabase(){
         fechaAsig:a.fecha_asig||'', fechaTermino:a.fecha_termino||'',
         fechaReal:a.fecha_real||'', numBobina:a.num_bobina||'',
         juegos:a.juegos||'', planosJuego:a.planos_juego||'',
-        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[], pausaMotivo:a.pausa_motivo||null, pausaPrioridad:a.pausa_prioridad||null,
+        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[], pausaMotivo:a.pausa_motivo||null, pausaPrioridad:a.pausa_prioridad||null, reapertura:a.reapertura||null,
         fechaEntregaProy:a.fecha_entrega_proy||null, devoluciones:a.devoluciones||0,
         createdAt:a.created_at, updatedAt:a.updated_at,
       }));
@@ -23527,7 +23726,7 @@ async function supaLoadAll(){
         fechaAsig:a.fecha_asig||'', fechaTermino:a.fecha_termino||'',
         fechaReal:a.fecha_real||'', numBobina:a.num_bobina||'',
         juegos:a.juegos||'', planosJuego:a.planos_juego||'',
-        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[], pausaMotivo:a.pausa_motivo||null, pausaPrioridad:a.pausa_prioridad||null,
+        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[], pausaMotivo:a.pausa_motivo||null, pausaPrioridad:a.pausa_prioridad||null, reapertura:a.reapertura||null,
         fechaEntregaProy:a.fecha_entrega_proy||null, devoluciones:a.devoluciones||0,
         createdAt:a.created_at, updatedAt:a.updated_at,
       }));
@@ -24084,7 +24283,7 @@ async function supaSyncActividad(a){
   // Columnas opcionales (se agregan con los SQL de Seguimiento individual / motivo de pausa). Si alguna
   // todavía no existe en Supabase, se omite solo esa y el guardado sigue funcionando.
   window._supaColsFaltan = window._supaColsFaltan || {};
-  const _opt = {fecha_entrega_proy:a.fechaEntregaProy||null, devoluciones:a.devoluciones||0, pausa_motivo:a.pausaMotivo||null, pausa_prioridad:a.pausaPrioridad||null};
+  const _opt = {fecha_entrega_proy:a.fechaEntregaProy||null, devoluciones:a.devoluciones||0, pausa_motivo:a.pausaMotivo||null, pausa_prioridad:a.pausaPrioridad||null, reapertura:a.reapertura||null};
   Object.keys(_opt).forEach(k=>{ if(!window._supaColsFaltan[k]) payload[k] = _opt[k]; });
   try{
     let {error} = await _supa.from('actividades').upsert(payload, {onConflict:'id'});
