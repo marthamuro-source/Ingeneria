@@ -1439,6 +1439,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
       Panel de Seguimiento
     </button>
+    <button class="ni" onclick="goView(&#39;segind&#39;)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/><path d="M16 3.5l1.5 1.5L21 1.5" transform="translate(-1 1)"/></svg>
+      Seguimiento individual
+    </button>
     <button class="ni" onclick="goView(&#39;servicios&#39;)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
       Servicios Esp.
@@ -2351,6 +2355,27 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
         </div>
       </div>
     </div>
+
+  <!-- PANEL DE SEGUIMIENTO INDIVIDUAL -->
+  <div id="v-segind" style="display:none">
+    <div class="topbar">
+      <div>
+        <h1>Panel de seguimiento individual</h1>
+        <div class="tmeta">Cumplimiento de entregas por integrante, contra la fecha pronóstico</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <label for="segIndPeriodo" style="font-size:11px;color:var(--dim)">Periodo (entregas)</label>
+        <select id="segIndPeriodo" onchange="segIndSetPeriodo(this.value)" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font);font-size:12px;padding:5px 8px">
+          <option value="todo">Todo el historial</option>
+          <option value="mes">Este mes</option>
+          <option value="mesant">Mes anterior</option>
+          <option value="3m">Últimos 3 meses</option>
+          <option value="anio">Este año</option>
+        </select>
+      </div>
+    </div>
+    <div id="segIndBody" style="padding:6px 28px 30px"></div>
+  </div>
 
   <div id="v-evaluaciones" style="display:none">
     <div class="topbar">
@@ -6225,7 +6250,17 @@ function renderReporteoView(){
     const pausaHeaderBadge = a.estatus==='En pausa'
       ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(245,166,35,.12);color:var(--amber);font-weight:600;white-space:nowrap" title="${a.pausaInicio?'En pausa desde '+cronoFmtDate(a.pausaInicio):'En pausa'}">⏸ En pausa${dpHeader?' · '+dpHeader+'d':''}</span>`
       : (dpHeader>0 ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(255,255,255,.06);color:var(--dim);white-space:nowrap" title="Total de días hábiles que estuvo en pausa (ver historial abajo)">⏸ ${dpHeader}d pausados (hist.)</span>` : '');
-    html += `<div class="panel" style="margin-bottom:12px;padding:0;overflow:hidden">
+    // "En proceso" = ya llegó su fecha de inicio y se puede reportar; "Programada" = todavía no inicia.
+    const inicioAct = a.fechaAsig || crono?.fechaInicio || '';
+    const programada = !!inicioAct && inicioAct > hoy;
+    const enProceso = !programada && !['En pausa','En revisión','Terminado'].includes(a.estatus) && !listaParaRevision;
+    const estadoChip = enProceso
+      ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(74,143,212,.15);color:var(--accent);font-weight:700;white-space:nowrap" title="Ya inició: se puede reportar avance">● En proceso</span>`
+      : programada
+      ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(255,255,255,.06);color:var(--dim);white-space:nowrap" title="Todavía no llega su fecha de inicio">🗓 Programada · inicia ${cronoFmtShort(inicioAct)}</span>`
+      : '';
+    const marcoPanel = enProceso ? ';border:1.5px solid var(--accent);box-shadow:0 0 0 3px rgba(74,143,212,.12)' : '';
+    html += `<div class="panel" style="margin-bottom:12px;padding:0;overflow:hidden${marcoPanel}">
       <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;border-bottom:${isOpen?'0.5px solid rgba(255,255,255,.06)':'none'}"
         onclick="cronoToggle('${a.id}')">
         <span style="font-size:12px;color:var(--dim);transition:transform .2s;transform:rotate(${isOpen?'90':'0'}deg)">▶</span>
@@ -6234,6 +6269,7 @@ function renderReporteoView(){
             <span style="font-size:13px;font-weight:600;color:var(--text)">${a.folio||a.actividad||'Sin folio'}</span>
             <span style="font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(74,143,212,.12);color:var(--accent)">${a.tipo}</span>
             ${esConectSub && a.numBobina ? `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(245,166,35,.12);color:var(--amber);font-weight:600">Bna #${a.numBobina}</span>` : ''}
+            ${estadoChip}
             ${revisionLabel || semaforoLabel}
             ${pausaHeaderBadge}
           </div>
@@ -6300,8 +6336,12 @@ function renderReporteoView(){
           const stBg = st.pendienteValidacion?'rgba(245,166,35,.1)':st.estatus==='completada'?'rgba(61,214,140,.1)':st.estatus==='en_progreso'?'rgba(74,143,212,.1)':'rgba(255,255,255,.04)';
           const avanceSt = st.avanceAcum||0;
           const pctSt = st.cantidad ? Math.min(100,Math.round((avanceSt/st.cantidad)*100)) : 0;
-          html += `<tr id="subrow-${st.id}" style="border-bottom:0.5px solid var(--border)">
-            <td style="padding:8px 8px"><div style="font-weight:500;color:var(--text)">${st.nombre}</div><div style="font-size:10px;color:var(--dim)">${st.unidad}${st.paqueteId?' · en paralelo':''}</div></td>
+          const _esAdm = _userRole==='admin';
+          const _puedeBorrar = _userRole!=='proyectista' || (!!st.propuestaPor && st.propuestaPor===_miNombre);
+          const _dragAttrs = _esAdm ? ` draggable="true" ondragstart="cronoStDragStart(event,'${a.id}','${st.id}')" ondragover="cronoStDragOver(event)" ondragleave="cronoStDragLeave(event)" ondrop="cronoStDrop(event,'${a.id}','${st.id}')" ondragend="cronoStDragEnd(event)"` : '';
+          const _handle = _esAdm ? `<span class="st-handle" title="Arrastra para reordenar" style="cursor:grab;color:var(--dim);font-size:14px;margin-right:8px;user-select:none;letter-spacing:-2px">⋮⋮</span>` : '';
+          html += `<tr id="subrow-${st.id}" style="border-bottom:0.5px solid var(--border)"${_dragAttrs}>
+            <td style="padding:8px 8px"><div style="display:flex;align-items:center">${_handle}<div><div style="font-weight:500;color:var(--text)">${st.nombre}</div><div style="font-size:10px;color:var(--dim)">${st.unidad}${st.paqueteId?' · en paralelo':''}</div></div></div></td>
             <td style="padding:8px;text-align:center;color:var(--text)">${st.cantidad} <span style="color:var(--dim);font-size:10.5px">${st.unidad}</span></td>
             <td style="padding:8px;text-align:center;color:var(--text)" title="Duración total configurada, sin restar avance">${cronoFmtDiasHoras(diasTotal)}</td>
             <td style="padding:8px;text-align:center;color:var(--dim)" title="${dias < 1 ? 'Menos de una jornada — puede compartir el día con otras subtareas' : ''}">${cronoFmtDiasHoras(dias)}</td>
@@ -6316,9 +6356,10 @@ function renderReporteoView(){
               <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:${stBg};color:${stColor};white-space:nowrap">${stLabel}</span>
             </td>
             <td style="padding:8px;text-align:right;white-space:nowrap">
+              ${_esAdm ? `<button class="et-act-btn" onclick="cronoMoverSubtarea('${a.id}','${st.id}',-1)" title="Subir" ${si===0?'disabled style="opacity:.3;cursor:default"':''}>▲</button><button class="et-act-btn" onclick="cronoMoverSubtarea('${a.id}','${st.id}',1)" title="Bajar" ${si===subtareas.length-1?'disabled style="opacity:.3;cursor:default;margin-right:4px"':'style="margin-right:4px"'}>▼</button>` : ''}
               ${_userRole==='admin' ? `<button class="et-act-btn" onclick="cronoEditSubtareaModal('${a.id}','${st.id}')" title="Editar subtarea" style="font-size:10px;background:rgba(74,143,212,.15);color:var(--accent);margin-right:4px">✎ Editar</button>` : ''}
               ${st.pendienteValidacion && (_userRole==='admin'||_userRole==='jefe') ? `<button class="et-act-btn" onclick="cronoValidarSubtarea('${a.id}','${st.id}')" title="Validar rendimiento" style="font-size:10px;background:rgba(245,166,35,.15);color:var(--amber)">✓ Validar</button>` : ''}
-              <button class="et-act-btn del" onclick="cronoDeleteSubtarea('${a.id}','${st.id}')" title="Eliminar">✕</button>
+              ${_puedeBorrar ? `<button class="et-act-btn del" onclick="cronoDeleteSubtarea('${a.id}','${st.id}')" title="Eliminar">✕</button>` : `<span title="Esta subtarea fue cargada por el administrador y no puede eliminarse" style="font-size:12px;color:var(--dim);opacity:.6;cursor:help">🔒</span>`}
             </td>
           </tr>`;
         });
@@ -7416,7 +7457,67 @@ async function cronoConfirmarValidacion(actId, stId){
   renderReporteoView();
 }
 
+// ── Reordenar subtareas (solo administrador). El orden del arreglo define la cadena del pronóstico. ──
+function cronoReordenarSubtareas(actId, fn){
+  if(_userRole!=='admin'){ alert('Solo un administrador puede reordenar las subtareas.'); return false; }
+  cronoLoad();
+  const item = CRONO_ITEMS.find(x=>x.actividadId===actId);
+  if(!item || !Array.isArray(item.subtareas)) return false;
+  if(fn(item.subtareas)===false) return false;
+  cronoSaveItem(actId);
+  cronoSubTab = 'cronograma';
+  cronoExpandedId = actId;
+  renderReporteoView();
+  return true;
+}
+function cronoMoverSubtarea(actId, stId, dir){
+  cronoReordenarSubtareas(actId, arr=>{
+    const i = arr.findIndex(s=>s.id===stId);
+    const j = i + dir;
+    if(i<0 || j<0 || j>=arr.length) return false;
+    const [x] = arr.splice(i,1);
+    arr.splice(j,0,x);
+  });
+}
+let _cronoStDrag = null;
+function cronoStDragStart(ev, actId, stId){
+  _cronoStDrag = {actId, stId};
+  try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain', stId); }catch(e){}
+  ev.currentTarget.style.opacity='.45';
+}
+function cronoStDragOver(ev){
+  if(!_cronoStDrag) return;
+  ev.preventDefault();
+  ev.currentTarget.style.boxShadow = 'inset 0 2px 0 var(--accent)';
+}
+function cronoStDragLeave(ev){ ev.currentTarget.style.boxShadow=''; }
+function cronoStDragEnd(ev){
+  ev.currentTarget.style.opacity=''; _cronoStDrag=null;
+  document.querySelectorAll('tr[id^="subrow-"]').forEach(r=>r.style.boxShadow='');
+}
+function cronoStDrop(ev, actId, targetId){
+  ev.preventDefault();
+  ev.currentTarget.style.boxShadow='';
+  const d = _cronoStDrag; _cronoStDrag = null;
+  if(!d || d.actId!==actId || d.stId===targetId) return;
+  cronoReordenarSubtareas(actId, arr=>{
+    const i = arr.findIndex(s=>s.id===d.stId);
+    let j = arr.findIndex(s=>s.id===targetId);
+    if(i<0 || j<0) return false;
+    const [x] = arr.splice(i,1);
+    j = arr.findIndex(s=>s.id===targetId);
+    arr.splice(j,0,x); // se inserta justo antes de la fila donde se soltó
+  });
+}
+
 function cronoDeleteSubtarea(actId, stId){
+  cronoLoad();
+  const _it = CRONO_ITEMS.find(x=>x.actividadId===actId);
+  const _st = _it?.subtareas?.find(s=>s.id===stId);
+  if(_userRole==='proyectista' && !(_st && _st.propuestaPor && _st.propuestaPor===_miNombre)){
+    alert('Esta subtarea fue cargada por el administrador, no puede eliminarse. Si necesitas cambiarla, avísale.');
+    return;
+  }
   if(!confirm('¿Eliminar esta subtarea?')) return;
   cronoLoad();
   const item = CRONO_ITEMS.find(x=>x.actividadId===actId);
@@ -9081,6 +9182,20 @@ function cronoAsignarPorDia(cursor, usado, dias, capFn){
   }
   return { porDia, cursor:repDateKey(d), usado:0 };
 }
+// Fechas REALES de una subtarea según los reportes: inicio = primer reporte; fin = el día en que el acumulado
+// llegó al total (o se reportó como completada). Devuelve {inicio, fin} (cualquiera puede ser null si no hay reportes).
+function cronoFechasRealesSubtarea(item, st){
+  const reps = ((item && item.reportes) || []).filter(r=>r.subtareaId===st.id && r.fecha)
+    .sort((x,y)=> x.fecha.localeCompare(y.fecha) || String(x.id).localeCompare(String(y.id)));
+  if(!reps.length) return { inicio:null, fin:null };
+  const total = parseFloat(st.cantidad)||0;
+  let acum = 0, fin = null;
+  for(const r of reps){
+    acum += parseFloat(r.cantidad)||0;
+    if(r.estatus==='completada' || (total>0 && acum >= total - 1e-9)){ fin = r.fecha; break; }
+  }
+  return { inicio: reps[0].fecha, fin: fin || reps[reps.length-1].fecha };
+}
 function cronoDesgloseDiario(a){
   const item = (typeof CRONO_ITEMS!=='undefined') ? CRONO_ITEMS.find(x=>x.actividadId===a.id) : null;
   const subs = ((item && item.subtareas) || []).filter(st=>!st.pendienteValidacion);
@@ -9170,6 +9285,8 @@ function planExportPDF(detallado) {
     +'table.lst tr:nth-child(even) td{background:#f9fafb}'
     +'table.lst tbody{page-break-inside:avoid;break-inside:avoid}'
     +'table.lst tr.sub td{background:#f4f7fb!important;font-size:8.5px;padding:3px 7px;border-bottom:1px dashed #dfe6ef;color:#374151}'
+    +'table.lst tr.act-fin td{background:#d1fae5!important;color:#14532d}'
+    +'table.lst tr.sub.sub-fin td{background:#ecfdf3!important}'
     +'.stchip{display:inline-block;border-radius:10px;padding:1px 8px;font-size:8px;font-weight:700;white-space:nowrap}'
     +'.st-fin{background:#dcfce7;color:#166534}.st-prog{background:#dbeafe;color:#1a4fa0}.st-nuevo{background:#e5e7eb;color:#4b5563}.st-val{background:#fef3c7;color:#92400e}'
     +'.sym{display:flex;gap:14px;flex-wrap:wrap;padding:10px 14px;background:#f8fafc;border:1px solid #e2eaf3;border-radius:6px;margin-top:14px;align-items:center}'
@@ -9282,7 +9399,9 @@ function planExportPDF(detallado) {
         var ec=isProg?'#1a4fa0':isV?'#b91c1c':'#374151';
         var crItem=(typeof CRONO_ITEMS!=='undefined')?CRONO_ITEMS.find(function(x){return x.actividadId===a.id;}):null;
         var subs=detallado?((crItem&&crItem.subtareas)||[]):[];
-        h+='<tbody><tr><td style="white-space:nowrap"><span class="av" style="background:'+col+'">'+ini+'</span>'+member.split(' ').slice(0,2).join(' ')+'</td>';
+        var actFin=a.estatus==='Terminado';
+        if(actFin) ec='#166534';
+        h+='<tbody><tr'+(actFin?' class="act-fin"':'')+'><td style="white-space:nowrap"><span class="av" style="background:'+col+'">'+ini+'</span>'+member.split(' ').slice(0,2).join(' ')+'</td>';
         h+='<td><b>'+(a.actividad||'--')+'</b>'+((detallado&&!subs.length)?'<br><span style="font-size:8px;color:#9ca3af;font-style:italic">Sin subtareas definidas</span>':'')+'</td>';
         var isConLst=(a.tipo==='Conectividad (Bobinas)'||a.tipo==='Planos de Conectividad');
         h+='<td><b>'+(a.proyecto||'--')+'</b><br><b style="font-size:9px;color:#374151">'+(a.tipo||'--')+'</b>'+(isConLst&&a.numBobina?' &nbsp;Bna #'+a.numBobina:'')+'</td>';
@@ -9300,8 +9419,18 @@ function planExportPDF(detallado) {
             var prog=!pend&&!fin&&(st.estatus==='en_progreso'||av>0);
             var chip=pend?'<span class="stchip st-val">Pend. validaci&oacute;n</span>':fin?'<span class="stchip st-fin">&#10003; Terminada</span>':prog?'<span class="stchip st-prog">En proceso</span>':'<span class="stchip st-nuevo">Sin iniciar</span>';
             var ps=dg.piezas.filter(function(pz){return pz.id===st.id;});
-            var fIni=ps.length?fd(ps[0].fecha):'&mdash;', fFin=ps.length?fd(ps[ps.length-1].fecha):'&mdash;';
-            h+='<tr class="sub"><td></td>';
+            var real=cronoFechasRealesSubtarea(crItem,st);
+            var fIni, fFin;
+            if(fin){
+              // Terminada: fechas reales según el reporteo
+              fIni=real.inicio?fd(real.inicio):'&mdash;';
+              fFin=real.fin?fd(real.fin):'&mdash;';
+            } else {
+              // Pendiente / en proceso: inicio real si ya se reportó algo; término = programación del trabajo que falta
+              fIni=real.inicio?fd(real.inicio):(ps.length?fd(ps[0].fecha):'&mdash;');
+              fFin=ps.length?fd(ps[ps.length-1].fecha):'&mdash;';
+            }
+            h+='<tr class="sub'+(fin?' sub-fin':'')+'"><td></td>';
             h+='<td style="padding-left:18px"><span style="color:#9ca3af">&#8627;</span> '+(st.nombre||'--')+'</td>';
             h+='<td>'+(fin?fq(cant)+' '+(st.unidad||'')+' &middot; 100%':fq(av)+' de '+fq(cant)+' '+(st.unidad||'')+' &middot; '+pct+'%')+'</td>';
             h+='<td></td><td style="white-space:nowrap">'+fIni+'</td><td style="white-space:nowrap">'+fFin+'</td>';
@@ -9312,7 +9441,7 @@ function planExportPDF(detallado) {
       });
     });
     h+='</table>';
-    if(detallado) h+='<div style="font-size:8px;color:#6b7280;margin:-2px 0 8px">Las fechas de cada subtarea son la programaci&oacute;n del trabajo que falta (seg&uacute;n su rendimiento, desde hoy); las ya terminadas no tienen fecha.</div>';
+    if(detallado) h+='<div style="font-size:8px;color:#6b7280;margin:-2px 0 8px">En subtareas terminadas, Inicio y Termino son las fechas reales del reporteo. En las que siguen abiertas, Inicio es el primer reporte (si ya hay) y Termino es la programaci&oacute;n del trabajo que falta, seg&uacute;n su rendimiento.</div>';
   });
 
   h+='<div class="sym"><b style="font-size:10px;color:#0f2744">Simbologia:</b>';
@@ -13245,7 +13374,7 @@ function toggleEval(p){
   renderEvaluaciones();
 }
 
-const VIDS=['overview','team','tasks','detalle','charts','reporteo','calidad','udemy','evaluaciones','panel','equipo','ausencias','dashboards','herramientas','seguimiento','servicios','sbi','proyectos'];
+const VIDS=['overview','team','tasks','detalle','charts','reporteo','calidad','udemy','evaluaciones','panel','equipo','ausencias','dashboards','herramientas','seguimiento','segind','servicios','sbi','proyectos'];
 function goView(name){
   curView=name;
   VIDS.forEach(v=>{ const el=document.getElementById('v-'+v); if(el) el.style.display=v===name?'':'none'; });
@@ -13264,6 +13393,7 @@ function refresh(){
   else if(curView==='udemy') renderUdemy();
   else if(curView==='evaluaciones') renderEvaluaciones();
   else if(curView==='seguimiento') renderSeguimiento();
+  else if(curView==='segind') renderSegInd();
   else if(curView==='servicios') renderServicios();
   else if(curView==='panel') renderPanel();
   else if(curView==='equipo') renderEquipo();
@@ -15872,6 +16002,18 @@ function paAplicarEstatus(a, newEstatus){
   if(newEstatus === 'En pausa'){
     a.pausaInicio = hoy;
   }
+  // ── Entrega del proyectista (para Seguimiento individual) ──
+  // "En revisión" / "Terminado" = el proyectista ya entregó. La fecha de entrega es la del momento en
+  // que pasó a revisión. Si el administrador la regresa a proceso (hubo cambios), esa entrega se
+  // descarta y se cuenta una devolución; la entrega válida es la última, cuando vuelve a revisión.
+  const _eraEntregada = (a.estatus==='En revisión' || a.estatus==='Terminado');
+  const _seraEntregada = (newEstatus==='En revisión' || newEstatus==='Terminado');
+  if(!_eraEntregada && _seraEntregada){
+    a.fechaEntregaProy = hoy;
+  } else if(_eraEntregada && !_seraEntregada){
+    a.fechaEntregaProy = null;
+    a.devoluciones = (a.devoluciones||0) + 1;
+  }
   a.estatus = newEstatus;
 }
 
@@ -16158,6 +16300,8 @@ function paGuardar(){
       data.pausaInicio = prev.pausaInicio || null;
       data.diasEnPausaAcum = prev.diasEnPausaAcum || 0;
       data.pausasHistorial = Array.isArray(prev.pausasHistorial) ? prev.pausasHistorial.slice() : [];
+      data.fechaEntregaProy = prev.fechaEntregaProy || null;
+      data.devoluciones = prev.devoluciones || 0;
       const nuevoEstatus = data.estatus;
       data.estatus = prev.estatus; // para que paAplicarEstatus detecte la transición real de estatus
       paAplicarEstatus(data, nuevoEstatus);
@@ -16168,6 +16312,8 @@ function paGuardar(){
     data.pausaInicio = data.estatus === 'En pausa' ? new Date().toISOString().slice(0,10) : null;
     data.diasEnPausaAcum = 0;
     data.pausasHistorial = [];
+    data.fechaEntregaProy = (data.estatus==='En revisión' || data.estatus==='Terminado') ? new Date().toISOString().slice(0,10) : null;
+    data.devoluciones = 0;
     PA_ITEMS.unshift(data);
       if(data.responsable && typeof notifNuevaActividad==='function'){
         notifNuevaActividad(data.responsable, data.folio||'', data.proyecto||data.actividad||'');
@@ -21742,6 +21888,193 @@ async function supaSyncAvanceField(actividad_id, proyectista, campos){
 // ══ PANEL DE SEGUIMIENTO ══
 let segActiveTab = null; // se decide la primera vez según el rol (ver renderSeguimiento)
 const _segMounted = {};
+// ═══════════════════════════════════════════════════════════════════════════
+// PANEL DE SEGUIMIENTO INDIVIDUAL
+// Meta de cada actividad = fecha PRONÓSTICO del cronograma (no la fecha que coloca el administrador,
+// que normalmente incluye un día extra para revisar). Sin cronograma: fecha límite − 1 día hábil.
+// "Entregada" = En revisión / Terminado. Fecha de entrega = fechaEntregaProy (se borra si el admin
+// la regresa a proceso); en actividades anteriores sin ese dato se usa F. Final Real.
+// ═══════════════════════════════════════════════════════════════════════════
+let segIndPeriodo = 'todo';
+let segIndPersona = null;
+function segIndEsc(t){ return String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function segIndCorto(n){ return String(n||'').split(' ').slice(0,2).join(' '); }
+function segIndFmt(f){ if(!f) return '—'; const d=new Date(f+'T00:00:00'); return d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear(); }
+function segIndSetPeriodo(v){ segIndPeriodo = v; renderSegInd(); }
+function segIndSelPersona(n){ segIndPersona = (segIndPersona===n ? null : n); renderSegInd(); }
+function segIndPrevWorkday(fechaStr){
+  const d = new Date(fechaStr+'T00:00:00');
+  do{ d.setDate(d.getDate()-1); }while(isWeekend(d) || FESTIVOS.includes(repDateKey(d)));
+  return repDateKey(d);
+}
+function segIndMeta(a){
+  const c = (typeof CRONO_ITEMS!=='undefined') ? CRONO_ITEMS.find(x=>x.actividadId===a.id) : null;
+  if(c && Array.isArray(c.subtareas) && c.subtareas.some(s=>!s.pendienteValidacion)){
+    const p = cronoCalcPronostico(c.subtareas, cronoFechaEfectiva(a, a.fechaAsig||c.fechaInicio));
+    if(p) return {fecha:p, origen:'Pronóstico del cronograma'};
+  }
+  if(a.fechaTermino) return {fecha:segIndPrevWorkday(a.fechaTermino), origen:'Sin cronograma: fecha límite − 1 día hábil'};
+  return {fecha:null, origen:'Sin fecha meta'};
+}
+function segIndClasifica(a, hoy){
+  const m = segIndMeta(a);
+  const entregada = (a.estatus==='En revisión' || a.estatus==='Terminado');
+  const entrega = entregada ? (a.fechaEntregaProy || a.fechaReal || '') : '';
+  const r = {a, meta:m.fecha, origen:m.origen, entregada, entrega, estado:'', dias:0};
+  if(entregada){
+    if(!entrega || !m.fecha) r.estado = 'sin_dato';
+    else if(entrega <= m.fecha) r.estado = 'a_tiempo';
+    else { r.estado = 'retraso'; r.dias = Math.max(1,(paWorkdays(m.fecha, entrega)||1)-1); }
+  } else {
+    if(!m.fecha) r.estado = 'sin_meta';
+    else if(m.fecha < hoy){ r.estado = 'vencida'; r.dias = Math.max(1,(paWorkdays(m.fecha, hoy)||1)-1); }
+    else { r.estado = 'en_curso'; r.dias = cronoDiasRestantes(m.fecha)||0; }
+  }
+  return r;
+}
+function segIndEnPeriodo(r, hoy){
+  if(!r.entregada) return true; // lo pendiente siempre cuenta: es la carga actual
+  if(segIndPeriodo==='todo') return true;
+  const ref = r.entrega || r.meta || r.a.fechaAsig || '';
+  if(!ref) return false;
+  const y = +hoy.slice(0,4), mo = +hoy.slice(5,7);
+  const key = (yy,mm)=> yy+'-'+String(mm).padStart(2,'0');
+  if(segIndPeriodo==='mes') return ref.slice(0,7)===key(y,mo);
+  if(segIndPeriodo==='mesant') return ref.slice(0,7)===(mo===1?key(y-1,12):key(y,mo-1));
+  if(segIndPeriodo==='anio') return ref.slice(0,4)===String(y);
+  if(segIndPeriodo==='3m'){ const d=new Date(hoy+'T00:00:00'); d.setDate(d.getDate()-90); return ref>=repDateKey(d); }
+  return true;
+}
+function segIndStats(nombre, hoy){
+  const rows = PA_ITEMS.filter(a=>a.responsable===nombre).map(a=>segIndClasifica(a,hoy)).filter(r=>segIndEnPeriodo(r,hoy));
+  const st = {nombre, rows, total:rows.length, entregadas:0, aTiempo:0, retraso:0, sinDato:0, pendientes:0, vencidas:0, devoluciones:0, proxima:null};
+  rows.forEach(r=>{
+    st.devoluciones += (r.a.devoluciones||0);
+    if(r.entregada){
+      st.entregadas++;
+      if(r.estado==='a_tiempo') st.aTiempo++; else if(r.estado==='retraso') st.retraso++; else st.sinDato++;
+    } else {
+      st.pendientes++;
+      if(r.estado==='vencida') st.vencidas++;
+    }
+  });
+  const medidas = st.aTiempo + st.retraso;
+  st.pctTiempo = medidas ? Math.round(st.aTiempo/medidas*100) : null;
+  st.pctRetraso = medidas ? 100 - st.pctTiempo : null;
+  // Próxima entrega: la de meta más cercana (las vencidas van primero) entre lo que no está en pausa
+  const cand = rows.filter(r=>!r.entregada && r.meta && r.a.estatus!=='En pausa').sort((x,y)=>x.meta<y.meta?-1:x.meta>y.meta?1:0);
+  const candP = rows.filter(r=>!r.entregada && r.meta).sort((x,y)=>x.meta<y.meta?-1:x.meta>y.meta?1:0);
+  st.proxima = cand[0] || candP[0] || null;
+  return st;
+}
+function segIndColorPct(p){ return p===null ? 'var(--dim)' : p>=80 ? 'var(--green)' : p>=60 ? 'var(--amber)' : 'var(--red)'; }
+function segIndChip(r){
+  const mk=(t,c,bg)=>`<span style="font-size:10.5px;padding:2px 9px;border-radius:20px;background:${bg};color:${c};white-space:nowrap">${t}</span>`;
+  switch(r.estado){
+    case 'a_tiempo': return mk('✓ A tiempo','var(--green)','rgba(61,214,140,.12)');
+    case 'retraso': return mk('⚠ Retraso +'+r.dias+' d','var(--red)','rgba(255,92,92,.12)');
+    case 'sin_dato': return mk('Entregada · sin fecha','var(--dim)','rgba(255,255,255,.06)');
+    case 'vencida': return mk('⏰ Vencida hace '+r.dias+' d','var(--red)','rgba(255,92,92,.12)');
+    case 'en_curso': return mk(r.dias===0?'Entrega hoy':'En curso · '+r.dias+' d háb.','var(--accent)','rgba(74,143,212,.12)');
+    default: return mk('Sin fecha meta','var(--dim)','rgba(255,255,255,.06)');
+  }
+}
+function segIndKpi(label, valor, sub, color){
+  return `<div class="kpi" style="min-width:0"><div style="font-size:24px;font-weight:600;color:${color||'var(--text)'}">${valor}</div><div style="font-size:11.5px;color:var(--text);margin-top:2px">${label}</div>${sub?`<div style="font-size:10.5px;color:var(--dim);margin-top:2px">${sub}</div>`:''}</div>`;
+}
+function segIndCard(st, sel){
+  const tot = st.total || 1;
+  const w = n => (n/tot*100).toFixed(1)+'%';
+  const p = st.proxima;
+  let prox = '<div style="color:var(--dim);font-size:11.5px">Sin entregas pendientes</div>';
+  if(p){
+    const col = p.estado==='vencida' ? 'var(--red)' : 'var(--text)';
+    prox = `<div style="font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${segIndEsc(p.a.actividad||'')}">${segIndEsc(p.a.folio||p.a.actividad||'—')}</div>
+      <div style="font-size:11px;color:${col};margin-top:2px">📅 ${segIndFmt(p.meta)} · ${p.estado==='vencida'?'vencida hace '+p.dias+' d háb.':p.dias===0?'es hoy':'faltan '+p.dias+' d háb.'}</div>`;
+  }
+  const pt = st.pctTiempo, pr = st.pctRetraso;
+  return `<div class="panel" onclick="segIndSelPersona('${segIndEsc(st.nombre).replace(/'/g,"\\'")}')" style="cursor:pointer;padding:14px 16px;${sel?'border-color:var(--accent);box-shadow:0 0 0 3px rgba(74,143,212,.15)':''}">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+      <div style="font-size:14px;font-weight:600;color:var(--text)">${segIndEsc(segIndCorto(st.nombre))}</div>
+      <div style="font-size:10.5px;color:var(--dim)">${st.total} actividad${st.total===1?'':'es'}</div>
+    </div>
+    <div style="display:flex;gap:16px;margin-bottom:10px">
+      <div><div style="font-size:22px;font-weight:600;color:${segIndColorPct(pt)}">${pt===null?'—':pt+'%'}</div><div style="font-size:10.5px;color:var(--dim)">en tiempo (${st.aTiempo})</div></div>
+      <div><div style="font-size:22px;font-weight:600;color:${pr?'var(--red)':'var(--dim)'}">${pr===null?'—':pr+'%'}</div><div style="font-size:10.5px;color:var(--dim)">con retraso (${st.retraso})</div></div>
+      <div><div style="font-size:22px;font-weight:600;color:var(--text)">${st.entregadas}<span style="font-size:12px;color:var(--dim);font-weight:400">/${st.total}</span></div><div style="font-size:10.5px;color:var(--dim)">entregadas</div></div>
+    </div>
+    <div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:rgba(128,140,160,.18);margin-bottom:6px" title="Verde: a tiempo · Rojo: con retraso · Gris: entregadas sin fecha · Hueco: pendientes">
+      <div style="width:${w(st.aTiempo)};background:var(--green)"></div><div style="width:${w(st.retraso)};background:var(--red)"></div><div style="width:${w(st.sinDato)};background:#8a94a8"></div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--dim);margin-bottom:12px">
+      <span>${st.pendientes} pendiente${st.pendientes===1?'':'s'}</span>
+      ${st.vencidas?`<span style="color:var(--red)">${st.vencidas} vencida${st.vencidas===1?'':'s'}</span>`:''}
+      ${st.devoluciones?`<span title="Veces que una entrega se regresó a proceso">↩ ${st.devoluciones} devuelta${st.devoluciones===1?'':'s'}</span>`:''}
+      ${st.sinDato?`<span>${st.sinDato} sin fecha</span>`:''}
+    </div>
+    <div style="border-top:0.5px solid var(--border);padding-top:9px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--dim);margin-bottom:3px">Próxima entrega</div>${prox}</div>
+  </div>`;
+}
+function segIndDetalle(st){
+  const ordenP = {vencida:0,en_curso:1,sin_meta:2};
+  const pend = st.rows.filter(r=>!r.entregada).sort((x,y)=> (ordenP[x.estado]-ordenP[y.estado]) || ((x.meta||'9')<(y.meta||'9')?-1:1));
+  const ent = st.rows.filter(r=>r.entregada).sort((x,y)=> (y.entrega||'')<(x.entrega||'')?-1:1);
+  const esAdm = _userRole!=='proyectista';
+  const th = (t,al)=>`<th style="text-align:${al||'left'};padding:7px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">${t}</th>`;
+  const tr = r=>`<tr style="border-bottom:0.5px solid var(--border)">
+    <td style="padding:8px"><div style="font-weight:500;color:var(--text)">${segIndEsc(r.a.folio||r.a.actividad||'—')}</div><div style="font-size:10.5px;color:var(--dim)">${segIndEsc([r.a.proyecto, r.a.tipo].filter(Boolean).join(' · '))}</div></td>
+    <td style="padding:8px;color:var(--dim);white-space:nowrap">${segIndEsc(r.a.estatus||'')}</td>
+    <td style="padding:8px;white-space:nowrap;color:var(--text)" title="${segIndEsc(r.origen)}">${segIndFmt(r.meta)}${r.origen.startsWith('Sin cron')?' <span style="color:var(--dim);font-size:10px">*</span>':''}</td>
+    ${esAdm?`<td style="padding:8px;white-space:nowrap;color:var(--dim)">${segIndFmt(r.a.fechaTermino)}</td>`:''}
+    <td style="padding:8px;white-space:nowrap;color:var(--text)">${r.entregada?segIndFmt(r.entrega):'—'}</td>
+    <td style="padding:8px">${segIndChip(r)}</td>
+    <td style="padding:8px;text-align:center;color:${r.a.devoluciones?'var(--amber)':'var(--dim)'}" title="Veces regresada a proceso">${r.a.devoluciones?('↩ '+r.a.devoluciones):'—'}</td>
+  </tr>`;
+  const sec = (t,arr)=> arr.length ? `<tr><td colspan="${esAdm?7:6}" style="padding:10px 8px 4px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--accent)">${t} (${arr.length})</td></tr>`+arr.map(tr).join('') : '';
+  return `<div class="panel" style="padding:14px 16px;margin-top:16px;overflow-x:auto">
+    <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:2px">Detalle · ${segIndEsc(segIndCorto(st.nombre))}</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:10px">Meta = fecha pronóstico. <span style="color:var(--dim)">*</span> Sin cronograma: se usa la fecha límite menos 1 día hábil.</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>${th('Actividad')}${th('Estatus')}${th('Meta (pronóstico)')}${esAdm?th('F. límite'):''}${th('Entrega')}${th('Resultado')}${th('Devol.','center')}</tr></thead>
+    <tbody>${sec('Pendientes',pend)}${sec('Entregadas',ent)}</tbody></table></div>`;
+}
+function renderSegInd(){
+  const host = document.getElementById('segIndBody'); if(!host) return;
+  try{ if(typeof cronoLoad==='function') cronoLoad(); }catch(e){}
+  const selP = document.getElementById('segIndPeriodo'); if(selP && selP.value!==segIndPeriodo) selP.value = segIndPeriodo;
+  const hoy = repDateKey(new Date());
+  const esProy = _userRole==='proyectista';
+  let nombres = esProy ? [_miNombre] : PA_MEMBERS.slice();
+  if(!esProy){ // responsables con actividades que no estén en la lista fija
+    PA_ITEMS.forEach(a=>{ if(a.responsable && !nombres.includes(a.responsable) && a.responsable!=='Martha Muro') nombres.push(a.responsable); });
+  }
+  let stats = nombres.map(n=>segIndStats(n,hoy)).filter(s=>s.total>0);
+  if(!stats.length){
+    host.innerHTML = `<div class="empty" style="padding:40px;text-align:center;color:var(--dim)">Sin actividades para mostrar en este periodo.</div>`; return;
+  }
+  const T = stats.reduce((t,s)=>{ t.total+=s.total; t.ent+=s.entregadas; t.ok+=s.aTiempo; t.late+=s.retraso; t.pend+=s.pendientes; t.venc+=s.vencidas; t.dev+=s.devoluciones; return t; },{total:0,ent:0,ok:0,late:0,pend:0,venc:0,dev:0});
+  const med = T.ok+T.late;
+  const pOk = med ? Math.round(T.ok/med*100) : null;
+  let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px">
+    ${segIndKpi('Actividades asignadas', T.total, esProy?'':'todo el equipo')}
+    ${segIndKpi('Entregadas', T.ent, T.total?Math.round(T.ent/T.total*100)+'% del total':'')}
+    ${segIndKpi('Entregas en tiempo', pOk===null?'—':pOk+'%', T.ok+' de '+med+' con fecha', segIndColorPct(pOk))}
+    ${segIndKpi('Entregas con retraso', pOk===null?'—':(100-pOk)+'%', T.late+' de '+med+' con fecha', T.late?'var(--red)':'var(--dim)')}
+    ${segIndKpi('Pendientes vencidas', T.venc, T.pend+' pendientes en total', T.venc?'var(--red)':'var(--green)')}
+    ${segIndKpi('Devueltas a proceso', T.dev, 'modificaciones tras entregar', T.dev?'var(--amber)':'var(--dim)')}
+  </div>`;
+  if(esProy){
+    html += segIndCard(stats[0], false).replace('onclick="','data-x="').replace('cursor:pointer;','');
+    html += segIndDetalle(stats[0]);
+  } else {
+    stats.sort((a,b)=> (b.vencidas-a.vencidas) || ((a.pctTiempo===null?101:a.pctTiempo)-(b.pctTiempo===null?101:b.pctTiempo)));
+    html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px">${stats.map(s=>segIndCard(s, segIndPersona===s.nombre)).join('')}</div>`;
+    const sel = stats.find(s=>s.nombre===segIndPersona);
+    if(sel) html += segIndDetalle(sel);
+    else html += `<div style="font-size:11.5px;color:var(--dim);margin-top:14px;text-align:center">Haz clic en la tarjeta de un integrante para ver el detalle de sus actividades.</div>`;
+  }
+  host.innerHTML = html;
+}
+
 function renderSeguimiento(){
   // Mostrar/ocultar la pestaña "Mis pendientes" — solo aplica al rol proyectista
   const tabPend = document.getElementById('segTab-pendientes');
@@ -21778,6 +22111,7 @@ async function paRefreshFromSupabase(){
         fechaReal:a.fecha_real||'', numBobina:a.num_bobina||'',
         juegos:a.juegos||'', planosJuego:a.planos_juego||'',
         pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[],
+        fechaEntregaProy:a.fecha_entrega_proy||null, devoluciones:a.devoluciones||0,
         createdAt:a.created_at, updatedAt:a.updated_at,
       }));
       localStorage.setItem('c3ntro_panel_actividades', JSON.stringify(PA_ITEMS));
@@ -22803,6 +23137,7 @@ async function supaLoadAll(){
         fechaReal:a.fecha_real||'', numBobina:a.num_bobina||'',
         juegos:a.juegos||'', planosJuego:a.planos_juego||'',
         pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[],
+        fechaEntregaProy:a.fecha_entrega_proy||null, devoluciones:a.devoluciones||0,
         createdAt:a.created_at, updatedAt:a.updated_at,
       }));
       localStorage.setItem('c3ntro_panel_actividades', JSON.stringify(PA_ITEMS));
@@ -23355,8 +23690,19 @@ async function supaSyncActividad(a){
     pausa_inicio:a.pausaInicio||null, dias_en_pausa_acum:a.diasEnPausaAcum||0, pausas_historial:a.pausasHistorial||[],
     updated_at:new Date().toISOString(),
   };
+  // Columnas nuevas (Seguimiento individual). Si todavía no se corre el SQL, se omiten sin romper el guardado.
+  if(!window._supaSinColEntrega){
+    payload.fecha_entrega_proy = a.fechaEntregaProy||null;
+    payload.devoluciones = a.devoluciones||0;
+  }
   try{
-    const {error} = await _supa.from('actividades').upsert(payload, {onConflict:'id'});
+    let {error} = await _supa.from('actividades').upsert(payload, {onConflict:'id'});
+    if(error && !window._supaSinColEntrega && /fecha_entrega_proy|devoluciones/.test((error.message||'')+' '+(error.details||''))){
+      console.warn('⚠️ Falta correr sql_seguimiento_individual.sql: se guarda sin fecha_entrega_proy/devoluciones');
+      window._supaSinColEntrega = true;
+      delete payload.fecha_entrega_proy; delete payload.devoluciones;
+      ({error} = await _supa.from('actividades').upsert(payload, {onConflict:'id'}));
+    }
     if(error){
       console.error('❌ Error guardando actividad en Supabase:', error.message, error);
       supaIndicator(false);
