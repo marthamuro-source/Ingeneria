@@ -2647,7 +2647,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
               <select class="pa-select" id="paFiltResp-Proyecto" onchange="paRenderTipo('Proyecto')" title="Filtrar por responsable"><option value="">Todos los responsables</option></select>
               <select class="pa-select" id="paFiltEst-Proyecto" onchange="paRenderTipo('Proyecto')" title="Filtrar por estatus">
                 <option value="">Todos los estatus</option>
-                <option>Sin iniciar</option><option>En progreso</option><option>En pausa</option><option>En revisión</option><option>Terminado</option>
+                <option>Sin iniciar</option><option>En progreso</option><option>En pausa</option><option>En revisión</option><option>Terminado (máximo avance)</option><option>Terminado</option>
               </select>
             </div>
           </div>
@@ -2681,7 +2681,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
               <select class="pa-select" id="paFiltResp-Planos de Conectividad" onchange="paRenderTipo('Planos de Conectividad')" title="Filtrar por responsable"><option value="">Todos los responsables</option></select>
               <select class="pa-select" id="paFiltEst-Planos de Conectividad" onchange="paRenderTipo('Planos de Conectividad')" title="Filtrar por estatus">
                 <option value="">Todos los estatus</option>
-                <option>Sin iniciar</option><option>En progreso</option><option>En pausa</option><option>En revisión</option><option>Terminado</option>
+                <option>Sin iniciar</option><option>En progreso</option><option>En pausa</option><option>En revisión</option><option>Terminado (máximo avance)</option><option>Terminado</option>
               </select>
             </div>
           </div>
@@ -2732,7 +2732,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
               <select class="pa-select" id="paFiltResp-Trabajo Operativo" onchange="paRenderTipo('Trabajo Operativo')" title="Filtrar por responsable"><option value="">Todos los responsables</option></select>
               <select class="pa-select" id="paFiltEst-Trabajo Operativo" onchange="paRenderTipo('Trabajo Operativo')" title="Filtrar por estatus">
                 <option value="">Todos los estatus</option>
-                <option>Sin iniciar</option><option>En progreso</option><option>En pausa</option><option>En revisión</option><option>Terminado</option>
+                <option>Sin iniciar</option><option>En progreso</option><option>En pausa</option><option>En revisión</option><option>Terminado (máximo avance)</option><option>Terminado</option>
               </select>
             </div>
           </div>
@@ -2765,7 +2765,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
               <select class="pa-select" id="paFiltResp-Impresiones" onchange="paRenderTipo('Impresiones')" title="Filtrar por responsable"><option value="">Todos los responsables</option></select>
               <select class="pa-select" id="paFiltEst-Impresiones" onchange="paRenderTipo('Impresiones')" title="Filtrar por estatus">
                 <option value="">Todos los estatus</option>
-                <option>Sin iniciar</option><option>En progreso</option><option>En pausa</option><option>En revisión</option><option>Terminado</option>
+                <option>Sin iniciar</option><option>En progreso</option><option>En pausa</option><option>En revisión</option><option>Terminado (máximo avance)</option><option>Terminado</option>
               </select>
             </div>
           </div>
@@ -3308,7 +3308,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
             <option>Sin iniciar</option>
             <option>En progreso</option>
             <option>En pausa</option>
-            <option>En revisión</option>
+            <option>En revisión</option><option>Terminado (máximo avance)</option>
             <option>Terminado</option>
           </select>
         </div>
@@ -6240,7 +6240,7 @@ function renderReporteoView(){
       : '';
 
     const esConectSub = a.tipo==='Planos de Conectividad'||a.tipo==='Conectividad (Bobinas)';
-    const listaParaRevision = avancePct===100 && a.estatus!=='Terminado';
+    const listaParaRevision = avancePct===100 && a.estatus!=='Terminado' && a.estatus!=='Terminado (máximo avance)';
     const revisionLabel = listaParaRevision
       ? (_userRole==='proyectista'
           ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(74,143,212,.12);color:var(--accent);font-weight:600">⏳ En proceso de revisión</span>`
@@ -6253,7 +6253,7 @@ function renderReporteoView(){
     // "En proceso" = ya llegó su fecha de inicio y se puede reportar; "Programada" = todavía no inicia.
     const inicioAct = a.fechaAsig || crono?.fechaInicio || '';
     const programada = !!inicioAct && inicioAct > hoy;
-    const enProceso = !programada && !['En pausa','En revisión','Terminado'].includes(a.estatus) && !listaParaRevision;
+    const enProceso = !programada && !['En pausa','En revisión','Terminado (máximo avance)','Terminado'].includes(a.estatus) && !listaParaRevision;
     const estadoChip = enProceso
       ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(74,143,212,.15);color:var(--accent);font-weight:700;white-space:nowrap" title="Ya inició: se puede reportar avance">● En proceso</span>`
       : programada
@@ -6384,13 +6384,16 @@ function renderReporteoView(){
             html += `<div style="margin-bottom:14px"></div>`;
           }
         }
+        if(a.estatus==='En pausa' && a.pausaInicio){
+          html += `<div style="margin-bottom:12px;padding:8px 12px;border-radius:8px;background:rgba(245,166,35,.1);border:0.5px solid rgba(245,166,35,.35);font-size:11px;color:var(--text)">⏸ <b>En pausa desde ${cronoFmtDate(a.pausaInicio)}</b> · ${a.pausaMotivo?'Motivo: '+segIndEsc(a.pausaMotivo):'<i style="color:var(--dim)">sin justificación registrada</i>'}</div>`;
+        }
         if(Array.isArray(a.pausasHistorial) && a.pausasHistorial.length){
           html += `<div style="margin-bottom:16px">
             <div style="font-size:11px;font-weight:500;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">⏸ Historial de pausas</div>
             <div style="border:0.5px solid var(--border);border-radius:8px;overflow:hidden">`;
           [...a.pausasHistorial].reverse().forEach(p=>{
             html += `<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 12px;font-size:11px;border-bottom:0.5px solid var(--border)">
-              <span style="color:var(--text)">${cronoFmtDate(p.inicio)} → ${cronoFmtDate(p.fin)}</span>
+              <span style="color:var(--text)">${cronoFmtDate(p.inicio)} → ${cronoFmtDate(p.fin)}<div style="font-size:10.5px;color:var(--dim);margin-top:2px">${p.motivo?'Motivo: '+segIndEsc(p.motivo):'<i>Sin justificación registrada</i>'}</div></span>
               <span style="color:var(--amber);font-weight:500;white-space:nowrap">${p.dias} día${p.dias===1?'':'s'} hábil${p.dias===1?'':'es'}</span>
             </div>`;
           });
@@ -7854,7 +7857,7 @@ function cronoGuardarReporte(){
   const pa = PA_ITEMS.find(x=>x.id===cronoReportActId);
   if(pa){
     const avanceTotal = cronoAvance(item.subtareas||[]);
-    if(avanceTotal===100 && pa.estatus!=='En revisión' && pa.estatus!=='Terminado'){
+    if(avanceTotal===100 && pa.estatus!=='En revisión' && pa.estatus!=='Terminado (máximo avance)' && pa.estatus!=='Terminado'){
       if(typeof paAplicarEstatus==='function') paAplicarEstatus(pa,'En revisión'); else pa.estatus = 'En revisión';
       if(typeof paSave==='function') paSave(pa);
       if(_userRole==='proyectista' && typeof notifAdd==='function'){
@@ -9286,6 +9289,7 @@ function planExportPDF(detallado) {
     +'table.lst tbody{page-break-inside:avoid;break-inside:avoid}'
     +'table.lst tr.sub td{background:#f4f7fb!important;font-size:8.5px;padding:3px 7px;border-bottom:1px dashed #dfe6ef;color:#374151}'
     +'table.lst tr.act-fin td{background:#d1fae5!important;color:#14532d}'
+    +'table.lst tr.pnota td{background:#fffbeb!important;color:#92400e;font-size:8px;padding:3px 7px;border-bottom:1px dashed #fcd34d}'
     +'table.lst tr.sub.sub-fin td{background:#ecfdf3!important}'
     +'.stchip{display:inline-block;border-radius:10px;padding:1px 8px;font-size:8px;font-weight:700;white-space:nowrap}'
     +'.st-fin{background:#dcfce7;color:#166534}.st-prog{background:#dbeafe;color:#1a4fa0}.st-nuevo{background:#e5e7eb;color:#4b5563}.st-val{background:#fef3c7;color:#92400e}'
@@ -9409,6 +9413,17 @@ function planExportPDF(detallado) {
         h+='<td style="white-space:nowrap">'+fd(a.fechaAsig)+'</td>';
         h+='<td style="white-space:nowrap">'+fd(a.fechaTermino)+'</td>';
         h+='<td style="color:'+ec+';font-weight:600">'+a.estatus+'</td></tr>';
+        var pr=(typeof paPausaResumen==='function')?paPausaResumen(a):null;
+        if(pr){
+          var esc=function(t){return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+          var nota='<b>&#9208; Pausa:</b> ';
+          nota+=pr.pausas.map(function(p){
+            return (p.abierta?'en pausa desde '+fd(p.inicio)+' ('+p.dias+' d&iacute;as h&aacute;b. a la fecha)':'del '+fd(p.inicio)+' al '+fd(p.fin)+' ('+p.dias+' d&iacute;a'+(p.dias===1?'':'s')+' h&aacute;b.)')+' &mdash; <i>'+(p.motivo?esc(p.motivo):'sin justificaci&oacute;n registrada')+'</i>';
+          }).join('; ');
+          if(pr.original&&pr.nueva&&pr.nueva!==pr.original) nota+='. Entrega original: <b>'+fd(pr.original)+'</b> &rarr; nueva fecha por la pausa: <b>'+fd(pr.nueva)+'</b> (+'+pr.totalDias+' d&iacute;a'+(pr.totalDias===1?'':'s')+' h&aacute;b.)';
+          else if(pr.totalDias) nota+='. Total pausado: '+pr.totalDias+' d&iacute;a'+(pr.totalDias===1?'':'s')+' h&aacute;b.';
+          h+='<tr class="pnota"><td></td><td colspan="6">'+nota+'</td></tr>';
+        }
         if(subs.length){
           var dg=getDesg(a);
           subs.forEach(function(st){
@@ -9994,7 +10009,7 @@ async function calProyGuardarReporteHoyG(){
   pendientes.forEach(entry=>{
     const pa = PA_ITEMS.find(x=>x.id===entry.actData.id);
     if(!pa) return;
-    if((entry.avance>=100 || entry.estatus==='completada') && pa.estatus!=='En revisión' && pa.estatus!=='Terminado'){
+    if((entry.avance>=100 || entry.estatus==='completada') && pa.estatus!=='En revisión' && pa.estatus!=='Terminado (máximo avance)' && pa.estatus!=='Terminado'){
       if(typeof paAplicarEstatus==='function') paAplicarEstatus(pa,'En revisión'); else pa.estatus = 'En revisión';
       if(typeof paSave==='function') paSave(pa);
       if(typeof notifAdd==='function'){
@@ -10189,7 +10204,7 @@ async function calProyGuardarReporteHoy(){
     const pa = PA_ITEMS.find(x=>x.id===actId);
     if(!item || !pa) return;
     const avanceTotal = cronoAvance(item.subtareas||[]);
-    if(avanceTotal===100 && pa.estatus!=='En revisión' && pa.estatus!=='Terminado'){
+    if(avanceTotal===100 && pa.estatus!=='En revisión' && pa.estatus!=='Terminado (máximo avance)' && pa.estatus!=='Terminado'){
       if(typeof paAplicarEstatus==='function') paAplicarEstatus(pa,'En revisión'); else pa.estatus = 'En revisión';
       if(typeof paSave==='function') paSave(pa);
       if(typeof notifAdd==='function'){
@@ -13815,6 +13830,7 @@ const PA_STATUS_CFG = {
   'En progreso':  {cls:'bb',  dot:'var(--accent)'},
   'En pausa':     {cls:'ba',  dot:'var(--amber)'},
   'En revisión':  {cls:'ba',  dot:'var(--amber)'},
+  'Terminado (máximo avance)': {cls:'bg', dot:'var(--green)'},
   'Terminado':    {cls:'bg',  dot:'var(--green)'},
 };
 
@@ -14110,7 +14126,7 @@ function paRenderTipo(tipo){
   });
 
   // Orden primario: activas primero, luego terminadas
-  const estatusPrioridad = {'En progreso':0,'Sin iniciar':1,'En pausa':2,'En revisión':3,'Terminado':4};
+  const estatusPrioridad = {'En progreso':0,'Sin iniciar':1,'En pausa':2,'En revisión':3,'Terminado (máximo avance)':3,'Terminado':4};
   items.sort((a,b)=>{
     const pa = estatusPrioridad[a.estatus]??3;
     const pb = estatusPrioridad[b.estatus]??3;
@@ -15988,6 +16004,63 @@ function paPausaElapsed(desde, hasta){
   return d===null ? 0 : Math.max(0, d - 1);
 }
 
+// ── Justificación obligatoria al pausar una actividad ──
+// Devuelve una promesa: el texto del motivo, o null si se cancela. El motivo queda en a.pausaMotivo
+// mientras dura la pausa y, al reanudar, se guarda en pausasHistorial junto con las fechas.
+function paPedirMotivoPausa(a){
+  return new Promise(resolve=>{
+    const old = document.getElementById('paPausaMotivoBg'); if(old) old.remove();
+    const bg = document.createElement('div');
+    bg.id = 'paPausaMotivoBg';
+    bg.className = 'pa-modal-bg open';
+    bg.style.zIndex = '100000';
+    const nombre = (a && (a.folio || a.actividad)) || 'esta actividad';
+    const sug = ['Esperando información del cliente','Cambio de prioridad','Falta de insumos / datos','Pendiente de revisión externa'];
+    bg.innerHTML = `<div class="pa-modal" style="max-width:460px;padding:20px 22px" onclick="event.stopPropagation()">
+      <div class="pa-modal-title" style="margin-bottom:10px">⏸ Pausar actividad</div>
+      <div style="font-size:12px;color:var(--text);margin-bottom:4px"><b>${segIndEsc(nombre)}</b>${a&&a.proyecto?' · '+segIndEsc(a.proyecto):''}</div>
+      <div style="font-size:11px;color:var(--dim);margin-bottom:12px">Escribe el motivo de la pausa. Quedará registrado junto con los días pausados y aparecerá en el plan de trabajo como justificación del cambio de fecha de entrega.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">${sug.map(t=>`<button type="button" class="et-act-btn" data-sug="${segIndEsc(t)}" style="font-size:10.5px">${segIndEsc(t)}</button>`).join('')}</div>
+      <textarea id="paPausaMotivoTxt" rows="3" placeholder="Motivo de la pausa (obligatorio)…" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font);font-size:12px;padding:8px;resize:vertical"></textarea>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+        <button type="button" class="et-act-btn" id="paPausaCancel">Cancelar</button>
+        <button type="button" class="et-act-btn" id="paPausaOk" disabled style="background:rgba(245,166,35,.18);color:var(--amber);opacity:.5">⏸ Pausar</button>
+      </div></div>`;
+    document.body.appendChild(bg);
+    const txt = bg.querySelector('#paPausaMotivoTxt'), ok = bg.querySelector('#paPausaOk');
+    const valida = ()=>{ const v = txt.value.trim().length>=5; ok.disabled = !v; ok.style.opacity = v?'1':'.5'; };
+    txt.addEventListener('input', valida);
+    bg.querySelectorAll('[data-sug]').forEach(b=>b.addEventListener('click',()=>{ txt.value = b.getAttribute('data-sug'); valida(); txt.focus(); }));
+    const cerrar = v=>{ bg.remove(); resolve(v); };
+    bg.querySelector('#paPausaCancel').addEventListener('click',()=>cerrar(null));
+    bg.addEventListener('click',()=>cerrar(null));
+    ok.addEventListener('click',()=>{ const v = txt.value.trim(); if(v.length>=5) cerrar(v); });
+    setTimeout(()=>txt.focus(),30);
+  });
+}
+// ¿Este cambio de estatus es "entrar a pausa"?
+function paEsEntradaPausa(a, nuevo){ return !!a && nuevo==='En pausa' && a.estatus!=='En pausa'; }
+
+// Resumen de pausas de una actividad (para el plan de trabajo): fechas, motivos, entrega original vs. nueva.
+function paPausaResumen(a){
+  if(!a) return null;
+  const hist = Array.isArray(a.pausasHistorial) ? a.pausasHistorial.slice() : [];
+  const abierta = (a.estatus==='En pausa' && a.pausaInicio) ? {inicio:a.pausaInicio, fin:null, dias:paPausaElapsed(a.pausaInicio, repDateKey(new Date())), motivo:a.pausaMotivo||'', abierta:true} : null;
+  if(!hist.length && !abierta) return null;
+  const pausas = abierta ? hist.concat([abierta]) : hist;
+  const totalDias = pausas.reduce((t,p)=>t+(p.dias||0),0);
+  let original = a.fechaTermino || null, nueva = null;
+  const c = (typeof CRONO_ITEMS!=='undefined') ? CRONO_ITEMS.find(x=>x.actividadId===a.id) : null;
+  if(c && Array.isArray(c.subtareas) && c.subtareas.some(x=>!x.pendienteValidacion)){
+    const base = a.fechaAsig || c.fechaInicio;
+    original = cronoCalcPronostico(c.subtareas, base) || original;
+    nueva = cronoCalcPronostico(c.subtareas, cronoFechaEfectiva(a, base));
+  } else if(original && totalDias){
+    nueva = cronoAddWorkdays(original, totalDias);
+  }
+  return {pausas, totalDias, original, nueva, abierta:!!abierta};
+}
+
 function paAplicarEstatus(a, newEstatus){
   if(!a || a.estatus === newEstatus) return;
   if(typeof paEnsurePausaInicio==='function') paEnsurePausaInicio(a);
@@ -15996,18 +16069,21 @@ function paAplicarEstatus(a, newEstatus){
     const diasEstePausa = paPausaElapsed(a.pausaInicio, hoy);
     a.diasEnPausaAcum = (a.diasEnPausaAcum||0) + diasEstePausa;
     if(!Array.isArray(a.pausasHistorial)) a.pausasHistorial = [];
-    a.pausasHistorial.push({ inicio: a.pausaInicio, fin: hoy, dias: diasEstePausa });
+    a.pausasHistorial.push({ inicio: a.pausaInicio, fin: hoy, dias: diasEstePausa, motivo: a.pausaMotivo||'' });
     a.pausaInicio = null;
+    a.pausaMotivo = null;
   }
   if(newEstatus === 'En pausa'){
     a.pausaInicio = hoy;
+    a.pausaMotivo = (window._paMotivoTmp||'').trim() || null; // justificación capturada en el modal de pausa
   }
+  window._paMotivoTmp = null;
   // ── Entrega del proyectista (para Seguimiento individual) ──
   // "En revisión" / "Terminado" = el proyectista ya entregó. La fecha de entrega es la del momento en
   // que pasó a revisión. Si el administrador la regresa a proceso (hubo cambios), esa entrega se
   // descarta y se cuenta una devolución; la entrega válida es la última, cuando vuelve a revisión.
-  const _eraEntregada = (a.estatus==='En revisión' || a.estatus==='Terminado');
-  const _seraEntregada = (newEstatus==='En revisión' || newEstatus==='Terminado');
+  const _eraEntregada = (a.estatus==='En revisión' || a.estatus==='Terminado (máximo avance)' || a.estatus==='Terminado');
+  const _seraEntregada = (newEstatus==='En revisión' || newEstatus==='Terminado (máximo avance)' || newEstatus==='Terminado');
   if(!_eraEntregada && _seraEntregada){
     a.fechaEntregaProy = hoy;
   } else if(_eraEntregada && !_seraEntregada){
@@ -16068,11 +16144,19 @@ function paInlineStatus(id, currentVal, td){
   if(!td||td.querySelector('select')) return;
   const sel = document.createElement('select');
   sel.style.cssText='background:var(--surface2);border:1px solid rgba(74,143,212,.4);border-radius:4px;color:var(--text);font-family:var(--font);font-size:11px;padding:2px 5px;';
-  ['Sin iniciar','En progreso','En pausa','En revisión','Terminado'].forEach(s=>{
+  ['Sin iniciar','En progreso','En pausa','En revisión','Terminado (máximo avance)','Terminado'].forEach(s=>{
     const o=document.createElement('option'); o.value=o.textContent=s; if(s===currentVal) o.selected=true; sel.appendChild(o);
   });
   td.innerHTML=''; td.appendChild(sel); sel.focus();
-  function save(){ const v=sel.value; const a=PA_ITEMS.find(x=>x.id===id); if(a){paAplicarEstatus(a,v);paSave(a);} renderPanel(); }
+  function save(){
+    const v=sel.value; const a=PA_ITEMS.find(x=>x.id===id);
+    if(a && paEsEntradaPausa(a,v)){
+      sel.removeEventListener('change', save);
+      paPedirMotivoPausa(a).then(m=>{ if(m!==null){ window._paMotivoTmp=m; paAplicarEstatus(a,v); paSave(a); } renderPanel(); });
+      return;
+    }
+    if(a){paAplicarEstatus(a,v);paSave(a);} renderPanel();
+  }
   sel.addEventListener('change', save);
   sel.addEventListener('blur', ()=>setTimeout(save,150));
 }
@@ -16269,6 +16353,15 @@ function paModalClickBg(e){
 function paGuardar(){
   const actividad = document.getElementById('paFActividad').value.trim();
   if(!actividad){ alert('La actividad no puede estar vacía.'); return; }
+  // Si se está pausando, pedir justificación primero y volver a guardar con el motivo ya capturado
+  if(paModalEditId && !window._paMotivoTmp){
+    const _prev = PA_ITEMS.find(x=>x.id===paModalEditId);
+    const _nuevo = document.getElementById('paFEstatus').value;
+    if(paEsEntradaPausa(_prev,_nuevo)){
+      paPedirMotivoPausa(_prev).then(m=>{ if(m===null) return; window._paMotivoTmp=m; paGuardar(); });
+      return;
+    }
+  }
 
   const data = {
     id: paModalEditId || paNextId(),
@@ -16300,6 +16393,7 @@ function paGuardar(){
       data.pausaInicio = prev.pausaInicio || null;
       data.diasEnPausaAcum = prev.diasEnPausaAcum || 0;
       data.pausasHistorial = Array.isArray(prev.pausasHistorial) ? prev.pausasHistorial.slice() : [];
+      data.pausaMotivo = prev.pausaMotivo || null;
       data.fechaEntregaProy = prev.fechaEntregaProy || null;
       data.devoluciones = prev.devoluciones || 0;
       const nuevoEstatus = data.estatus;
@@ -16312,7 +16406,7 @@ function paGuardar(){
     data.pausaInicio = data.estatus === 'En pausa' ? new Date().toISOString().slice(0,10) : null;
     data.diasEnPausaAcum = 0;
     data.pausasHistorial = [];
-    data.fechaEntregaProy = (data.estatus==='En revisión' || data.estatus==='Terminado') ? new Date().toISOString().slice(0,10) : null;
+    data.fechaEntregaProy = (data.estatus==='En revisión' || data.estatus==='Terminado (máximo avance)' || data.estatus==='Terminado') ? new Date().toISOString().slice(0,10) : null;
     data.devoluciones = 0;
     PA_ITEMS.unshift(data);
       if(data.responsable && typeof notifNuevaActividad==='function'){
@@ -16671,6 +16765,7 @@ function pdmOpen(name){
   const activas    = all.filter(a => a.estatus !== 'Terminado');
   const enProceso  = all.filter(a => a.estatus === 'En progreso');
   const enRevision = all.filter(a => a.estatus === 'En revisión');
+  const enMaxAvance = all.filter(a => a.estatus === 'Terminado (máximo avance)');
   const sinIniciar = all.filter(a => a.estatus === 'Sin iniciar');
   const enPausa    = all.filter(a => a.estatus === 'En pausa');
   const terminadas = all.filter(a => a.estatus === 'Terminado');
@@ -16708,13 +16803,14 @@ function pdmOpen(name){
   const SECTIONS = [
     { label: 'En progreso',  items: enProceso,          color: 'var(--accent)' },
     { label: 'En revisión',  items: enRevision,         color: 'var(--amber)'  },
+    { label: 'Terminado (máximo avance)', items: enMaxAvance, color: 'var(--green)' },
     { label: 'Sin iniciar',  items: sinIniciar,         color: 'var(--muted)'  },
     { label: 'En pausa',     items: enPausa,            color: 'var(--dim)'    },
     { label: 'Terminadas',   items: terminadasOrdenadas, color: 'var(--green)' },
   ];
 
   const statusCls = {
-    'En progreso':'bb','En revisión':'ba','Sin iniciar':'bgr','En pausa':'ba','Terminado':'bg'
+    'En progreso':'bb','En revisión':'ba','Terminado (máximo avance)':'bg','Sin iniciar':'bgr','En pausa':'ba','Terminado':'bg'
   };
 
   function actCard(a){
@@ -16742,7 +16838,7 @@ function pdmOpen(name){
         ${a.notas?`<div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">📝 ${a.notas}</div>`:''}
         <div class="pdm-act-actions">
           <select class="pdm-status-sel" onchange="pdmUpdateStatus('${a.id}',this.value,this)">
-            ${['Sin iniciar','En progreso','En pausa','En revisión','Terminado'].map(s=>`<option${s===a.estatus?' selected':''}>${s}</option>`).join('')}
+            ${['Sin iniciar','En progreso','En pausa','En revisión','Terminado (máximo avance)','Terminado'].map(s=>`<option${s===a.estatus?' selected':''}>${s}</option>`).join('')}
           </select>
           <button class="pdm-edit-btn" onclick="pdmGoEdit('${a.id}','${a.tipo||'Proyecto'}')">✎ Editar completo</button>
           ${(()=>{ const dp = paDiasEnPausa(a); if(a.estatus==='En pausa'){ return `<span style="font-size:10px;color:var(--amber);font-weight:600;white-space:nowrap" title="Días hábiles que lleva en pausa">⏸ ${dp}d en pausa</span>`; } if(dp>0){ return `<span style="font-size:10px;color:var(--dim);white-space:nowrap" title="Total de días hábiles que estuvo en pausa (histórico)">⏸ ${dp}d pausados (hist.)</span>`; } return ''; })()}
@@ -16781,9 +16877,16 @@ function pdmClickBg(e){
 }
 
 // ── Inline status update from PDM ──
-function pdmUpdateStatus(id, newEstatus){
+function pdmUpdateStatus(id, newEstatus, selEl){
   const a = PA_ITEMS.find(x=>x.id===id);
   if(!a) return;
+  if(paEsEntradaPausa(a,newEstatus) && !window._paMotivoTmp){
+    paPedirMotivoPausa(a).then(m=>{
+      if(m===null){ if(selEl) selEl.value = a.estatus; return; }
+      window._paMotivoTmp = m; pdmUpdateStatus(id,newEstatus,selEl);
+    });
+    return;
+  }
   paAplicarEstatus(a, newEstatus);
   paSave(a);
   paRenderTipo(a.tipo);
@@ -16904,13 +17007,14 @@ function pdmGeneratePDF(period){
   const SECTIONS_PDF = [
     {label:'En progreso',  items:all.filter(a=>a.estatus==='En progreso'),  color:'#1a4fa0'},
     {label:'En revisión',  items:all.filter(a=>a.estatus==='En revisión'),  color:'#7a5c00'},
+    {label:'Terminado (máximo avance)', items:all.filter(a=>a.estatus==='Terminado (máximo avance)'), color:'#2a8f6b'},
     {label:'Sin iniciar',  items:all.filter(a=>a.estatus==='Sin iniciar'),  color:'#555'},
     {label:'En pausa',     items:all.filter(a=>a.estatus==='En pausa'),     color:'#5a3a00'},
     {label:'Terminadas',   items:all.filter(a=>a.estatus==='Terminado'),    color:'#1a7f4b'},
   ].filter(s=>s.items.length>0);
 
   function sBadge(s){
-    const map={'Terminado':'#1a7f4b','En progreso':'#1a4fa0','En revisión':'#7a5c00','En pausa':'#5a3a00','Sin iniciar':'#555'};
+    const map={'Terminado':'#1a7f4b','Terminado (máximo avance)':'#2a8f6b','En progreso':'#1a4fa0','En revisión':'#7a5c00','En pausa':'#5a3a00','Sin iniciar':'#555'};
     return `<span style="background:${map[s]||'#555'};color:#fff;padding:2px 7px;border-radius:4px;font-size:9px;font-weight:600">${s}</span>`;
   }
 
@@ -18556,7 +18660,7 @@ function paExportPDF(){
   });
 
   const statusBadge = s => {
-    const map={'Terminado':'#1a7f4b','En progreso':'#1a4fa0','En revisión':'#7a5c00','En pausa':'#5a3a00','Sin iniciar':'#444'};
+    const map={'Terminado':'#1a7f4b','Terminado (máximo avance)':'#2a8f6b','En progreso':'#1a4fa0','En revisión':'#7a5c00','En pausa':'#5a3a00','Sin iniciar':'#444'};
     return `<span style="background:${map[s]||'#444'};color:#fff;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:600">${s}</span>`;
   };
 
@@ -20124,6 +20228,13 @@ function avanceGetItem(id){
   return data[id] || {};
 }
 function avanceSetField(id, field, value){
+  if(field==='estatus' && !window._paMotivoTmp){
+    const _a = PA_ITEMS.find(x=>x.id===id);
+    if(paEsEntradaPausa(_a,value)){
+      paPedirMotivoPausa(_a).then(m=>{ if(m===null) return; window._paMotivoTmp=m; avanceSetField(id,field,value); });
+      return;
+    }
+  }
   const data = avanceLoad();
   if(!data[id]) data[id] = {};
   data[id][field] = value;
@@ -21913,12 +22024,16 @@ function segIndMeta(a){
     const p = cronoCalcPronostico(c.subtareas, cronoFechaEfectiva(a, a.fechaAsig||c.fechaInicio));
     if(p) return {fecha:p, origen:'Pronóstico del cronograma'};
   }
-  if(a.fechaTermino) return {fecha:segIndPrevWorkday(a.fechaTermino), origen:'Sin cronograma: fecha límite − 1 día hábil'};
+  if(a.fechaTermino){
+    const dp = (typeof paDiasEnPausa==='function') ? paDiasEnPausa(a) : 0;
+    const base = segIndPrevWorkday(a.fechaTermino);
+    return {fecha: dp ? cronoAddWorkdays(base, dp) : base, origen:'Sin cronograma: fecha límite − 1 día hábil'+(dp?' + '+dp+' d por pausa':'')};
+  }
   return {fecha:null, origen:'Sin fecha meta'};
 }
 function segIndClasifica(a, hoy){
   const m = segIndMeta(a);
-  const entregada = (a.estatus==='En revisión' || a.estatus==='Terminado');
+  const entregada = (a.estatus==='En revisión' || a.estatus==='Terminado (máximo avance)' || a.estatus==='Terminado');
   const entrega = entregada ? (a.fechaEntregaProy || a.fechaReal || '') : '';
   const r = {a, meta:m.fecha, origen:m.origen, entregada, entrega, estado:'', dias:0};
   if(entregada){
@@ -22110,7 +22225,7 @@ async function paRefreshFromSupabase(){
         fechaAsig:a.fecha_asig||'', fechaTermino:a.fecha_termino||'',
         fechaReal:a.fecha_real||'', numBobina:a.num_bobina||'',
         juegos:a.juegos||'', planosJuego:a.planos_juego||'',
-        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[],
+        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[], pausaMotivo:a.pausa_motivo||null,
         fechaEntregaProy:a.fecha_entrega_proy||null, devoluciones:a.devoluciones||0,
         createdAt:a.created_at, updatedAt:a.updated_at,
       }));
@@ -22168,7 +22283,7 @@ function renderSegPendientes(){
   const pendientes = mias.filter(a=>a.estatus!=='Terminado');
 
   // Desglose por estatus
-  const estados = ['Sin iniciar','En progreso','En pausa','En revisión'];
+  const estados = ['Sin iniciar','En progreso','En pausa','En revisión','Terminado (máximo avance)'];
   const counts = {}; estados.forEach(e=>counts[e]=0);
   pendientes.forEach(a=>{
     const e = a.estatus||'Sin iniciar';
@@ -22195,7 +22310,7 @@ function renderSegPendientes(){
     });
   }catch(e){}
 
-  const dotColorMap = {'Sin iniciar':'#7a8098','En progreso':'#4a8fd4','En pausa':'#f5a623','En revisión':'#f5a623'};
+  const dotColorMap = {'Sin iniciar':'#7a8098','En progreso':'#4a8fd4','En pausa':'#f5a623','En revisión':'#f5a623','Terminado (máximo avance)':'#3dd68c'};
 
   let html = `<div style="background:rgba(255,255,255,.03);border:0.5px solid var(--border);border-radius:12px;padding:16px;margin-top:8px">`;
 
@@ -23136,7 +23251,7 @@ async function supaLoadAll(){
         fechaAsig:a.fecha_asig||'', fechaTermino:a.fecha_termino||'',
         fechaReal:a.fecha_real||'', numBobina:a.num_bobina||'',
         juegos:a.juegos||'', planosJuego:a.planos_juego||'',
-        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[],
+        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[], pausaMotivo:a.pausa_motivo||null,
         fechaEntregaProy:a.fecha_entrega_proy||null, devoluciones:a.devoluciones||0,
         createdAt:a.created_at, updatedAt:a.updated_at,
       }));
@@ -23690,17 +23805,19 @@ async function supaSyncActividad(a){
     pausa_inicio:a.pausaInicio||null, dias_en_pausa_acum:a.diasEnPausaAcum||0, pausas_historial:a.pausasHistorial||[],
     updated_at:new Date().toISOString(),
   };
-  // Columnas nuevas (Seguimiento individual). Si todavía no se corre el SQL, se omiten sin romper el guardado.
-  if(!window._supaSinColEntrega){
-    payload.fecha_entrega_proy = a.fechaEntregaProy||null;
-    payload.devoluciones = a.devoluciones||0;
-  }
+  // Columnas opcionales (se agregan con los SQL de Seguimiento individual / motivo de pausa). Si alguna
+  // todavía no existe en Supabase, se omite solo esa y el guardado sigue funcionando.
+  window._supaColsFaltan = window._supaColsFaltan || {};
+  const _opt = {fecha_entrega_proy:a.fechaEntregaProy||null, devoluciones:a.devoluciones||0, pausa_motivo:a.pausaMotivo||null};
+  Object.keys(_opt).forEach(k=>{ if(!window._supaColsFaltan[k]) payload[k] = _opt[k]; });
   try{
     let {error} = await _supa.from('actividades').upsert(payload, {onConflict:'id'});
-    if(error && !window._supaSinColEntrega && /fecha_entrega_proy|devoluciones/.test((error.message||'')+' '+(error.details||''))){
-      console.warn('⚠️ Falta correr sql_seguimiento_individual.sql: se guarda sin fecha_entrega_proy/devoluciones');
-      window._supaSinColEntrega = true;
-      delete payload.fecha_entrega_proy; delete payload.devoluciones;
+    for(let i=0; error && i<3; i++){
+      const msg = (error.message||'')+' '+(error.details||'');
+      const falta = Object.keys(_opt).find(k=>!window._supaColsFaltan[k] && msg.indexOf(k)>-1);
+      if(!falta) break;
+      console.warn('⚠️ Falta la columna actividades.'+falta+' en Supabase: se guarda sin ella (corre el SQL correspondiente).');
+      window._supaColsFaltan[falta] = true; delete payload[falta];
       ({error} = await _supa.from('actividades').upsert(payload, {onConflict:'id'}));
     }
     if(error){
