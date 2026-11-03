@@ -6272,6 +6272,11 @@ function renderReporteoView(){
       : '';
 
     const esConectSub = a.tipo==='Planos de Conectividad'||a.tipo==='Conectividad (Bobinas)';
+    const _veCump = _userRole!=='proyectista' || (typeof DASH_VISIBILITY!=='undefined' && DASH_VISIBILITY[SEGIND_VIS_ID]===true);
+    const _cumpH = (_veCump && crono) ? cronoCumplimiento(a, crono) : null;
+    const _porConf = cronoSubsPorConfirmar(crono);
+    const _obsPlan = _porConf.length ? cronoObsPlan(crono) : null;
+    const _esDueno = cronoEsDuenoItem(crono);
     const _reab = !!(a.reapertura && a.reapertura.inicio);
     const _reabEspera = _reab && paReabEsperaSubtareas(a);
     const listaParaRevision = avancePct===100 && a.estatus!=='Terminado' && a.estatus!=='Terminado (máximo avance)' && !_reabEspera;
@@ -6306,6 +6311,8 @@ function renderReporteoView(){
             ${estadoChip}
             ${revisionLabel || semaforoLabel}
             ${pausaHeaderBadge}
+            ${_cumpH && _cumpH.pct!==null ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(128,140,160,.14);color:${cronoCumpColor(_cumpH.estado)};font-weight:600;white-space:nowrap" title="Cumplimiento acumulado contra el plan confirmado (en unidades, ponderado por jornadas)">📊 ${Math.round(_cumpH.pct*100)}% del plan</span>` : ''}
+            ${_porConf.length ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:${_obsPlan?'rgba(255,92,92,.12)':'rgba(245,166,35,.14)'};color:${_obsPlan?'var(--red)':'var(--amber)'};font-weight:600;white-space:nowrap" title="${_obsPlan?'El proyectista envió observaciones del plan':'El proyectista todavía no confirma su plan: no puede reportar estas subtareas'}">${_obsPlan?'💬 Observaciones del plan':'⏳ Por confirmar ('+_porConf.length+')'}</span>` : ''}
             ${_reab ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(192,132,252,.14);color:#a56cf0;font-weight:600;white-space:nowrap" title="Se cerró en máximo avance y se retomó para completar lo pendiente. Cuenta como una sola entrega.">🔄 Reabierta · ${((a.reapertura.cerrados||[]).length)+1}º tramo</span>` : ''}
             ${_reabEspera ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(245,166,35,.12);color:var(--amber);font-weight:600;white-space:nowrap">📋 Falta asignar subtareas</span>` : ''}
           </div>
@@ -6324,6 +6331,25 @@ function renderReporteoView(){
 
       // Tabla de subtareas
       if(subtareas.length){
+        if(_porConf.length){
+          const _btn = 'font-size:11px;padding:5px 12px;margin-right:6px;border-radius:6px;cursor:pointer;font-family:var(--font);border:0.5px solid ';
+          if(_esDueno){
+            html += `<div style="margin-bottom:14px;padding:12px 14px;border-radius:10px;background:rgba(245,166,35,.10);border:0.5px solid rgba(245,166,35,.45)">
+              <div style="font-size:12.5px;font-weight:600;color:var(--amber);margin-bottom:4px">⏳ ${_porConf.length} subtarea${_porConf.length!==1?'s':''} por confirmar</div>
+              <div style="font-size:11.5px;color:var(--text);margin-bottom:8px">Acomoda el orden en que las vas a ejecutar (▲ ▼ o arrastrando) y confirma tu plan. <b>Hasta que lo confirmes no puedes reportarlas.</b> Al confirmar, el orden, las cantidades y los rendimientos quedan fijos y es contra lo que se mide tu avance diario.</div>
+              ${_obsPlan?`<div style="font-size:11px;color:var(--dim);margin-bottom:8px">💬 Tu observación (${cronoFmtDate(String(_obsPlan.en).slice(0,10))}): <i style="color:var(--text)">${segIndEsc(_obsPlan.texto)}</i> — esperando respuesta del administrador.</div>`:''}
+              <button type="button" style="${_btn}rgba(61,214,140,.5);background:rgba(61,214,140,.16);color:var(--green)" onclick="event.stopPropagation();cronoConfirmarPlanModal('${a.id}')">✓ Confirmar plan</button>
+              <button type="button" style="${_btn}var(--border);background:var(--surface2);color:var(--text)" onclick="event.stopPropagation();cronoObservacionesPlan('${a.id}')">💬 Tengo observaciones</button>
+            </div>`;
+          } else {
+            html += `<div style="margin-bottom:14px;padding:12px 14px;border-radius:10px;background:${_obsPlan?'rgba(255,92,92,.08)':'rgba(245,166,35,.10)'};border:0.5px solid ${_obsPlan?'rgba(255,92,92,.4)':'rgba(245,166,35,.45)'}">
+              <div style="font-size:12.5px;font-weight:600;color:${_obsPlan?'var(--red)':'var(--amber)'};margin-bottom:4px">${_obsPlan?'💬 Observaciones del plan':'⏳ Esperando confirmación de '+segIndEsc(segIndCorto(a.responsable||'el proyectista'))}</div>
+              <div style="font-size:11.5px;color:var(--text);margin-bottom:${_obsPlan||_userRole==='admin'?'8':'0'}px">${_porConf.length} subtarea${_porConf.length!==1?'s':''} sin confirmar: no se pueden reportar hasta que ${segIndEsc(segIndCorto(a.responsable||'el proyectista'))} confirme su plan.</div>
+              ${_obsPlan?`<div style="font-size:11.5px;color:var(--text);margin-bottom:8px"><b>${segIndEsc(segIndCorto(_obsPlan.por||a.responsable||''))}</b> (${cronoFmtDate(String(_obsPlan.en).slice(0,10))}): <i>${segIndEsc(_obsPlan.texto)}</i></div>`:''}
+              ${_userRole==='admin'?`${_obsPlan?`<button type="button" style="${_btn}rgba(74,143,212,.5);background:rgba(74,143,212,.15);color:var(--accent)" onclick="event.stopPropagation();cronoAtenderObservacion('${a.id}')">✓ Marcar atendida y avisar</button>`:''}<button type="button" style="${_btn}var(--border);background:var(--surface2);color:var(--text)" onclick="event.stopPropagation();cronoConfirmarPlanModal('${a.id}',true)">Confirmar por ${segIndEsc(segIndCorto(a.responsable||''))}</button>`:''}
+            </div>`;
+          }
+        }
         html += `<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px">
           <thead><tr style="border-bottom:0.5px solid var(--border)">
             <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em">Subtarea</th>
@@ -6373,17 +6399,20 @@ function renderReporteoView(){
             cursor = r.cursor; usado = r.usado;
           }
           const fechaFin = stFin;
-          const stColor = st.pendienteValidacion?'var(--amber)':st.estatus==='completada'?'var(--green)':st.estatus==='en_progreso'?'var(--accent)':'var(--dim)';
-          const stLabel = st.pendienteValidacion?'⏳ Pend. validación':st.estatus==='completada'?'✓ Completada':st.estatus==='en_progreso'?'↗ En progreso':'○ Pendiente';
-          const stBg = st.pendienteValidacion?'rgba(245,166,35,.1)':st.estatus==='completada'?'rgba(61,214,140,.1)':st.estatus==='en_progreso'?'rgba(74,143,212,.1)':'rgba(255,255,255,.04)';
+          const stColor = st.confirmada===false?'var(--amber)':st.pendienteValidacion?'var(--amber)':st.estatus==='completada'?'var(--green)':st.estatus==='en_progreso'?'var(--accent)':'var(--dim)';
+          const stLabel = st.confirmada===false?'⏳ Por confirmar':st.pendienteValidacion?'⏳ Pend. validación':st.estatus==='completada'?'✓ Completada':st.estatus==='en_progreso'?'↗ En progreso':'○ Pendiente';
+          const stBg = st.confirmada===false?'rgba(245,166,35,.14)':st.pendienteValidacion?'rgba(245,166,35,.1)':st.estatus==='completada'?'rgba(61,214,140,.1)':st.estatus==='en_progreso'?'rgba(74,143,212,.1)':'rgba(255,255,255,.04)';
           const avanceSt = st.avanceAcum||0;
           const pctSt = st.cantidad ? Math.min(100,Math.round((avanceSt/st.cantidad)*100)) : 0;
           const _esAdm = _userRole==='admin';
+          const _puedeOrd = _esAdm || (_esDueno && st.confirmada===false);
+          const _upOk = si>0 && (_esAdm || subtareas[si-1].confirmada===false);
+          const _dnOk = si<subtareas.length-1 && (_esAdm || subtareas[si+1].confirmada===false);
           const _puedeBorrar = _userRole!=='proyectista' || (!!st.propuestaPor && st.propuestaPor===_miNombre);
-          const _dragAttrs = _esAdm ? ` draggable="true" ondragstart="cronoStDragStart(event,'${a.id}','${st.id}')" ondragover="cronoStDragOver(event)" ondragleave="cronoStDragLeave(event)" ondrop="cronoStDrop(event,'${a.id}','${st.id}')" ondragend="cronoStDragEnd(event)"` : '';
-          const _handle = _esAdm ? `<span class="st-handle" title="Arrastra para reordenar" style="cursor:grab;color:var(--dim);font-size:14px;margin-right:8px;user-select:none;letter-spacing:-2px">⋮⋮</span>` : '';
+          const _dragAttrs = _puedeOrd ? ` draggable="true" ondragstart="cronoStDragStart(event,'${a.id}','${st.id}')" ondragover="cronoStDragOver(event)" ondragleave="cronoStDragLeave(event)" ondrop="cronoStDrop(event,'${a.id}','${st.id}')" ondragend="cronoStDragEnd(event)"` : '';
+          const _handle = _puedeOrd ? `<span class="st-handle" title="Arrastra para reordenar" style="cursor:grab;color:var(--dim);font-size:14px;margin-right:8px;user-select:none;letter-spacing:-2px">⋮⋮</span>` : '';
           html += `<tr id="subrow-${st.id}" style="border-bottom:0.5px solid var(--border)"${_dragAttrs}>
-            <td style="padding:8px 8px"><div style="display:flex;align-items:center">${_handle}<div><div style="font-weight:500;color:var(--text)">${st.nombre}</div><div style="font-size:10px;color:var(--dim)">${st.unidad}${st.paqueteId?' · en paralelo':''}</div></div></div></td>
+            <td style="padding:8px 8px"><div style="display:flex;align-items:center">${_handle}<div><div style="font-weight:500;color:var(--text)">${st.nombre}${st.conf?` <span title="Plan confirmado por ${segIndEsc(st.conf.por||'')} el ${cronoFmtDate(String(st.conf.en||'').slice(0,10))}. Orden, cantidad y rendimiento fijos; solo el administrador puede replanificar." style="font-size:10px;opacity:.75;cursor:help">🔒</span>`:''}${(st.hist&&st.hist.length)?` <span title="${segIndEsc(st.hist.map(h=>cronoFmtDate(String(h.en||'').slice(0,10))+' · '+(h.tipo==='orden'?'orden '+h.de+'→'+h.a:'cantidad/rendimiento')+' · '+(h.nota||'')).join('\n'))}" style="font-size:10px;color:var(--amber);cursor:help">↻ replanificada</span>`:''}</div><div style="font-size:10px;color:var(--dim)">${st.unidad}${st.paqueteId?' · en paralelo':''}</div></div></div></td>
             <td style="padding:8px;text-align:center;color:var(--text)">${st.cantidad} <span style="color:var(--dim);font-size:10.5px">${st.unidad}</span></td>
             <td style="padding:8px;text-align:center;color:var(--text)" title="Duración total configurada, sin restar avance">${cronoFmtDiasHoras(diasTotal)}</td>
             <td style="padding:8px;text-align:center;color:var(--dim)" title="${dias < 1 ? 'Menos de una jornada — puede compartir el día con otras subtareas' : ''}">${cronoFmtDiasHoras(dias)}</td>
@@ -6398,7 +6427,7 @@ function renderReporteoView(){
               <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:${stBg};color:${stColor};white-space:nowrap">${stLabel}</span>
             </td>
             <td style="padding:8px;text-align:right;white-space:nowrap">
-              ${_esAdm ? `<button class="et-act-btn" onclick="cronoMoverSubtarea('${a.id}','${st.id}',-1)" title="Subir" ${si===0?'disabled style="opacity:.3;cursor:default"':''}>▲</button><button class="et-act-btn" onclick="cronoMoverSubtarea('${a.id}','${st.id}',1)" title="Bajar" ${si===subtareas.length-1?'disabled style="opacity:.3;cursor:default;margin-right:4px"':'style="margin-right:4px"'}>▼</button>` : ''}
+              ${_puedeOrd ? `<button class="et-act-btn" onclick="cronoMoverSubtarea('${a.id}','${st.id}',-1)" title="Subir" ${!_upOk?'disabled style="opacity:.3;cursor:default"':''}>▲</button><button class="et-act-btn" onclick="cronoMoverSubtarea('${a.id}','${st.id}',1)" title="Bajar" ${!_dnOk?'disabled style="opacity:.3;cursor:default;margin-right:4px"':'style="margin-right:4px"'}>▼</button>` : ''}
               ${_userRole==='admin' ? `<button class="et-act-btn" onclick="cronoEditSubtareaModal('${a.id}','${st.id}')" title="Editar subtarea" style="font-size:10px;background:rgba(74,143,212,.15);color:var(--accent);margin-right:4px">✎ Editar</button>` : ''}
               ${st.pendienteValidacion && (_userRole==='admin'||_userRole==='jefe') ? `<button class="et-act-btn" onclick="cronoValidarSubtarea('${a.id}','${st.id}')" title="Validar rendimiento" style="font-size:10px;background:rgba(245,166,35,.15);color:var(--amber)">✓ Validar</button>` : ''}
               ${_puedeBorrar ? `<button class="et-act-btn del" onclick="cronoDeleteSubtarea('${a.id}','${st.id}')" title="Eliminar">✕</button>` : `<span title="Esta subtarea fue cargada por el administrador y no puede eliminarse" style="font-size:12px;color:var(--dim);opacity:.6;cursor:help">🔒</span>`}
@@ -6465,6 +6494,7 @@ function renderReporteoView(){
             <div style="font-size:10px;color:var(--dim);margin-top:6px">Total pausado: ${a.pausasHistorial.reduce((s,p)=>s+(p.dias||0),0)} días hábiles · este tiempo ya se sumó al pronóstico de entrega, no se pierde ni se penaliza como retraso.</div>
           </div>`;
         }
+        if(_veCump && crono) html += cronoCumpHTML(a, crono);
       } else {
         html += `<div style="padding:16px;text-align:center;color:var(--dim);font-size:12px;border:0.5px dashed rgba(255,255,255,.1);border-radius:8px;margin-bottom:14px">Sin subtareas aún. Agrega una para generar el cronograma.</div>`;
       }
@@ -6632,9 +6662,11 @@ async function cronoGuardarOperativa(){
     pendienteValidacion:false,
     propuestaPor: _userRole==='proyectista' ? _miNombre : null,
     estatus:'pendiente',
+    confirmada: cronoConfInicial(),
     avanceAcum:0
   });
   cronoSaveItem(cronoModalActId);
+  cronoNotificarPorConfirmar(cronoModalActId);
 
   cronoSubTab = 'cronograma';
   cronoExpandedId = cronoModalActId;
@@ -7251,9 +7283,11 @@ async function cronoGuardarSubtarea(){
     pendienteValidacion: requiereValidacion,
     propuestaPor: esProyectista ? _miNombre : null,
     estatus:'pendiente',
+    confirmada: cronoConfInicial(),
     avanceAcum:0
   });
   cronoSaveItem(cronoModalActId);
+  cronoNotificarPorConfirmar(cronoModalActId);
 
   // Notificar al admin si es proyectista con personalizada
   if(requiereValidacion && typeof notifAdd==='function'){
@@ -7292,6 +7326,7 @@ async function cronoGuardarCorreccion(){
       pendienteValidacion:false,
       propuestaPor: esProyectista ? _miNombre : null,
       estatus:'pendiente',
+      confirmada: cronoConfInicial(),
       avanceAcum:0
     });
     creadas++;
@@ -7306,6 +7341,7 @@ async function cronoGuardarCorreccion(){
       pendienteValidacion:false,
       propuestaPor: esProyectista ? _miNombre : null,
       estatus:'pendiente',
+      confirmada: cronoConfInicial(),
       avanceAcum:0
     });
     creadas++;
@@ -7356,10 +7392,12 @@ async function cronoGuardarPaquete(paqId){
       pendienteValidacion:false,
       propuestaPor: esProyectista ? _miNombre : null,
       estatus:'pendiente',
+      confirmada: cronoConfInicial(),
       avanceAcum:0
     });
   });
   cronoSaveItem(cronoModalActId);
+  cronoNotificarPorConfirmar(cronoModalActId);
 
   cronoSubTab = 'cronograma';
   cronoExpandedId = cronoModalActId;
@@ -7528,13 +7566,393 @@ async function cronoConfirmarValidacion(actId, stId){
   renderReporteoView();
 }
 
-// ── Reordenar subtareas (solo administrador). El orden del arreglo define la cadena del pronóstico. ──
-function cronoReordenarSubtareas(actId, fn){
-  if(_userRole!=='admin'){ alert('Solo un administrador puede reordenar las subtareas.'); return false; }
+// ══════════ Cumplimiento del plan (esperado vs. real, en unidades) ══════════
+// Se mide contra el plan confirmado por el proyectista (cantidad / rendimiento congelados en st.conf). Lo esperado por día
+// es el rendimiento × la fracción de jornada que esa subtarea ocupa ese día (una subtarea que arranca a media jornada solo
+// espera media jornada; el viernes vale 6/9; vacaciones, festivos y pausas no se esperan). En un paquete en paralelo, lo
+// esperado de cada subtarea se reparte parejo sobre el tramo del grupo. Los reportes por porcentaje general no entran.
+const CRONO_CUMP_OK = 0.95, CRONO_CUMP_PARCIAL = 0.8; // ≥95% cumple (margen por redondeo de lo reportado y fracciones de jornada)
+let cronoCumpSem = 0; // semana mostrada: desplazamiento en semanas respecto a la actual
+function cronoStPlanVals(st){
+  const c = st.conf || {};
+  return {
+    cantidad: parseFloat(c.cantidad!=null ? c.cantidad : st.cantidad)||0,
+    rendimiento: parseFloat(c.rendimiento!=null ? c.rendimiento : st.rendimiento)||1,
+    tipo: c.tipo || st.tipo || 'unidades_por_dia'
+  };
+}
+function cronoStDurPlan(v){ return v.tipo==='dias_por_unidad' ? v.cantidad*v.rendimiento : v.cantidad/v.rendimiento; }
+function cronoStUnidPorJornada(v){ return v.tipo==='dias_por_unidad' ? 1/v.rendimiento : v.rendimiento; }
+function cronoFmtU(n){ n = Math.round((+n||0)*100)/100; return String(n); }
+// Último día completo que se puede evaluar: hoy si ya cerró el horario de reporte; si no, el día anterior
+function cronoFechaCorteReal(){
+  let cierre = false; try{ cierre = repHorarioCerrado(); }catch(e){}
+  if(cierre) return repDateKey(new Date());
+  const d = new Date(); d.setDate(d.getDate()-1); return repDateKey(d);
+}
+// Plan día por día: {dias:{fecha:{stId:unidadesEsperadas}}, filas:[{st,v,inicio,fin,jornadas}], base, fin} (null si no hay nada medible)
+function cronoPlanDiario(a, crono){
+  if(!a || !crono) return null;
+  let lista = (crono.subtareas||[]).filter(st=>!st.pendienteValidacion && st.confirmada!==false);
+  let base = a.fechaAsig || crono.fechaInicio;
+  if(a.reapertura && a.reapertura.inicio){
+    // Tramo reabierto: solo se miden las subtareas nuevas (confirmadas desde la reapertura)
+    const ini = a.reapertura.inicio;
+    lista = lista.filter(st=>st.conf && String(st.conf.en||'').slice(0,10) >= ini);
+    base = ini;
+  }
+  if(!lista.length || !base) return null;
+  const persona = a.responsable;
+  const cap = ds=>{
+    let c = cronoCapacidadDia(new Date(ds+'T00:00:00'), persona);
+    if(c>0 && typeof paEnPausaEnFecha==='function' && paEnPausaEnFecha(a, ds)) c = 0;
+    return c;
+  };
+  const dias = {}, filas = [];
+  let cursor = base, usado = 0, guard = 0;
+  const siguienteDia = ()=>{ const d = new Date(cursor+'T00:00:00'); d.setDate(d.getDate()+1); cursor = repDateKey(d); usado = 0; };
+  const hechos = new Set(), bloques = [];
+  lista.forEach(st=>{
+    if(hechos.has(st.id)) return;
+    if(st.paqueteId){ const g = lista.filter(x=>x.paqueteId===st.paqueteId); g.forEach(x=>hechos.add(x.id)); bloques.push(g); }
+    else { hechos.add(st.id); bloques.push([st]); }
+  });
+  bloques.forEach(g=>{
+    const vals = g.map(st=>({st, v:cronoStPlanVals(st)}));
+    const D = Math.max(...vals.map(x=>cronoStDurPlan(x.v)));
+    const ini = {}, fin = {};
+    if(D>1e-9){
+      let resto = D;
+      while(resto>1e-9 && guard++<6000){
+        const c = cap(cursor);
+        if(c<=1e-9 || usado>=c-1e-9){ siguienteDia(); continue; }
+        const take = Math.min(c-usado, resto);
+        vals.forEach(x=>{
+          const dd = dias[cursor] || (dias[cursor] = {});
+          dd[x.st.id] = (dd[x.st.id]||0) + x.v.cantidad*(take/D);
+          if(!ini[x.st.id]) ini[x.st.id] = cursor;
+          fin[x.st.id] = cursor;
+        });
+        usado += take; resto -= take;
+      }
+    }
+    vals.forEach(x=>filas.push({st:x.st, v:x.v, inicio:ini[x.st.id]||null, fin:fin[x.st.id]||null, jornadas:cronoStDurPlan(x.v)}));
+  });
+  return {dias, filas, base, fin: cursor};
+}
+// Reportado por día para una subtarea (solo reportes por subtarea; los de porcentaje general no cuentan)
+function cronoRealPorDia(crono, stId){
+  const m = {};
+  ((crono&&crono.reportes)||[]).forEach(r=>{
+    if(!r || r.subtareaId!==stId || r.modo==='general') return;
+    const f = String(r.fecha||'').slice(0,10); if(!f) return;
+    m[f] = (m[f]||0) + (parseFloat(r.cantidad)||0);
+  });
+  return m;
+}
+// Cumplimiento acumulado a la fecha: por subtarea y de la actividad (ponderado por jornadas esperadas, sin que lo adelantado tape lo atrasado)
+function cronoCumplimiento(a, crono, hasta){
+  const plan = cronoPlanDiario(a, crono);
+  if(!plan) return null;
+  const corte = cronoFechaCorteReal();
+  hasta = (hasta && hasta<corte) ? hasta : corte;
+  const fechas = Object.keys(plan.dias).sort();
+  let jorEsp = 0, jorOk = 0;
+  const filas = plan.filas.map(f=>{
+    const real = cronoRealPorDia(crono, f.st.id);
+    let esp = 0, rea = 0;
+    fechas.forEach(ds=>{ if(ds<=hasta) esp += (plan.dias[ds][f.st.id]||0); });
+    Object.keys(real).forEach(ds=>{ if(ds<=hasta) rea += real[ds]; });
+    esp = Math.min(esp, f.v.cantidad); rea = Math.min(Math.max(rea,0), f.v.cantidad);
+    const upj = cronoStUnidPorJornada(f.v) || 1;
+    const pct = esp>1e-9 ? rea/esp : null;
+    let estado;
+    if(rea>=f.v.cantidad-1e-9) estado = 'completada';
+    else if(pct===null) estado = rea>0 ? 'adelantada' : 'sin_inicio';
+    else if(pct>=CRONO_CUMP_OK) estado = 'cumple';
+    else if(pct>=CRONO_CUMP_PARCIAL) estado = 'parcial';
+    else estado = 'atrasada';
+    if(esp>1e-9){ jorEsp += esp/upj; jorOk += Math.min(rea,esp)/upj; }
+    return {st:f.st, v:f.v, inicio:f.inicio, fin:f.fin, esp, rea, pct, estado, falta:Math.max(0,esp-rea), atrasoDias:Math.max(0,esp-rea)/upj, real};
+  });
+  const pct = jorEsp>1e-9 ? jorOk/jorEsp : null;
+  const estado = pct===null ? 'sin_inicio' : pct>=CRONO_CUMP_OK ? 'cumple' : pct>=CRONO_CUMP_PARCIAL ? 'parcial' : 'atrasada';
+  return {plan, hasta, filas, pct, estado};
+}
+function cronoCumpColor(e){ return e==='cumple'||e==='completada'||e==='adelantada' ? 'var(--green)' : e==='parcial' ? 'var(--amber)' : e==='atrasada' ? 'var(--red)' : 'var(--dim)'; }
+function cronoCumpLabel(e){ return {cumple:'✓ Al día', completada:'✓ Completada', adelantada:'↑ Adelantada', parcial:'◐ Parcial', atrasada:'⚠ Atrasada', sin_inicio:'Sin iniciar'}[e]||e; }
+function cronoCumpMover(d){ cronoCumpSem += d; renderReporteoView(); }
+function cronoCumpLunes(off){
+  const d = new Date(); d.setHours(0,0,0,0);
+  const dow = d.getDay(); d.setDate(d.getDate() - (dow===0?6:dow-1) + (off||0)*7);
+  return d;
+}
+// Bloque visual del Panel de seguimiento: semana L-V con real/esperado por subtarea y acumulados
+function cronoCumpHTML(a, crono){
+  const cump = cronoCumplimiento(a, crono);
+  const por = cronoSubsPorConfirmar(crono).length;
+  if(!cump){
+    return `<div style="margin:0 0 16px;padding:10px 12px;border:0.5px dashed var(--border);border-radius:8px;font-size:11.5px;color:var(--dim)">📊 <b style="color:var(--text)">Cumplimiento del plan:</b> todavía no hay subtareas confirmadas para medir${por?' ('+por+' por confirmar)':''}.</div>`;
+  }
+  const lun = cronoCumpLunes(cronoCumpSem);
+  const dias = [0,1,2,3,4].map(i=>{ const d = new Date(lun); d.setDate(d.getDate()+i); return repDateKey(d); });
+  const nombres = ['L','M','M','J','V'];
+  const fmt = ds=>{ const d = new Date(ds+'T00:00:00'); return d.getDate()+'/'+(d.getMonth()+1); };
+  const th = (t,al)=>`<th style="text-align:${al||'center'};padding:5px 6px;font-size:10px;color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap">${t}</th>`;
+  const hoyK = repDateKey(new Date());
+  const celda = (f, ds)=>{
+    const e = cump.plan.dias[ds] ? (cump.plan.dias[ds][f.st.id]||0) : 0;
+    const r = f.real[ds]||0;
+    if(e<=1e-9 && r<=1e-9) return `<td style="padding:6px;text-align:center;color:var(--dim)">—</td>`;
+    if(ds>cump.hasta) return `<td style="padding:6px;text-align:center;color:var(--dim)" title="Esperado ${cronoFmtU(e)}${r?' · reportado '+cronoFmtU(r):''}">${r>0?cronoFmtU(r)+'/':''}<span style="opacity:.8">${cronoFmtU(e)}</span></td>`;
+    let col = 'var(--green)';
+    if(e<=1e-9) col = 'var(--accent)';
+    else if(r/e < CRONO_CUMP_OK) col = r/e>=CRONO_CUMP_PARCIAL ? 'var(--amber)' : 'var(--red)';
+    return `<td style="padding:6px;text-align:center;color:${col};font-weight:500" title="Reportado ${cronoFmtU(r)} · esperado ${cronoFmtU(e)} ${f.st.unidad||''}">${cronoFmtU(r)}/${cronoFmtU(e)}</td>`;
+  };
+  const filas = cump.filas.map(f=>`<tr style="border-bottom:0.5px solid var(--border)">
+      <td style="padding:6px 6px"><div style="font-weight:500;color:var(--text)">${segIndEsc(f.st.nombre)}</div><div style="font-size:10px;color:var(--dim)">${segIndEsc(f.st.unidad||'')} · plan ${cronoFmtU(f.v.cantidad)}${f.inicio?' · '+fmt(f.inicio)+'→'+fmt(f.fin):''}</div></td>
+      ${dias.map(ds=>celda(f,ds)).join('')}
+      <td style="padding:6px;text-align:center;color:var(--text)">${cronoFmtU(f.esp)}</td>
+      <td style="padding:6px;text-align:center;color:var(--text)">${cronoFmtU(f.rea)}</td>
+      <td style="padding:6px;text-align:center;font-weight:600;color:${cronoCumpColor(f.estado)}">${f.pct===null?'—':Math.round(f.pct*100)+'%'}</td>
+      <td style="padding:6px;text-align:center"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(128,140,160,.14);color:${cronoCumpColor(f.estado)};white-space:nowrap" title="${f.atrasoDias>0.05?'Le faltan '+cronoFmtU(f.falta)+' '+segIndEsc(f.st.unidad||'')+' (≈ '+cronoFmtU(f.atrasoDias)+' jornadas)':''}">${cronoCumpLabel(f.estado)}${f.atrasoDias>0.05?' · −'+cronoFmtU(f.atrasoDias)+' d':''}</span></td>
+    </tr>`).join('');
+  const sem = fmt(dias[0])+' – '+fmt(dias[4]);
+  return `<div style="margin:0 0 16px;border:0.5px solid var(--border);border-radius:10px;padding:12px 14px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <span style="font-size:12.5px;font-weight:600;color:var(--text)">📊 Cumplimiento del plan</span>
+      <span style="font-size:11px;padding:2px 10px;border-radius:20px;background:rgba(128,140,160,.14);color:${cronoCumpColor(cump.estado)};font-weight:600">${cump.pct===null?'Aún sin días medibles':cronoCumpLabel(cump.estado)+' · '+Math.round(cump.pct*100)+'%'}</span>
+      <span style="flex:1"></span>
+      <button type="button" class="et-act-btn" onclick="event.stopPropagation();cronoCumpMover(-1)" title="Semana anterior">‹</button>
+      <span style="font-size:11px;color:var(--dim);min-width:92px;text-align:center">${cronoCumpSem===0?'Esta semana · ':''}${sem}</span>
+      <button type="button" class="et-act-btn" onclick="event.stopPropagation();cronoCumpMover(1)" title="Semana siguiente">›</button>
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">
+      <thead><tr style="border-bottom:0.5px solid var(--border)">${th('Subtarea','left')}${dias.map((ds,i)=>th(nombres[i]+' '+fmt(ds))).join('')}${th('Esp. acum.')}${th('Real acum.')}${th('%')}${th('Estado')}</tr></thead>
+      <tbody>${filas}</tbody></table></div>
+    <div style="font-size:10px;color:var(--dim);margin-top:8px">Cada día: <b>reportado / esperado</b> (en la unidad de la subtarea). Lo esperado sale del plan confirmado y de la fracción de jornada que le toca ese día (viernes = 6/9; vacaciones y pausas no se esperan). Acumulado a ${fmt(cump.hasta)}${cump.hasta<hoyK?'':''}. Cumple ≥95% · parcial 80–94% · atrasada &lt;80%.${por?` ${por} subtarea${por!==1?'s':''} por confirmar no se mide${por!==1?'n':''}.`:''}</div>
+  </div>`;
+}
+
+// ══════════ Confirmación del plan de subtareas ══════════
+// Las subtareas que carga el administrador nacen "por confirmar" (confirmada:false). El proyectista acomoda el orden
+// en que las va a ejecutar y confirma: en ese momento el plan queda congelado (orden, cantidad, rendimiento e inicio
+// = línea base) y ya no se modifica salvo que el administrador replanifique con nota. Mientras una subtarea está por
+// confirmar no se puede reportar. Las subtareas anteriores a esta función (sin el campo) cuentan como confirmadas.
+// Todo vive dentro del JSON de subtareas, así que no requiere columnas nuevas en Supabase.
+function cronoConfInicial(){ return _userRole==='proyectista' ? undefined : false; }
+function cronoEsDuenoItem(item){ return _userRole==='proyectista' && !!item && !!item.responsable && item.responsable===_miNombre; }
+function cronoSubsPorConfirmar(item){ return (item && Array.isArray(item.subtareas) ? item.subtareas : []).filter(s=>s.confirmada===false); }
+function cronoObsPlan(item){ const s = cronoSubsPorConfirmar(item).find(x=>x.obs && x.obs.texto); return s ? s.obs : null; }
+function cronoActividadesPorConfirmar(){
+  const out = [];
+  (CRONO_ITEMS||[]).forEach(it=>{
+    const subs = cronoSubsPorConfirmar(it); if(!subs.length) return;
+    const a = PA_ITEMS.find(x=>x.id===it.actividadId); if(!a || a.estatus==='Terminado') return;
+    out.push({a, item:it, subs, obs:cronoObsPlan(it)});
+  });
+  return out;
+}
+function cronoNotifProy(responsable, icon, title, msg){
+  if(!responsable) return;
+  const n = { id:'np_'+Date.now()+'_'+Math.random().toString(36).slice(2,5), icon, read:false, title, msg, time:new Date().toISOString(), tipo:'avance' };
+  try{
+    const key = 'c3ntro_notifs_proy_'+toCanonical(responsable);
+    const arr = JSON.parse(localStorage.getItem(key)||'[]'); arr.unshift(n); if(arr.length>50) arr.splice(50);
+    localStorage.setItem(key, JSON.stringify(arr));
+  }catch(e){}
+  if(typeof supaSyncNotifProy==='function') supaSyncNotifProy(responsable, n);
+}
+// Avisa al proyectista que tiene subtareas por confirmar (una vez cada 10 min por actividad, para no spamear al cargar varias)
+function cronoNotificarPorConfirmar(actId){
+  if(_userRole==='proyectista') return;
+  const item = CRONO_ITEMS.find(x=>x.actividadId===actId);
+  if(!item || !item.responsable || !cronoSubsPorConfirmar(item).length) return;
+  const key = 'c3ntro_confnotif_'+actId; let last = 0;
+  try{ last = +localStorage.getItem(key)||0; }catch(e){}
+  if(Date.now()-last < 10*60*1000) return;
+  try{ localStorage.setItem(key, String(Date.now())); }catch(e){}
+  const a = PA_ITEMS.find(x=>x.id===actId);
+  cronoNotifProy(item.responsable, '⏳', 'Subtareas por confirmar', `"${a?(a.folio||a.actividad||'Actividad'):'Actividad'}" tiene subtareas nuevas: acomódalas y confirma tu plan para poder reportar`);
+}
+// Modal genérico de nota obligatoria. Promesa: texto o null si se cancela.
+function cronoPedirNota(o){
+  return new Promise(resolve=>{
+    const old = document.getElementById('cronoNotaBg'); if(old) old.remove();
+    const bg = document.createElement('div');
+    bg.id = 'cronoNotaBg'; bg.className = 'pa-modal-bg open'; bg.style.zIndex = '100002';
+    bg.innerHTML = `<div class="pa-modal" style="max-width:480px;padding:20px 22px;max-height:92vh;overflow:auto" onclick="event.stopPropagation()">
+      <div class="pa-modal-title" style="margin-bottom:10px">${o.titulo}</div>
+      <div style="font-size:11.5px;color:var(--dim);margin-bottom:12px">${o.texto||''}</div>
+      <textarea id="cronoNotaTxt" rows="3" placeholder="${segIndEsc(o.placeholder||'Escribe aquí (obligatorio)…')}" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font);font-size:12px;padding:8px;resize:vertical"></textarea>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+        <button type="button" class="et-act-btn" id="cronoNotaCancel">Cancelar</button>
+        <button type="button" class="et-act-btn" id="cronoNotaOk" disabled style="background:rgba(74,143,212,.18);color:var(--accent);opacity:.5">${o.boton||'Aceptar'}</button>
+      </div></div>`;
+    document.body.appendChild(bg);
+    const txt = bg.querySelector('#cronoNotaTxt'), ok = bg.querySelector('#cronoNotaOk');
+    const upd = ()=>{ const v = txt.value.trim().length>=3; ok.disabled=!v; ok.style.opacity = v?'1':'.5'; };
+    txt.addEventListener('input', upd);
+    const fin = v=>{ bg.remove(); resolve(v); };
+    bg.querySelector('#cronoNotaCancel').addEventListener('click',()=>fin(null));
+    bg.addEventListener('click',()=>fin(null));
+    ok.addEventListener('click',()=>{ const v = txt.value.trim(); if(v.length>=3) fin(v); });
+    setTimeout(()=>txt.focus(),30);
+  });
+}
+// Fechas del plan por subtarea (mismo cálculo que la tabla del Panel de seguimiento)
+function cronoPlanFechas(a, crono){
+  const subs = ((crono && crono.subtareas) || []).filter(x=>!x.pendienteValidacion);
+  const filas = [];
+  if(!subs.length || !a) return {filas, fin:null};
+  let cursor = cronoFechaEfectiva(a, a.fechaAsig || crono.fechaInicio), usado = 0;
+  const cache = {};
+  subs.forEach(st=>{
+    let ini, fin;
+    if(st.paqueteId){
+      if(!cache[st.paqueteId]){
+        const g = subs.filter(x=>x.paqueteId===st.paqueteId);
+        const dm = Math.max(...g.map(x=>cronoDiasParaSubtarea(x)));
+        const ig = cursor; const r = cronoAvanzarCursorDia(cursor, usado, dm, a.responsable);
+        cache[st.paqueteId] = {inicio:ig, fin:r.fin}; cursor = r.cursor; usado = r.usado;
+      }
+      ini = cache[st.paqueteId].inicio; fin = cache[st.paqueteId].fin;
+    } else {
+      const r = cronoAvanzarCursorDia(cursor, usado, cronoDiasParaSubtarea(st), a.responsable);
+      ini = r.inicio; fin = r.fin; cursor = r.cursor; usado = r.usado;
+    }
+    filas.push({st, inicio:ini, fin});
+  });
+  return {filas, fin: filas.length ? filas[filas.length-1].fin : null};
+}
+// Modal de confirmación: resumen del plan en el orden actual
+function cronoConfirmarPlanModal(actId, porAdmin){
+  cronoLoad();
+  const item = CRONO_ITEMS.find(x=>x.actividadId===actId);
+  const a = PA_ITEMS.find(x=>x.id===actId);
+  const subs = cronoSubsPorConfirmar(item);
+  if(!item || !a || !subs.length) return;
+  const plan = cronoPlanFechas(a, item);
+  const porId = {}; plan.filas.forEach(f=>{ porId[f.st.id] = f; });
+  const old = document.getElementById('cronoConfBg'); if(old) old.remove();
+  const bg = document.createElement('div');
+  bg.id = 'cronoConfBg'; bg.className = 'pa-modal-bg open'; bg.style.zIndex = '100001';
+  const filas = subs.map((st,i)=>{
+    const f = porId[st.id];
+    return `<div style="display:flex;gap:10px;align-items:baseline;padding:7px 4px;border-bottom:0.5px solid var(--border);font-size:12px"><span style="width:18px;color:var(--dim)">${i+1}.</span><span style="flex:1;color:var(--text)">${segIndEsc(st.nombre)}<div style="font-size:10.5px;color:var(--dim)">${segIndEsc(String(st.cantidad))} ${segIndEsc(st.unidad||'')} · ${cronoFmtDiasHoras(cronoDiasParaSubtarea(st))}</div></span><span style="font-size:11px;color:var(--accent);white-space:nowrap">${f?cronoFmtShort(f.inicio)+' → '+cronoFmtShort(f.fin):''}</span></div>`;
+  }).join('');
+  const quien = porAdmin ? segIndCorto(item.responsable||'el proyectista') : '';
+  bg.innerHTML = `<div class="pa-modal" style="max-width:520px;padding:20px 22px;max-height:92vh;overflow:auto" onclick="event.stopPropagation()">
+    <div class="pa-modal-title" style="margin-bottom:10px">✓ Confirmar plan${porAdmin?' de '+segIndEsc(quien):''}</div>
+    <div style="font-size:12px;color:var(--text);margin-bottom:4px"><b>${segIndEsc(a.folio||a.actividad||'')}</b>${a.proyecto?' · '+segIndEsc(a.proyecto):''}</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:10px">${porAdmin?'Vas a confirmar en nombre del proyectista. ':''}Este es el orden en que se ejecutarán las subtareas. Al confirmar, el orden, las cantidades y los rendimientos quedan <b>fijos</b> y se podrá reportar; cualquier cambio posterior lo hace el administrador con una nota.</div>
+    <div style="border:0.5px solid var(--border);border-radius:8px;padding:2px 10px;background:var(--surface2)">${filas}</div>
+    <div style="font-size:11.5px;color:var(--text);margin-top:10px">📅 Pronóstico de entrega de la actividad: <b>${plan.fin?cronoFmtDate(plan.fin):'—'}</b></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+      <button type="button" class="et-act-btn" onclick="document.getElementById('cronoConfBg').remove()">Cancelar</button>
+      <button type="button" class="et-act-btn" style="background:rgba(61,214,140,.16);color:var(--green)" onclick="cronoConfirmarPlan('${actId}',${porAdmin?'true':'false'})">✓ Confirmar plan</button>
+    </div></div>`;
+  bg.addEventListener('click',()=>bg.remove());
+  document.body.appendChild(bg);
+}
+async function cronoConfirmarPlan(actId, porAdmin){
+  document.getElementById('cronoConfBg')?.remove();
+  await cronoRecargarDeSupabase();
+  const item = CRONO_ITEMS.find(x=>x.actividadId===actId);
+  const a = PA_ITEMS.find(x=>x.id===actId);
+  if(!item || !Array.isArray(item.subtareas)) return;
+  if(porAdmin ? _userRole!=='admin' : !cronoEsDuenoItem(item)){ alert('Solo el proyectista responsable (o el administrador) puede confirmar este plan.'); return; }
+  const ahora = new Date().toISOString();
+  const por = porAdmin ? ((_miNombre||'Admin')+' (por '+(item.responsable||'el proyectista')+')') : (_miNombre||item.responsable||'');
+  let n = 0;
+  item.subtareas.forEach((st,i)=>{
+    if(st.confirmada!==false) return;
+    st.confirmada = true; st.obs = null;
+    st.conf = {en:ahora, por, orden:i+1, cantidad:st.cantidad, rendimiento:st.rendimiento, tipo:st.tipo||'unidades_por_dia', inicio:(a&&a.fechaAsig)||item.fechaInicio||null, v:1};
+    n++;
+  });
+  if(!n) return;
+  cronoSaveItem(actId);
+  const folio = a ? (a.folio||a.actividad||'') : '';
+  if(porAdmin){
+    cronoNotifProy(item.responsable, '✅', 'Tu plan fue confirmado', `"${folio}": el administrador confirmó ${n} subtarea${n!==1?'s':''} por ti. Ya puedes reportarlas`);
+  } else if(typeof notifAdd==='function'){
+    notifAdd('✅', `${(_miNombre||'').split(' ')[0]} confirmó su plan`, `"${folio}" — ${n} subtarea${n!==1?'s':''} confirmada${n!==1?'s':''}`, 'avance', false);
+  }
+  cronoSubTab = 'cronograma'; cronoExpandedId = actId;
+  renderReporteoView();
+}
+// El proyectista no está de acuerdo con el plan: manda observaciones al administrador (las subtareas siguen sin poder reportarse)
+async function cronoObservacionesPlan(actId){
+  cronoLoad();
+  const item0 = CRONO_ITEMS.find(x=>x.actividadId===actId);
+  const a0 = PA_ITEMS.find(x=>x.id===actId);
+  if(!item0 || !cronoEsDuenoItem(item0)) return;
+  const nota = await cronoPedirNota({
+    titulo:'💬 Tengo observaciones del plan',
+    texto:`Cuéntale al administrador por qué no puedes cumplir este plan (otra urgencia, la cantidad no coincide, falta información…). Las subtareas siguen por confirmar y no se pueden reportar hasta que se atienda y confirmes.`,
+    placeholder:'Observación para el administrador (obligatorio)…', boton:'Enviar observación'
+  });
+  if(nota===null) return;
+  await cronoRecargarDeSupabase();
+  const item = CRONO_ITEMS.find(x=>x.actividadId===actId);
+  if(!item) return;
+  const obs = {texto:nota, en:new Date().toISOString(), por:_miNombre||''};
+  cronoSubsPorConfirmar(item).forEach(st=>{ st.obs = obs; });
+  cronoSaveItem(actId);
+  if(typeof notifAdd==='function'){
+    notifAdd('💬', `${(_miNombre||'').split(' ')[0]} tiene observaciones del plan`, `"${a0?(a0.folio||a0.actividad||''):''}": ${nota.slice(0,90)}`, 'avance', false);
+  }
+  cronoSubTab = 'cronograma'; cronoExpandedId = actId;
+  renderReporteoView();
+}
+// El admin atiende la observación (ajustó el plan o respondió) y le avisa al proyectista que vuelva a revisar y confirme
+function cronoAtenderObservacion(actId){
+  if(_userRole!=='admin') return;
+  cronoLoad();
+  const item = CRONO_ITEMS.find(x=>x.actividadId===actId); if(!item) return;
+  cronoSubsPorConfirmar(item).forEach(st=>{ st.obs = null; });
+  cronoSaveItem(actId);
+  const a = PA_ITEMS.find(x=>x.id===actId);
+  cronoNotifProy(item.responsable, '💬', 'Atendieron tu observación', `"${a?(a.folio||a.actividad||''):''}": revisa el plan y confírmalo para poder reportar`);
+  cronoSubTab = 'cronograma'; cronoExpandedId = actId;
+  renderReporteoView();
+}
+
+// ── Reordenar subtareas. El orden del arreglo define la cadena del pronóstico. ──
+// Administrador: siempre (si mueve subtareas ya confirmadas es una replanificación y pide nota). Proyectista responsable:
+// solo entre las subtareas por confirmar de su actividad; lo ya confirmado queda fijo.
+async function cronoReordenarSubtareas(actId, fn){
   cronoLoad();
   const item = CRONO_ITEMS.find(x=>x.actividadId===actId);
   if(!item || !Array.isArray(item.subtareas)) return false;
-  if(fn(item.subtareas)===false) return false;
+  const esAdm = _userRole==='admin';
+  if(!esAdm && !cronoEsDuenoItem(item)){ alert('Solo el administrador o el proyectista responsable pueden ordenar las subtareas.'); return false; }
+  const antes = item.subtareas.slice();
+  const copia = antes.slice();
+  if(fn(copia)===false) return false;
+  const tocadas = antes.map((st,i)=>({st, i, j:copia.indexOf(st)})).filter(x=>x.st.confirmada!==false && x.i!==x.j);
+  let nota = null;
+  if(tocadas.length){
+    if(!esAdm){ alert('Esa subtarea ya está confirmada: su orden quedó fijo. Si necesitas un cambio, avísale al administrador.'); renderReporteoView(); return false; }
+    nota = await cronoPedirNota({
+      titulo:'🔁 Replanificar orden',
+      texto:'Vas a mover subtareas cuyo plan ya fue confirmado. Queda registrado con tu nota y se le avisa al proyectista.',
+      placeholder:'Motivo de la replanificación (obligatorio)…', boton:'Replanificar'
+    });
+    if(nota===null){ renderReporteoView(); return false; }
+  }
+  item.subtareas = copia;
+  if(tocadas.length){
+    const ahora = new Date().toISOString();
+    tocadas.forEach(x=>{
+      x.st.hist = (x.st.hist||[]).concat([{tipo:'orden', en:ahora, por:_miNombre||'Admin', nota, de:x.i+1, a:x.j+1}]);
+      if(x.st.conf){ x.st.conf.orden = x.j+1; x.st.conf.v = (x.st.conf.v||1)+1; }
+    });
+    const a = PA_ITEMS.find(x=>x.id===actId);
+    cronoNotifProy(item.responsable, '🔁', 'Replanificaron tu orden', `"${a?(a.folio||a.actividad||''):''}": ${nota}`);
+  }
   cronoSaveItem(actId);
   cronoSubTab = 'cronograma';
   cronoExpandedId = actId;
@@ -7725,6 +8143,18 @@ async function cronoGuardarEdicionSubtarea(actId, stId){
   const freshSt = freshItem?.subtareas?.find(s=>s.id===stId);
   if(!freshSt||!freshItem){ alert('Esta subtarea ya no existe (puede que alguien la haya eliminado). Se actualizó la vista con los datos más recientes.'); cronoSubTab='cronograma'; cronoExpandedId=actId; renderReporteoView(); return; }
 
+  // Subtarea con plan confirmado: cambiar cantidad / rendimiento / tipo es una replanificación (pide nota y queda registrada)
+  let _notaReplan = null;
+  const _cambioPlan = freshSt.confirmada!==false && !!freshSt.conf && (parseFloat(freshSt.cantidad)!==cantidad || parseFloat(freshSt.rendimiento)!==rend || (freshSt.tipo||'unidades_por_dia')!==tipo);
+  if(_cambioPlan){
+    _notaReplan = await cronoPedirNota({
+      titulo:'🔁 Replanificar subtarea',
+      texto:`"${segIndEsc(freshSt.nombre)}" ya tiene el plan confirmado. Cambiar su cantidad o rendimiento modifica la línea base: queda registrado con tu nota y se le avisa al proyectista.`,
+      placeholder:'Motivo del cambio (obligatorio)…', boton:'Guardar cambio'
+    });
+    if(_notaReplan===null){ cronoSubTab='cronograma'; cronoExpandedId=actId; renderReporteoView(); return; }
+  }
+  const _antes = {cantidad:freshSt.cantidad, rendimiento:freshSt.rendimiento, tipo:freshSt.tipo||'unidades_por_dia'};
   freshSt.nombre = nombre;
   freshSt.unidad = unidad;
   freshSt.cantidad = cantidad;
@@ -7734,6 +8164,12 @@ async function cronoGuardarEdicionSubtarea(actId, stId){
   freshSt.estatus = estatus;
   freshSt.editadoPor = _miNombre||'Admin';
   freshSt.editadoAt = repDateKey(new Date());
+  if(_cambioPlan){
+    freshSt.hist = (freshSt.hist||[]).concat([{tipo:'plan', en:new Date().toISOString(), por:_miNombre||'Admin', nota:_notaReplan, antes:_antes, despues:{cantidad, rendimiento:rend, tipo}}]);
+    freshSt.conf = Object.assign({}, freshSt.conf, {cantidad, rendimiento:rend, tipo, v:(freshSt.conf.v||1)+1});
+    const _pa = PA_ITEMS.find(x=>x.id===actId);
+    cronoNotifProy(freshItem.responsable, '🔁', 'Replanificaron una subtarea', `"${_pa?(_pa.folio||_pa.actividad||''):''}" — ${freshSt.nombre}: ${_notaReplan}`);
+  }
 
   // Re-evaluar TODO el historial de reportes de esta subtarea contra el rendimiento/cantidad/unidad
   // que acaba de quedar — así la marca de "bajo rendimiento" es consistente sin importar cuándo se
@@ -7881,6 +8317,7 @@ function cronoGuardarReporte(){
   const item = CRONO_ITEMS.find(x=>x.actividadId===cronoReportActId);
   const st = item?.subtareas?.find(s=>s.id===cronoReportStId);
   if(!st||!item) return;
+  if(st.confirmada===false){ alert('Esta subtarea sigue por confirmar: confirma el plan antes de reportarla.'); return; }
 
   // ¿Este reporte quedó por debajo del rendimiento diario esperado de la subtarea?
   // (se evalúa contra el acumulado ANTES de sumar este reporte, así detecta si con esto se completa la subtarea)
@@ -9042,6 +9479,7 @@ function planBuildHTML() {
   h += '<button onclick="planOpenProyectos()" style="font-size:11px;padding:6px 14px;border-radius:7px;border:0.5px solid rgba(27,175,122,.3);background:transparent;color:#1baf7a;cursor:pointer;font-family:var(--font)">📋 Proyectos del período</button>';
   h += '<button onclick="planExportPDF()" title="Plan por actividad, como siempre" style="font-size:11px;padding:6px 14px;border-radius:7px;border:0.5px solid rgba(255,92,92,.3);background:transparent;color:#ff7a7a;cursor:pointer;font-family:var(--font)">⬇ PDF básico</button>';
   h += '<button onclick="planExportPDF(true)" title="Desglose día por día de lo que toca terminar según las subtareas" style="font-size:11px;padding:6px 14px;border-radius:7px;border:0.5px solid rgba(42,120,214,.4);background:rgba(42,120,214,.1);color:#5a9ff0;cursor:pointer;font-family:var(--font)">⬇ PDF detallado</button>';
+  h += '<button onclick="planExportPDF(\'corte\')" title="Mismo reporte, cortado al viernes de cada semana: subtareas que se alcanzan a tocar, parte que cruza el viernes y cumplimiento del rendimiento diario" style="font-size:11px;padding:6px 14px;border-radius:7px;border:0.5px solid rgba(61,214,140,.45);background:rgba(61,214,140,.1);color:#2fbf80;cursor:pointer;font-family:var(--font)">⬇ PDF corte viernes</button>';
   h += '<button onclick="document.getElementById(\'planModalBg\').remove()" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer;padding:0 4px;line-height:1">×</button>';
   h += '</div></div>';
   h += '<div style="padding:16px 20px;overflow-x:auto">';
@@ -9300,8 +9738,165 @@ function cronoDesgloseDiario(a){
   return { piezas, sinSubtareas:false };
 }
 
+// Filas de notas (vacaciones, reapertura, pausas) de una actividad para el plan de trabajo en PDF
+function planNotasFilas(a, crItem, cols, fd){
+  var h='';
+        var pinf=(typeof cronoPronosticoInfo==='function')?cronoPronosticoInfo(a,crItem):null;
+        if(pinf&&pinf.diasVac){
+          h+='<tr class="pnota vac"><td></td><td colspan="'+cols+'"><b>&#127796; Vacaciones:</b> la fecha pron&oacute;stico se recorri&oacute; <b>+'+pinf.diasVac+' d&iacute;a'+(pinf.diasVac===1?'':'s')+' por vacaciones</b>: de '+fd(pinf.sinVac)+' a <b>'+fd(pinf.fecha)+'</b>.</td></tr>';
+        }
+        if(a.reapertura&&a.reapertura.inicio){
+          var escR=function(t){return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+          var tR='<b>&#128260; Reabierta</b> el '+fd(a.reapertura.inicio)+' desde &ldquo;Terminado (m&aacute;ximo avance)&rdquo;: ';
+          tR+=(a.reapertura.cerrados||[]).map(function(c,i){
+            return (i+1)+'&ordf; entrega '+(c.entrega?fd(c.entrega):'--')+' ('+(c.resultado==='a_tiempo'?'a tiempo':c.resultado==='retraso'?'con retraso +'+(c.dias||0)+' d':'sin fecha meta')+')'+(c.nota?' &mdash; <i>'+escR(c.nota)+'</i>':'');
+          }).join('; ');
+          tR+='. Nuevo pron&oacute;stico'+(pinf&&pinf.fecha?' <b>'+fd(pinf.fecha)+'</b>':' pendiente (faltan subtareas)')+'; el t&eacute;rmino incluye 1 d&iacute;a de revisi&oacute;n.';
+          h+='<tr class="pnota vac"><td></td><td colspan="'+cols+'">'+tR+'</td></tr>';
+        }
+        var pr=(typeof paPausaResumen==='function')?paPausaResumen(a):null;
+        if(pr){
+          var esc=function(t){return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+          var nota='<b>&#9208; Pausa:</b> ';
+          nota+=pr.pausas.map(function(p){
+            var pri=(p.prioridad&&p.prioridad.items&&p.prioridad.items.length)?' (se atendi&oacute; '+esc(paPrioridadEtiquetas(p.prioridad).join(', '))+')':'';
+            return (p.abierta?'en pausa desde '+fd(p.inicio)+' ('+p.dias+' d&iacute;as h&aacute;b. estimados)':'del '+fd(p.inicio)+' al '+fd(p.fin)+' ('+p.dias+' d&iacute;a'+(p.dias===1?'':'s')+' h&aacute;b.)')+' &mdash; <i>'+(p.motivo?esc(p.motivo):'sin justificaci&oacute;n registrada')+'</i>'+pri;
+          }).join('; ');
+          if(pr.original&&pr.nueva&&pr.nueva!==pr.original) nota+='. Entrega original: <b>'+fd(pr.original)+'</b> &rarr; nueva fecha por la pausa: <b>'+fd(pr.nueva)+'</b> (+'+pr.totalDias+' d&iacute;a'+(pr.totalDias===1?'':'s')+' h&aacute;b.)';
+          else if(pr.totalDias) nota+='. Total pausado: '+pr.totalDias+' d&iacute;a'+(pr.totalDias===1?'':'s')+' h&aacute;b.';
+          h+='<tr class="pnota"><td></td><td colspan="'+cols+'">'+nota+'</td></tr>';
+        }
+  return h;
+}
+
+// ══════════ PDF "Corte viernes": plan + cumplimiento, cortado al viernes de cada semana ══════════
+function planCorteCSS(){
+  return '.st-late{background:#fee2e2;color:#b91c1c}.st-par{background:#fef3c7;color:#92400e}'
+    +'table.lst td.dc{text-align:center;white-space:nowrap;font-size:8.5px;padding:5px 3px}'
+    +'table.lst th.dc{text-align:center;padding:5px 3px}'
+    +'.cmeta{font-size:8px;color:#6b7280;margin:4px 0 8px;line-height:1.4}'
+    +'table.lst tr.pnota.cont td{background:#eef2ff!important;color:#3730a3;border-bottom:1px dashed #a5b4fc}';
+}
+function planCorteSeccion(weeks, C){
+  var esc=function(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+  var fd=C.fd, fq=C.fq;
+  var corteReal=cronoFechaCorteReal();
+  var dn=['L','M','M','J','V'];
+  var noEval={}, h='';
+  var chipDe=function(e){
+    var cls=(e==='cumple'||e==='completada')?'st-fin':e==='parcial'?'st-par':e==='atrasada'?'st-late':e==='adelantada'?'st-prog':'st-nuevo';
+    return '<span class="stchip '+cls+'">'+esc(cronoCumpLabel(e))+'</span>';
+  };
+  var colDe=function(e){return (e==='cumple'||e==='completada'||e==='adelantada')?'#166534':e==='parcial'?'#92400e':e==='atrasada'?'#b91c1c':'#6b7280';};
+  var ABIERTAS=['Sin iniciar','En progreso','En pausa'];
+  weeks.forEach(function(week,wi){
+    var dias=week.map(function(d){return d.toISOString().slice(0,10);});
+    var wS=dias[0], wE=dias[4];
+    var weekEval = wS<=corteReal;
+    var evalHasta = wE<corteReal?wE:corteReal;
+    h+='<div class="whdr">Semana '+(wi+1)+' - '+C.fWk(week)+' &middot; Corte al viernes '+fd(wE)
+      +'<span style="float:right;font-weight:400;opacity:.9">'+(weekEval?'Evaluado al '+fd(evalHasta)+(evalHasta<wE?' (último día medido; la semana sigue en curso)':''):'Semana por venir: solo meta del plan')+'</span></div>';
+    h+='<table class="lst"><thead><tr><th>Proyectista</th><th>Actividad / Subtareas</th><th>Proyecto / Tipo &middot; Plan</th><th>Folio</th>';
+    dias.forEach(function(ds,i){h+='<th class="dc">'+dn[i]+' '+fd(ds)+'</th>';});
+    h+='<th class="dc">Meta al viernes</th><th class="dc">Real</th><th class="dc">%</th><th>Estado</th></tr></thead>';
+    PA_MEMBERS.forEach(function(member){
+      PA_ITEMS.forEach(function(a){
+        if(a.responsable!==member||!a.fechaAsig) return;
+        var crItem=CRONO_ITEMS.find(function(x){return x.actividadId===a.id;});
+        var cump=crItem?cronoCumplimiento(a,crItem,wE):null;
+        if(!cump){
+          if(ABIERTAS.indexOf(a.estatus)>=0 && a.fechaAsig<=wE && (a.fechaTermino||a.fechaAsig)>=wS) noEval[a.id]={a:a,crItem:crItem};
+          return;
+        }
+        var plan=cump.plan, fechas=Object.keys(plan.dias).sort();
+        var vis=[], futuras=[];
+        cump.filas.forEach(function(f){
+          var metaV=0;
+          fechas.forEach(function(ds){ if(ds<=wE) metaV+=(plan.dias[ds][f.st.id]||0); });
+          metaV=Math.min(metaV,f.v.cantidad);
+          if(!f.inicio || f.inicio>wE){ if(f.inicio) futuras.push(f); return; }      // no se alcanza a tocar hasta el viernes
+          if(f.estado==='completada' && f.fin && f.fin<wS) return;                   // ya se cerró en semanas anteriores
+          vis.push({f:f, metaV:metaV, cruza:!!(f.fin && f.fin>wE)});
+        });
+        var pr=(typeof paPausaResumen==='function')?paPausaResumen(a):null;
+        if(!vis.length && !pr) return;
+        var col=C.gc(member), ini=C.gi(member);
+        var cierra = !futuras.length && !vis.some(function(v){return v.cruza;});
+        var estAct = weekEval && cump.pct!==null ? cump.estado : 'sin_inicio';
+        h+='<tbody><tr><td style="white-space:nowrap"><span class="av" style="background:'+col+'">'+ini+'</span>'+member.split(' ').slice(0,2).join(' ')+'</td>';
+        h+='<td><b>'+esc(a.actividad||'--')+'</b></td>';
+        var isCon=(a.tipo==='Conectividad (Bobinas)'||a.tipo==='Planos de Conectividad');
+        h+='<td><b>'+esc(a.proyecto||'--')+'</b><br><b style="font-size:9px;color:#374151">'+esc(a.tipo||'--')+'</b>'+(isCon&&a.numBobina?' &nbsp;Bna #'+esc(a.numBobina):'')+'</td>';
+        h+='<td style="font-family:monospace;font-size:8px;color:#1a4fa0">'+esc(a.folio||'--')+'</td>';
+        h+='<td colspan="5" style="font-size:8.5px;color:#374151">Pron&oacute;stico completo: <b>'+fd(plan.fin)+'</b>'+(a.fechaTermino?' &middot; L&iacute;mite: '+fd(a.fechaTermino):'')+' &middot; <b>'+esc(a.estatus||'')+'</b>'+(cierra?' &middot; <b style="color:#166534">cierra esta semana</b>':' &middot; <b style="color:#3730a3">contin&uacute;a despu&eacute;s del viernes</b>')+'</td>';
+        h+='<td></td><td></td>';
+        h+='<td class="dc" style="font-weight:700;color:'+colDe(estAct)+'">'+(weekEval&&cump.pct!==null?Math.round(cump.pct*100)+'%':'&mdash;')+'</td>';
+        h+='<td>'+(weekEval&&cump.pct!==null?chipDe(cump.estado):'<span class="stchip st-nuevo">Programada</span>')+'</td></tr>';
+        h+=planNotasFilas(a,crItem,12,fd);
+        vis.forEach(function(v){
+          var f=v.f, st=f.st;
+          var cant=f.v.cantidad;
+          h+='<tr class="sub'+(f.estado==='completada'?' sub-fin':'')+'"><td></td>';
+          h+='<td style="padding-left:18px"><span style="color:#9ca3af">&#8627;</span> '+esc(st.nombre||'--')+'</td>';
+          h+='<td>'+fq(cant)+' '+esc(st.unidad||'')+(f.inicio?' &middot; <span style="color:#6b7280">'+fd(f.inicio)+'&rarr;'+fd(f.fin)+'</span>':'')+'</td><td></td>';
+          dias.forEach(function(ds){
+            var e=plan.dias[ds]?(plan.dias[ds][st.id]||0):0, r=f.real[ds]||0;
+            if(e<=1e-9 && r<=1e-9){ h+='<td class="dc" style="color:#d1d5db">&mdash;</td>'; return; }
+            if(ds>cump.hasta){ h+='<td class="dc" style="color:#9ca3af">'+(r>0?fq(r)+'/':'')+fq(e)+'</td>'; return; }
+            var c='#166534';
+            if(e<=1e-9) c='#1a4fa0'; else if(r/e<CRONO_CUMP_OK) c=(r/e>=CRONO_CUMP_PARCIAL)?'#92400e':'#b91c1c';
+            h+='<td class="dc" style="color:'+c+';font-weight:700">'+fq(r)+'/'+fq(e)+'</td>';
+          });
+          h+='<td class="dc">'+fq(v.metaV)+'</td>';
+          h+='<td class="dc">'+(weekEval?fq(f.rea):'&mdash;')+'</td>';
+          h+='<td class="dc" style="font-weight:700;color:'+colDe(f.estado)+'">'+(weekEval&&f.pct!==null?Math.round(f.pct*100)+'%':'&mdash;')+'</td>';
+          var linea;
+          if(f.estado==='completada') linea='';
+          else if(v.cruza) linea='<br><span style="font-size:7.5px;color:#3730a3">contin&uacute;a &rarr; '+fd(f.fin)+' (&asymp;'+Math.round(v.metaV/cant*100)+'% al viernes)</span>';
+          else linea='<br><span style="font-size:7.5px;color:#166534">cierra el viernes</span>';
+          var chip = weekEval ? chipDe(f.estado)+((f.atrasoDias>0.05&&f.estado!=='completada')?' <span style="font-size:7.5px;color:#b91c1c">&minus;'+fq(f.atrasoDias)+' d</span>':'') : '<span class="stchip st-nuevo">Programada</span>';
+          h+='<td>'+chip+linea+'</td></tr>';
+        });
+        if(futuras.length){
+          h+='<tr class="pnota cont"><td></td><td colspan="12"><b>&#10145; Contin&uacute;a despu&eacute;s del viernes:</b> '+futuras.length+' subtarea'+(futuras.length===1?'':'s')+' m&aacute;s ('+futuras.map(function(f){return esc(f.st.nombre||'--')+' &middot; '+fd(f.inicio);}).join('; ')+'). Pron&oacute;stico completo '+fd(plan.fin)+'.</td></tr>';
+        }
+        h+='</tbody>';
+      });
+    });
+    h+='</table>';
+  });
+  // Actividades que no se pueden medir contra un rendimiento diario
+  var ids=Object.keys(noEval);
+  if(ids.length){
+    h+='<div class="sec" style="margin-top:14px">No evaluables en este corte</div>';
+    h+='<div class="cmeta">Actividades abiertas del periodo que se reportan por porcentaje, no tienen subtareas asignadas o su plan sigue por confirmar: no hay un rendimiento diario contra el cual compararlas. Se listan para que no se pierdan de vista.</div>';
+    h+='<table class="lst"><thead><tr><th>Proyectista</th><th>Actividad</th><th>Proyecto / Tipo</th><th>Folio</th><th>Termino</th><th>Avance reportado</th><th>Motivo</th></tr></thead><tbody>';
+    ids.forEach(function(id){
+      var a=noEval[id].a, crItem=noEval[id].crItem;
+      var subs=(crItem&&crItem.subtareas)||[];
+      var gen=((crItem&&crItem.reportes)||[]).filter(function(r){return r.modo==='general';}).sort(function(x,y){return String(x.fecha||'').localeCompare(String(y.fecha||''));});
+      var ult=gen.length?gen[gen.length-1]:null;
+      var motivo, avance='&mdash;';
+      if(a.reapertura&&a.reapertura.inicio&&!ult){ motivo='Reabierta: faltan subtareas nuevas por asignar'; }
+      else if(ult){ motivo='Reporte por porcentaje'; avance=(ult.avance!=null?ult.avance+'%':'&mdash;')+(ult.fecha?' <span style="color:#6b7280">('+fd(String(ult.fecha).slice(0,10))+')</span>':''); }
+      else if(!subs.length){ motivo='Sin subtareas asignadas'; }
+      else if(subs.every(function(x){return x.confirmada===false||x.pendienteValidacion;})){ motivo='Plan por confirmar'; avance=fq(cronoAvance(subs))+'%'; }
+      else { motivo='Sin subtareas medibles'; avance=fq(cronoAvance(subs))+'%'; }
+      h+='<tr><td style="white-space:nowrap"><span class="av" style="background:'+C.gc(a.responsable)+'">'+C.gi(a.responsable)+'</span>'+esc((a.responsable||'').split(' ').slice(0,2).join(' '))+'</td>';
+      h+='<td><b>'+esc(a.actividad||'--')+'</b></td><td><b>'+esc(a.proyecto||'--')+'</b><br><b style="font-size:9px;color:#374151">'+esc(a.tipo||'--')+'</b></td>';
+      h+='<td style="font-family:monospace;font-size:8px;color:#1a4fa0">'+esc(a.folio||'--')+'</td><td style="white-space:nowrap">'+fd(a.fechaTermino)+'</td><td>'+avance+'</td><td>'+esc(motivo)+'</td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+  h+='<div class="cmeta"><b>C&oacute;mo leer el corte.</b> Cada semana se corta en su viernes: de una actividad que sigue despu&eacute;s solo salen las subtareas que se alcanzan a tocar hasta ese d&iacute;a, y la que cruza el viernes indica cu&aacute;nto del plan le toca. '
+    +'En cada d&iacute;a se muestra <b>reportado / esperado</b> (en la unidad de la subtarea): lo esperado sale del plan que el proyectista confirm&oacute; y de la fracci&oacute;n de jornada que le toca ese d&iacute;a (viernes = 6/9; vacaciones, festivos y pausas no se esperan). '
+    +'<b>Meta al viernes</b> es lo acumulado que deber&iacute;a llevar al cierre de la semana; <b>Real</b> y <b>%</b> se miden contra lo esperado a la fecha de evaluaci&oacute;n. Cumple &ge;95% &middot; parcial 80-94% &middot; atrasada &lt;80%. El % de la actividad se pondera por jornadas esperadas, sin que lo adelantado tape lo atrasado. Los reportes por porcentaje general no se miden.</div>';
+  return h;
+}
+
 function planExportPDF(detallado) {
-  detallado = detallado===true;
+  var corte = (detallado==='corte');
+  detallado = (detallado===true || corte);
   if(typeof cronoLoad==='function') cronoLoad();
   var today = new Date();
   today.setHours(0,0,0,0);
@@ -9371,11 +9966,12 @@ function planExportPDF(detallado) {
     +'.pbt button{padding:7px 22px;background:#0f2744;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:Arial,sans-serif}'
     +'@media print{.pbt{display:none}@page{margin:.6cm;size:landscape}}';
   css += '*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}';
+  if(corte) css += planCorteCSS();
 
-  var h='<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Plan de Trabajo C3NTRO'+(detallado?' - Detallado':'')+'</title><style>'+css+'</style></head><body>';
+  var h='<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Plan de Trabajo C3NTRO'+(corte?' - Corte viernes':detallado?' - Detallado':'')+'</title><style>'+css+'</style></head><body>';
 
   h+='<div class="hdr"><div><div class="logo">C3NTRO Telecom</div><div style="font-size:10px;color:#6b7280;margin-top:2px">Coordinacion de Ingenieria</div></div>';
-  h+='<div class="rtitle"><h1>Plan de Trabajo del Equipo'+(detallado?' - Detallado por dia':'')+'</h1><p>Proximas '+pLabel+' - '+genStr+'<br>Martha Raquel Muro Morales</p></div></div>';
+  h+='<div class="rtitle"><h1>Plan de Trabajo del Equipo'+(corte?' - Corte al viernes':detallado?' - Detallado por dia':'')+'</h1><p>Proximas '+pLabel+' - '+genStr+'<br>Martha Raquel Muro Morales</p></div></div>';
   h+='<div class="pbt"><button onclick="window.print()">Exportar PDF / Imprimir</button></div>';
 
   // 1. PROYECTOS
@@ -9459,8 +10055,9 @@ function planExportPDF(detallado) {
   });
 
   // 3. LISTA
-  h+='<div class="sec" style="margin-top:0;page-break-before:always;break-before:page">Lista de actividades por proyectista</div>';
-  weeks.forEach(function(week,wi){
+  h+='<div class="sec" style="margin-top:0;page-break-before:always;break-before:page">'+(corte?'Corte al viernes: plan y cumplimiento por proyectista':'Lista de actividades por proyectista')+'</div>';
+  if(corte) h+=planCorteSeccion(weeks,{gc:gc,gi:gi,fd:fd,fq:fq,fWk:fWk});
+  else weeks.forEach(function(week,wi){
     var wS=week[0].toISOString().slice(0,10),wE=week[4].toISOString().slice(0,10);
     h+='<div class="whdr">Semana '+(wi+1)+' - '+fWk(week)+'</div>';
     h+='<table class="lst"><thead><tr><th>Proyectista</th><th>'+(detallado?'Actividad / Subtareas':'Actividad')+'</th><th>'+(detallado?'Proyecto / Tipo &middot; Avance':'Proyecto / Tipo')+'</th><th>Folio</th><th>Inicio</th><th>Termino</th><th>Estatus</th></tr></thead>';
@@ -9483,31 +10080,7 @@ function planExportPDF(detallado) {
         h+='<td style="white-space:nowrap">'+fd(a.fechaAsig)+'</td>';
         h+='<td style="white-space:nowrap">'+fd(a.fechaTermino)+'</td>';
         h+='<td style="color:'+ec+';font-weight:600">'+a.estatus+'</td></tr>';
-        var pinf=(typeof cronoPronosticoInfo==='function')?cronoPronosticoInfo(a,crItem):null;
-        if(pinf&&pinf.diasVac){
-          h+='<tr class="pnota vac"><td></td><td colspan="6"><b>&#127796; Vacaciones:</b> la fecha pron&oacute;stico se recorri&oacute; <b>+'+pinf.diasVac+' d&iacute;a'+(pinf.diasVac===1?'':'s')+' por vacaciones</b>: de '+fd(pinf.sinVac)+' a <b>'+fd(pinf.fecha)+'</b>.</td></tr>';
-        }
-        if(a.reapertura&&a.reapertura.inicio){
-          var escR=function(t){return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
-          var tR='<b>&#128260; Reabierta</b> el '+fd(a.reapertura.inicio)+' desde &ldquo;Terminado (m&aacute;ximo avance)&rdquo;: ';
-          tR+=(a.reapertura.cerrados||[]).map(function(c,i){
-            return (i+1)+'&ordf; entrega '+(c.entrega?fd(c.entrega):'--')+' ('+(c.resultado==='a_tiempo'?'a tiempo':c.resultado==='retraso'?'con retraso +'+(c.dias||0)+' d':'sin fecha meta')+')'+(c.nota?' &mdash; <i>'+escR(c.nota)+'</i>':'');
-          }).join('; ');
-          tR+='. Nuevo pron&oacute;stico'+(pinf&&pinf.fecha?' <b>'+fd(pinf.fecha)+'</b>':' pendiente (faltan subtareas)')+'; el t&eacute;rmino incluye 1 d&iacute;a de revisi&oacute;n.';
-          h+='<tr class="pnota vac"><td></td><td colspan="6">'+tR+'</td></tr>';
-        }
-        var pr=(typeof paPausaResumen==='function')?paPausaResumen(a):null;
-        if(pr){
-          var esc=function(t){return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
-          var nota='<b>&#9208; Pausa:</b> ';
-          nota+=pr.pausas.map(function(p){
-            var pri=(p.prioridad&&p.prioridad.items&&p.prioridad.items.length)?' (se atendi&oacute; '+esc(paPrioridadEtiquetas(p.prioridad).join(', '))+')':'';
-            return (p.abierta?'en pausa desde '+fd(p.inicio)+' ('+p.dias+' d&iacute;as h&aacute;b. estimados)':'del '+fd(p.inicio)+' al '+fd(p.fin)+' ('+p.dias+' d&iacute;a'+(p.dias===1?'':'s')+' h&aacute;b.)')+' &mdash; <i>'+(p.motivo?esc(p.motivo):'sin justificaci&oacute;n registrada')+'</i>'+pri;
-          }).join('; ');
-          if(pr.original&&pr.nueva&&pr.nueva!==pr.original) nota+='. Entrega original: <b>'+fd(pr.original)+'</b> &rarr; nueva fecha por la pausa: <b>'+fd(pr.nueva)+'</b> (+'+pr.totalDias+' d&iacute;a'+(pr.totalDias===1?'':'s')+' h&aacute;b.)';
-          else if(pr.totalDias) nota+='. Total pausado: '+pr.totalDias+' d&iacute;a'+(pr.totalDias===1?'':'s')+' h&aacute;b.';
-          h+='<tr class="pnota"><td></td><td colspan="6">'+nota+'</td></tr>';
-        }
+        h+=planNotasFilas(a,crItem,6,fd);
         if(subs.length){
           var dg=getDesg(a);
           subs.forEach(function(st){
@@ -9726,10 +10299,17 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
   misActividades.forEach(a=>{
     const crono = CRONO_ITEMS.find(x=>x.actividadId===a.id);
     if(!crono) return;
-    (crono.subtareas||[]).filter(st=>!st.pendienteValidacion && st.estatus!=='completada').forEach(st=>{
+    (crono.subtareas||[]).filter(st=>!st.pendienteValidacion && st.estatus!=='completada' && st.confirmada!==false).forEach(st=>{
       subtareasDisponibles.push({actividadId:a.id, folio:a.folio||a.actividad, proyecto:a.proyecto, tipo:a.tipo, numBobina:a.numBobina, st});
     });
   });
+  // Subtareas que el admin cargó y todavía no confirma el proyectista: no se pueden reportar
+  const _porConfDiario = misActividades.map(a=>({a, item:CRONO_ITEMS.find(x=>x.actividadId===a.id)})).filter(x=>x.item && cronoSubsPorConfirmar(x.item).length);
+  const _bannerConf = _porConfDiario.length ? `<div style="margin:6px 0 12px;padding:10px 12px;border-radius:8px;background:rgba(245,166,35,.10);border:0.5px solid rgba(245,166,35,.4);font-size:11.5px;color:var(--text)">
+    <div style="font-weight:600;color:var(--amber);margin-bottom:4px">⏳ Subtareas por confirmar</div>
+    <div style="color:var(--dim);margin-bottom:6px">Hasta que confirmes tu plan (orden de ejecución) no puedes reportar estas subtareas:</div>
+    ${_porConfDiario.map(x=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 0"><span>${segIndEsc(x.a.folio||x.a.actividad||'—')} <span style="color:var(--dim);font-size:10.5px">${segIndEsc(x.a.proyecto||'')} · ${cronoSubsPorConfirmar(x.item).length} por confirmar</span></span><button type="button" class="et-act-btn" style="background:rgba(74,143,212,.15);color:var(--accent);white-space:nowrap" onclick="paIrAsignarSubtareas('${x.a.id}',true)">Confirmar plan →</button></div>`).join('')}
+  </div>` : '';
 
   const dObj = new Date(fecha+'T00:00:00');
   const fmtDia = dObj.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
@@ -9737,6 +10317,7 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
   const horarioCerrado = esHoy && _userRole==='proyectista' && repHorarioCerrado();
   let html=`<div style="background:rgba(74,143,212,.05);border:0.5px solid rgba(74,143,212,.2);border-radius:10px;padding:14px 16px">
     <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;text-transform:capitalize">${esHoy?'📝 Reporte de hoy — ':''} ${fmtDia}</div>
+    ${_bannerConf}
     ${horarioCerrado?`<div style="margin-bottom:12px;padding:8px 10px;background:rgba(255,92,92,.08);border:0.5px solid rgba(255,92,92,.3);border-radius:8px;font-size:11.5px;color:var(--red)">⏰ Ya son las 7:15pm — el horario para reportar el avance de hoy ya cerró. No se puede guardar un reporte nuevo.</div>`:''}`;
 
   // Reportes ya hechos hoy
@@ -10236,10 +10817,12 @@ async function calProyGuardarReporteHoy(){
   await cronoRecargarDeSupabase();
 
   const itemsAfectados = new Set();
+  const bloqueadasConf = [];
   for(const entry of pendientes){
     const item = CRONO_ITEMS.find(x=>x.actividadId===entry.stData.actividadId);
     const st = item?.subtareas?.find(s=>s.id===entry.stData.st.id);
     if(!st||!item) continue;
+    if(st.confirmada===false){ bloqueadasConf.push(st.nombre); continue; } // plan sin confirmar: no se puede reportar
 
     // Recalcular contra la subtarea recién recargada (por si su rendimiento cambió desde que se agregó a la lista)
     // Se evalúa contra el acumulado ANTES de sumar este reporte, así detecta si con esto se completa la subtarea.
@@ -10280,6 +10863,9 @@ async function calProyGuardarReporteHoy(){
     }
   }
   itemsAfectados.forEach(id=>cronoSaveItem(id));
+  if(bloqueadasConf.length){
+    alert('No se guardó el reporte de: '+bloqueadasConf.join(', ')+'.\n\nEstas subtareas siguen por confirmar. Confirma tu plan primero (Panel de seguimiento > Subtareas).');
+  }
 
   // Si con este reporte alguna actividad llegó al 100% de avance en subtareas,
   // pasarla automáticamente a "En revisión" y avisar al admin que ya puede revisarla.
@@ -14487,6 +15073,31 @@ function paReabEsperaSubtareas(a){
   const rep = (c && c.reportes) || [];
   return !rep.some(r=>r && r.fecha && String(r.fecha).slice(0,10) >= a.reapertura.inicio);
 }
+// Actividades con subtareas por confirmar que le corresponde ver a quien tiene la sesión (el proyectista, solo las suyas)
+function paActividadesPorConfirmarVisibles(){
+  return cronoActividadesPorConfirmar().filter(x=>_userRole!=='proyectista' || x.a.responsable===_miNombre);
+}
+// Clic en la alerta de confirmaciones: una sola → directo a la actividad; varias → lista para elegir
+function paAlertConfirmaciones(soloObs){
+  let lista = paActividadesPorConfirmarVisibles();
+  if(soloObs) lista = lista.filter(x=>x.obs);
+  if(!lista.length) return;
+  if(lista.length===1){ paIrAsignarSubtareas(lista[0].a.id, true); return; }
+  const old = document.getElementById('paConfListBg'); if(old) old.remove();
+  const bg = document.createElement('div');
+  bg.id = 'paConfListBg'; bg.className = 'pa-modal-bg open'; bg.style.zIndex = '100001';
+  bg.innerHTML = `<div class="pa-modal" style="max-width:480px;padding:20px 22px" onclick="event.stopPropagation()">
+    <div class="pa-modal-title" style="margin-bottom:10px">${soloObs?'💬 Observaciones del plan':'⏳ Subtareas sin confirmar'}</div>
+    <div style="font-size:12px;color:var(--text);margin-bottom:10px">${_userRole==='proyectista'?'Confirma tu plan para poder reportar estas subtareas.':'El proyectista no puede reportar estas subtareas hasta confirmar su plan.'}</div>
+    <div style="max-height:52vh;overflow:auto">
+    ${lista.map(x=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:0.5px solid var(--border);border-radius:8px;margin-bottom:6px"><span style="font-size:12px;color:var(--text);min-width:0">${segIndEsc(x.a.folio||x.a.actividad||'—')} <span style="color:var(--dim);font-size:10.5px">${segIndEsc(x.a.proyecto||'')}${x.a.responsable?' · '+segIndEsc(segIndCorto(x.a.responsable)):''} · ${x.subs.length} sin confirmar</span>${x.obs?`<div style="font-size:10.5px;color:var(--red);margin-top:2px">💬 ${segIndEsc(String(x.obs.texto).slice(0,90))}</div>`:''}</span><button type="button" class="et-act-btn" data-go="${segIndEsc(x.a.id)}" style="background:rgba(74,143,212,.15);color:var(--accent);white-space:nowrap">Ver plan →</button></div>`).join('')}
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px"><button type="button" class="et-act-btn" id="paConfListCerrar">Cerrar</button></div></div>`;
+  document.body.appendChild(bg);
+  bg.addEventListener('click',()=>bg.remove());
+  bg.querySelector('#paConfListCerrar').addEventListener('click',()=>bg.remove());
+  bg.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{ const id=b.getAttribute('data-go'); bg.remove(); paIrAsignarSubtareas(id, true); }));
+}
 // Clic en la alerta: si es una sola, directo a agregar sus subtareas; si son varias, lista para elegir.
 function paAlertSubtareas(){
   const lista = paActividadesSinSubtareas();
@@ -14536,6 +15147,11 @@ function paRenderAlerts(){
   // por lo que no tienen fecha pronóstico. Se espera a que el cronograma esté cargado para no dar falsos avisos.
   const sinSub = (window._cronoRecargado || (typeof CRONO_ITEMS!=='undefined' && CRONO_ITEMS.length)) ? paActividadesSinSubtareas() : [];
   if(sinSub.length) chips.push({type:'amber', icon:'📋', label:`Falta asignación de subtareas (${sinSub.length})`, action:`paAlertSubtareas()`});
+  // Planes de subtareas que el proyectista todavía no confirma (y los que mandó con observaciones)
+  const porConf = (window._cronoRecargado || (typeof CRONO_ITEMS!=='undefined' && CRONO_ITEMS.length)) ? paActividadesPorConfirmarVisibles() : [];
+  const conObs = porConf.filter(x=>x.obs);
+  if(conObs.length) chips.push({type:'red', icon:'💬', label:`Observaciones del plan (${conObs.length})`, action:`paAlertConfirmaciones(true)`});
+  if(porConf.length) chips.push({type:'amber', icon:'⏳', label:`Subtareas sin confirmar (${porConf.length})`, action:`paAlertConfirmaciones()`});
   if(sinResp.length) chips.push({type:'red', icon:'👤', label:`${sinResp.length} sin responsable`, action:`paAlertFilter('sinResp')`});
   if(vencidas.length) chips.push({type:'red', icon:'⏰', label:`${vencidas.length} vencida${vencidas.length!==1?'s':''}`, action:`paAlertFilter('vencidas')`});
   if(enRiesgo.length) chips.push({type:'red', icon:'🚩', label:`${enRiesgo.length} en riesgo de retraso`, action:`paAlertFilter('enRiesgo')`});
@@ -16279,7 +16895,7 @@ function paRecordarAsignacionSubtareas(ids, pausada, opts){
   bg.querySelector('#paRecordarCerrar').addEventListener('click',()=>bg.remove());
   bg.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{ const id=b.getAttribute('data-go'); bg.remove(); paIrAsignarSubtareas(id); }));
 }
-async function paIrAsignarSubtareas(actId){
+async function paIrAsignarSubtareas(actId, soloVer){
   const a = PA_ITEMS.find(x=>x.id===actId); if(!a) return;
   try{ pdmClose(); }catch(e){}
   try{ paCloseModal(); }catch(e){}
@@ -16292,7 +16908,7 @@ async function paIrAsignarSubtareas(actId){
   setTimeout(()=>{
     const el = document.querySelector(`[onclick="cronoToggle('${actId}')"]`);
     if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
-    if(typeof cronoAddSubtareaModal==='function') cronoAddSubtareaModal(actId);
+    if(!soloVer && typeof cronoAddSubtareaModal==='function') cronoAddSubtareaModal(actId);
   }, 300);
 }
 // ¿La actividad estaba (o está) en pausa en esa fecha? Se usa en el calendario del plan de trabajo:
