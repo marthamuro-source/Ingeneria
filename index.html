@@ -9609,7 +9609,7 @@ function planBuildHTML() {
 
         dayActs.forEach(function(a) {
           var isProg = a.estatus === 'En progreso';
-          var isVenc = a.fechaTermino && a.fechaTermino < todayStr && a.estatus !== 'Terminado';
+          var isVenc = a.fechaTermino && a.fechaTermino < todayStr && a.estatus !== 'Terminado' && a.estatus !== 'Terminado (máximo avance)';
           var bg = isProg ? 'rgba(42,120,214,.2)' : isVenc ? 'rgba(226,75,74,.15)' : 'rgba(255,255,255,.06)';
           var tc = isProg ? '#7ab8f5' : isVenc ? '#ff6b6b' : 'var(--dim)';
           var isConect = a.tipo==='Conectividad (Bobinas)';
@@ -10108,7 +10108,7 @@ function planExportPDF(detallado) {
         else if(isVac){h+='<div class="cvac">Vac</div>';}
         acts.forEach(function(a){
           var isProg=a.estatus==='En progreso';
-          var isV=a.fechaTermino&&a.fechaTermino<todayStr&&a.estatus!=='Terminado';
+          var isV=a.fechaTermino&&a.fechaTermino<todayStr&&a.estatus!=='Terminado'&&a.estatus!=='Terminado (máximo avance)';
           var cls=isProg?'cp':isV?'cv':'cs';
           h+='<div class="chip '+cls+(isOnly?' chip-solo':'')+'">';
           h+='<div class="chip-body">';
@@ -10141,7 +10141,7 @@ function planExportPDF(detallado) {
       acts.forEach(function(a){
         var col=gc(member),ini=gi(member);
         var isProg=a.estatus==='En progreso';
-        var isV=a.fechaTermino&&a.fechaTermino<todayStr&&a.estatus!=='Terminado';
+        var isV=a.fechaTermino&&a.fechaTermino<todayStr&&a.estatus!=='Terminado'&&a.estatus!=='Terminado (máximo avance)';
         var ec=isProg?'#1a4fa0':isV?'#b91c1c':'#374151';
         var crItem=(typeof CRONO_ITEMS!=='undefined')?CRONO_ITEMS.find(function(x){return x.actividadId===a.id;}):null;
         var subs=detallado?((crItem&&crItem.subtareas)||[]):[];
