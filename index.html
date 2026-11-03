@@ -7658,11 +7658,19 @@ function cronoCumplimiento(a, crono, hasta){
   hasta = (hasta && hasta<corte) ? hasta : corte;
   const fechas = Object.keys(plan.dias).sort();
   let jorEsp = 0, jorOk = 0;
+  const entrega = (a.estatus==='En revisión'||a.estatus==='Terminado (máximo avance)'||a.estatus==='Terminado') && a.fechaEntregaProy ? String(a.fechaEntregaProy).slice(0,10) : null;
   const filas = plan.filas.map(f=>{
     const real = cronoRealPorDia(crono, f.st.id);
     let esp = 0, rea = 0;
-    fechas.forEach(ds=>{ if(ds<=hasta) esp += (plan.dias[ds][f.st.id]||0); });
-    Object.keys(real).forEach(ds=>{ if(ds<=hasta) rea += real[ds]; });
+    // Si la subtarea ya se completó (aunque sea hoy, con el día aún abierto), se mide hasta el día en que se completó:
+    // un día cerrado por completo no puede quedar "sin medir" ni contarse como atraso.
+    let hastaF = hasta, acum = 0, hoyK = repDateKey(new Date());
+    // Actividad ya entregada/terminada: el día de la entrega cuenta como día cerrado para todas sus subtareas.
+    if(entrega && entrega>hastaF) hastaF = entrega<=hoyK ? entrega : hoyK;
+    const dReal = Object.keys(real).sort();
+    for(const ds of dReal){ acum += real[ds]; if(acum >= f.v.cantidad-1e-9){ if(ds>hastaF && ds<=hoyK) hastaF = ds; break; } }
+    fechas.forEach(ds=>{ if(ds<=hastaF) esp += (plan.dias[ds][f.st.id]||0); });
+    Object.keys(real).forEach(ds=>{ if(ds<=hastaF) rea += real[ds]; });
     esp = Math.min(esp, f.v.cantidad); rea = Math.min(Math.max(rea,0), f.v.cantidad);
     const upj = cronoStUnidPorJornada(f.v) || 1;
     const pct = esp>1e-9 ? rea/esp : null;
@@ -7673,7 +7681,7 @@ function cronoCumplimiento(a, crono, hasta){
     else if(pct>=CRONO_CUMP_PARCIAL) estado = 'parcial';
     else estado = 'atrasada';
     if(esp>1e-9){ jorEsp += esp/upj; jorOk += Math.min(rea,esp)/upj; }
-    return {st:f.st, v:f.v, inicio:f.inicio, fin:f.fin, esp, rea, pct, estado, falta:Math.max(0,esp-rea), atrasoDias:Math.max(0,esp-rea)/upj, real};
+    return {st:f.st, v:f.v, inicio:f.inicio, fin:f.fin, hasta:hastaF, esp, rea, pct, estado, falta:Math.max(0,esp-rea), atrasoDias:Math.max(0,esp-rea)/upj, real};
   });
   const pct = jorEsp>1e-9 ? jorOk/jorEsp : null;
   const estado = pct===null ? 'sin_inicio' : pct>=CRONO_CUMP_OK ? 'cumple' : pct>=CRONO_CUMP_PARCIAL ? 'parcial' : 'atrasada';
@@ -7704,7 +7712,7 @@ function cronoCumpHTML(a, crono){
     const e = cump.plan.dias[ds] ? (cump.plan.dias[ds][f.st.id]||0) : 0;
     const r = f.real[ds]||0;
     if(e<=1e-9 && r<=1e-9) return `<td style="padding:6px;text-align:center;color:var(--dim)">—</td>`;
-    if(ds>cump.hasta) return `<td style="padding:6px;text-align:center;color:var(--dim)" title="Esperado ${cronoFmtU(e)}${r?' · reportado '+cronoFmtU(r):''}">${r>0?cronoFmtU(r)+'/':''}<span style="opacity:.8">${cronoFmtU(e)}</span></td>`;
+    if(ds>(f.hasta||cump.hasta)) return `<td style="padding:6px;text-align:center;color:var(--dim)" title="Esperado ${cronoFmtU(e)}${r?' · reportado '+cronoFmtU(r):''}">${r>0?cronoFmtU(r)+'/':''}<span style="opacity:.8">${cronoFmtU(e)}</span></td>`;
     let col = 'var(--green)';
     if(e<=1e-9) col = 'var(--accent)';
     else if(r/e < CRONO_CUMP_OK) col = r/e>=CRONO_CUMP_PARCIAL ? 'var(--amber)' : 'var(--red)';
@@ -9887,7 +9895,7 @@ function planCorteSeccion(weeks, C){
           dias.forEach(function(ds){
             var e=plan.dias[ds]?(plan.dias[ds][st.id]||0):0, r=f.real[ds]||0;
             if(e<=1e-9 && r<=1e-9){ h+='<td class="dc" style="color:#d1d5db">&mdash;</td>'; return; }
-            if(ds>cump.hasta){ h+='<td class="dc" style="color:#9ca3af">'+(r>0?fq(r)+'/':'')+fq(e)+'</td>'; return; }
+            if(ds>(f.hasta||cump.hasta)){ h+='<td class="dc" style="color:#9ca3af">'+(r>0?fq(r)+'/':'')+fq(e)+'</td>'; return; }
             var c='#166534';
             if(e<=1e-9) c='#1a4fa0'; else if(r/e<CRONO_CUMP_OK) c=(r/e>=CRONO_CUMP_PARCIAL)?'#92400e':'#b91c1c';
             h+='<td class="dc" style="color:'+c+';font-weight:700">'+fq(r)+'/'+fq(e)+'</td>';
