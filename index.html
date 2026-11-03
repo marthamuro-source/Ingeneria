@@ -9860,6 +9860,25 @@ function planCorteSeccion(weeks, C){
         var entr=(a.estatus==='En revisión'||a.estatus==='Terminado (máximo avance)'||a.estatus==='Terminado')?(a.fechaEntregaProy||a.fechaTermino||null):null;
         if(entr) entr=String(entr).slice(0,10);
         if(entr && entr<wS) return;                                                // se entregó antes de esta semana
+        // Actividad en pausa toda la semana (no se espera ningún avance): solo motivo, inicio y fin programados; sin desglosar subtareas
+        if(!entr && plan.fin>=wS){
+          var pausadaSem=(typeof paEnPausaEnFecha==='function') && dias.some(function(ds){return paEnPausaEnFecha(a,ds);});
+          var espSem=0;
+          if(pausadaSem){ dias.forEach(function(ds){ if(plan.dias[ds]) Object.keys(plan.dias[ds]).forEach(function(k){ espSem+=plan.dias[ds][k]; }); }); }
+          if(pausadaSem && espSem<=1e-9){
+            var iniProg=fechas.filter(function(d){return d>=wS;})[0]||plan.fin;
+            h+='<tbody><tr><td style="white-space:nowrap"><span class="av" style="background:'+C.gc(member)+'">'+C.gi(member)+'</span>'+member.split(' ').slice(0,2).join(' ')+'</td>';
+            h+='<td><b>'+esc(a.actividad||'--')+'</b></td>';
+            var isConP=(a.tipo==='Conectividad (Bobinas)'||a.tipo==='Planos de Conectividad');
+            h+='<td><b>'+esc(a.proyecto||'--')+'</b><br><b style="font-size:9px;color:#374151">'+esc(a.tipo||'--')+'</b>'+(isConP&&a.numBobina?' &nbsp;Bna #'+esc(a.numBobina):'')+'</td>';
+            h+='<td style="font-family:monospace;font-size:8px;color:#1a4fa0">'+esc(a.folio||'--')+'</td>';
+            h+='<td colspan="5" style="font-size:8.5px;color:#374151"><b style="color:#92400e">En pausa</b> &middot; Inicio programado: <b>'+fd(iniProg)+'</b> &middot; Fin programado: <b>'+fd(plan.fin)+'</b> &middot; <i>no se espera avance esta semana; las subtareas no se desglosan</i></td>';
+            h+='<td></td><td></td><td class="dc">&mdash;</td><td><span class="stchip st-val">En pausa</span></td></tr>';
+            h+=planNotasFilas(a,crItem,12,fd);
+            h+='</tbody>';
+            return;
+          }
+        }
         var vis=[], futuras=[];
         cump.filas.forEach(function(f){
           if(entr && f.inicio && f.inicio>entr) return;                            // lo que quedó después de la entrega ya no cuenta
@@ -9941,7 +9960,7 @@ function planCorteSeccion(weeks, C){
     });
     h+='</tbody></table>';
   }
-  h+='<div class="cmeta"><b>C&oacute;mo leer el corte.</b> Solo se listan subtareas cuyo plan toca la semana (si su plan termin&oacute; antes del lunes no aparece, est&eacute; cerrada o no). Una actividad ya entregada o terminada se ubica por su fecha real de entrega: si la entreg&oacute; antes del lunes no aparece. Cada semana se corta en su viernes: de una actividad que sigue despu&eacute;s solo salen las subtareas que se alcanzan a tocar hasta ese d&iacute;a, y la que cruza el viernes indica cu&aacute;nto del plan le toca. '
+  h+='<div class="cmeta"><b>C&oacute;mo leer el corte.</b> Solo se listan subtareas cuyo plan toca la semana (si su plan termin&oacute; antes del lunes no aparece, est&eacute; cerrada o no). Una actividad ya entregada o terminada se ubica por su fecha real de entrega: si la entreg&oacute; antes del lunes no aparece. Si una actividad est&aacute; en pausa toda la semana solo se indica el motivo y sus fechas programadas de inicio y fin, sin desglosar subtareas. Cada semana se corta en su viernes: de una actividad que sigue despu&eacute;s solo salen las subtareas que se alcanzan a tocar hasta ese d&iacute;a, y la que cruza el viernes indica cu&aacute;nto del plan le toca. '
     +'En cada d&iacute;a se muestra <b>reportado / esperado</b> (en la unidad de la subtarea): lo esperado sale del plan que el proyectista confirm&oacute; y de la fracci&oacute;n de jornada que le toca ese d&iacute;a (viernes = 6/9; vacaciones, festivos y pausas no se esperan). '
     +'<b>Meta al viernes</b> es lo acumulado que deber&iacute;a llevar al cierre de la semana; <b>Real</b> y <b>%</b> se miden contra lo esperado a la fecha de evaluaci&oacute;n. Cumple &ge;95% &middot; parcial 80-94% &middot; atrasada &lt;80%. El % de la actividad se pondera por jornadas esperadas, sin que lo adelantado tape lo atrasado. Los reportes por porcentaje general no se miden.</div>';
   return h;
