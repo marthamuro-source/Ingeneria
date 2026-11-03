@@ -9809,14 +9809,20 @@ function planCorteSeccion(weeks, C){
           return;
         }
         var plan=cump.plan, fechas=Object.keys(plan.dias).sort();
+        // Actividad ya entregada/terminada: manda su fecha real de entrega, no el pronóstico recalculado del plan
+        var entr=(a.estatus==='En revisión'||a.estatus==='Terminado (máximo avance)'||a.estatus==='Terminado')?(a.fechaEntregaProy||a.fechaTermino||null):null;
+        if(entr) entr=String(entr).slice(0,10);
+        if(entr && entr<wS) return;                                                // se entregó antes de esta semana
         var vis=[], futuras=[];
         cump.filas.forEach(function(f){
+          if(entr && f.inicio && f.inicio>entr) return;                            // lo que quedó después de la entrega ya no cuenta
           var metaV=0;
           fechas.forEach(function(ds){ if(ds<=wE) metaV+=(plan.dias[ds][f.st.id]||0); });
           metaV=Math.min(metaV,f.v.cantidad);
           if(!f.inicio || f.inicio>wE){ if(f.inicio) futuras.push(f); return; }      // no se alcanza a tocar hasta el viernes
-          if(f.fin && f.fin<wS) return;                                                // su plan terminó antes de esta semana (cerrada o no): no es trabajo de esta semana
-          vis.push({f:f, metaV:metaV, cruza:!!(f.fin && f.fin>wE)});
+          var finEf=(entr && f.fin && entr<f.fin)?entr:f.fin;
+          if(finEf && finEf<wS) return;                                                // su plan terminó antes de esta semana (cerrada o no): no es trabajo de esta semana
+          vis.push({f:f, metaV:metaV, cruza:!!(finEf && finEf>wE)});
         });
         var pr=(typeof paPausaResumen==='function')?paPausaResumen(a):null;
         if(!vis.length) return;
@@ -9828,7 +9834,7 @@ function planCorteSeccion(weeks, C){
         var isCon=(a.tipo==='Conectividad (Bobinas)'||a.tipo==='Planos de Conectividad');
         h+='<td><b>'+esc(a.proyecto||'--')+'</b><br><b style="font-size:9px;color:#374151">'+esc(a.tipo||'--')+'</b>'+(isCon&&a.numBobina?' &nbsp;Bna #'+esc(a.numBobina):'')+'</td>';
         h+='<td style="font-family:monospace;font-size:8px;color:#1a4fa0">'+esc(a.folio||'--')+'</td>';
-        h+='<td colspan="5" style="font-size:8.5px;color:#374151">Pron&oacute;stico completo: <b>'+fd(plan.fin)+'</b>'+(a.fechaTermino?' &middot; L&iacute;mite: '+fd(a.fechaTermino):'')+' &middot; <b>'+esc(a.estatus||'')+'</b>'+(cierra?' &middot; <b style="color:#166534">cierra esta semana</b>':' &middot; <b style="color:#3730a3">contin&uacute;a despu&eacute;s del viernes</b>')+'</td>';
+        h+='<td colspan="5" style="font-size:8.5px;color:#374151">'+(entr?'Entregada: <b>'+fd(entr)+'</b>':'Pron&oacute;stico completo: <b>'+fd(plan.fin)+'</b>')+(a.fechaTermino?' &middot; L&iacute;mite: '+fd(a.fechaTermino):'')+' &middot; <b>'+esc(a.estatus||'')+'</b>'+(cierra?' &middot; <b style="color:#166534">cierra esta semana</b>':' &middot; <b style="color:#3730a3">contin&uacute;a despu&eacute;s del viernes</b>')+'</td>';
         h+='<td></td><td></td>';
         h+='<td class="dc" style="font-weight:700;color:'+colDe(estAct)+'">'+(weekEval&&cump.pct!==null?Math.round(cump.pct*100)+'%':'&mdash;')+'</td>';
         h+='<td>'+(weekEval&&cump.pct!==null?chipDe(cump.estado):'<span class="stchip st-nuevo">Programada</span>')+'</td></tr>';
@@ -9888,7 +9894,7 @@ function planCorteSeccion(weeks, C){
     });
     h+='</tbody></table>';
   }
-  h+='<div class="cmeta"><b>C&oacute;mo leer el corte.</b> Solo se listan subtareas cuyo plan toca la semana (si su plan termin&oacute; antes del lunes no aparece, est&eacute; cerrada o no). Cada semana se corta en su viernes: de una actividad que sigue despu&eacute;s solo salen las subtareas que se alcanzan a tocar hasta ese d&iacute;a, y la que cruza el viernes indica cu&aacute;nto del plan le toca. '
+  h+='<div class="cmeta"><b>C&oacute;mo leer el corte.</b> Solo se listan subtareas cuyo plan toca la semana (si su plan termin&oacute; antes del lunes no aparece, est&eacute; cerrada o no). Una actividad ya entregada o terminada se ubica por su fecha real de entrega: si la entreg&oacute; antes del lunes no aparece. Cada semana se corta en su viernes: de una actividad que sigue despu&eacute;s solo salen las subtareas que se alcanzan a tocar hasta ese d&iacute;a, y la que cruza el viernes indica cu&aacute;nto del plan le toca. '
     +'En cada d&iacute;a se muestra <b>reportado / esperado</b> (en la unidad de la subtarea): lo esperado sale del plan que el proyectista confirm&oacute; y de la fracci&oacute;n de jornada que le toca ese d&iacute;a (viernes = 6/9; vacaciones, festivos y pausas no se esperan). '
     +'<b>Meta al viernes</b> es lo acumulado que deber&iacute;a llevar al cierre de la semana; <b>Real</b> y <b>%</b> se miden contra lo esperado a la fecha de evaluaci&oacute;n. Cumple &ge;95% &middot; parcial 80-94% &middot; atrasada &lt;80%. El % de la actividad se pondera por jornadas esperadas, sin que lo adelantado tape lo atrasado. Los reportes por porcentaje general no se miden.</div>';
   return h;
