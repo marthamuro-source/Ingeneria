@@ -9815,11 +9815,11 @@ function planCorteSeccion(weeks, C){
           fechas.forEach(function(ds){ if(ds<=wE) metaV+=(plan.dias[ds][f.st.id]||0); });
           metaV=Math.min(metaV,f.v.cantidad);
           if(!f.inicio || f.inicio>wE){ if(f.inicio) futuras.push(f); return; }      // no se alcanza a tocar hasta el viernes
-          if(f.estado==='completada' && f.fin && f.fin<wS) return;                   // ya se cerró en semanas anteriores
+          if(f.fin && f.fin<wS) return;                                                // su plan terminó antes de esta semana (cerrada o no): no es trabajo de esta semana
           vis.push({f:f, metaV:metaV, cruza:!!(f.fin && f.fin>wE)});
         });
         var pr=(typeof paPausaResumen==='function')?paPausaResumen(a):null;
-        if(!vis.length && !pr) return;
+        if(!vis.length) return;
         var col=C.gc(member), ini=C.gi(member);
         var cierra = !futuras.length && !vis.some(function(v){return v.cruza;});
         var estAct = weekEval && cump.pct!==null ? cump.estado : 'sin_inicio';
