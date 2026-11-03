@@ -9417,6 +9417,33 @@ function planProySave() {
 }
 
 
+// ── Alcance del plan: todo el equipo o solo algunos proyectistas ──
+function planMiembros(){
+  var sel = window.PLAN_MEMBERS;
+  if(!sel || !sel.length) return PA_MEMBERS.slice();
+  var r = PA_MEMBERS.filter(function(m){ return sel.indexOf(m)>=0; });
+  return r.length ? r : PA_MEMBERS.slice();
+}
+function planAlcanceTexto(){
+  var sel = window.PLAN_MEMBERS;
+  if(!sel || !sel.length || sel.length>=PA_MEMBERS.length) return 'Todo el equipo';
+  return planMiembros().map(function(m){ return m.split(' ')[0]; }).join(', ');
+}
+function planToggleMiembro(i){
+  var m = PA_MEMBERS[i]; if(!m) return;
+  var sel = (window.PLAN_MEMBERS||[]).slice();
+  var k = sel.indexOf(m);
+  if(k>=0) sel.splice(k,1); else sel.push(m);
+  window.PLAN_MEMBERS = sel.length>=PA_MEMBERS.length ? null : (sel.length?sel:null);
+  var modal = document.querySelector('#planModalBg > div');
+  if(modal) modal.innerHTML = planBuildHTML();
+}
+function planTodoEquipo(){
+  window.PLAN_MEMBERS = null;
+  var modal = document.querySelector('#planModalBg > div');
+  if(modal) modal.innerHTML = planBuildHTML();
+}
+
 function planOpen() {
   var old = document.getElementById('planModalBg');
   if (old) old.remove();
@@ -9482,6 +9509,18 @@ function planBuildHTML() {
   h += '<button onclick="planExportPDF(\'corte\')" title="Mismo reporte, cortado al viernes de cada semana: subtareas que se alcanzan a tocar, parte que cruza el viernes y cumplimiento del rendimiento diario" style="font-size:11px;padding:6px 14px;border-radius:7px;border:0.5px solid rgba(61,214,140,.45);background:rgba(61,214,140,.1);color:#2fbf80;cursor:pointer;font-family:var(--font)">⬇ PDF corte viernes</button>';
   h += '<button onclick="document.getElementById(\'planModalBg\').remove()" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer;padding:0 4px;line-height:1">×</button>';
   h += '</div></div>';
+  // Selector de proyectistas
+  var _selM = (window.PLAN_MEMBERS||[]);
+  var _todos = !_selM.length;
+  h += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:10px 20px;border-bottom:0.5px solid var(--border)">';
+  h += '<span style="font-size:11px;color:var(--dim);margin-right:2px">Plan de:</span>';
+  h += '<button onclick="planTodoEquipo()" style="font-size:11px;padding:5px 12px;border-radius:20px;border:0.5px solid '+(_todos?'#2a78d6':'var(--border)')+';background:'+(_todos?'rgba(42,120,214,.18)':'transparent')+';color:'+(_todos?'#5a9ff0':'var(--dim)')+';cursor:pointer;font-family:var(--font);font-weight:'+(_todos?'700':'400')+'">Todo el equipo</button>';
+  PA_MEMBERS.forEach(function(m,i){
+    var on = _selM.indexOf(m)>=0;
+    h += '<button onclick="planToggleMiembro('+i+')" style="font-size:11px;padding:5px 12px;border-radius:20px;border:0.5px solid '+(on?getMColor(m):'var(--border)')+';background:'+(on?getMColor(m):'transparent')+';color:'+(on?'#fff':'var(--dim)')+';cursor:pointer;font-family:var(--font);font-weight:'+(on?'700':'400')+'">'+(on?'✓ ':'')+m.split(' ')[0]+'</button>';
+  });
+  h += '<span style="font-size:10px;color:var(--dim);margin-left:auto">'+(_todos?'Se incluye a todos':'Solo: '+planAlcanceTexto())+' · aplica a la vista y a los PDF</span>';
+  h += '</div>';
   h += '<div style="padding:16px 20px;overflow-x:auto">';
 
   weeks.forEach(function(week, wi) {
@@ -9506,7 +9545,7 @@ function planBuildHTML() {
     h += '</div>';
 
     // Filas por proyectista
-    PA_MEMBERS.forEach(function(member) {
+    planMiembros().forEach(function(member) {
       var col = getMColor(member);
       var ini = getIni(member);
       var shortName = member.split(' ').slice(0,2).join(' ');
@@ -9799,7 +9838,7 @@ function planCorteSeccion(weeks, C){
     h+='<table class="lst"><thead><tr><th>Proyectista</th><th>Actividad / Subtareas</th><th>Proyecto / Tipo &middot; Plan</th><th>Folio</th>';
     dias.forEach(function(ds,i){h+='<th class="dc">'+dn[i]+' '+fd(ds)+'</th>';});
     h+='<th class="dc">Meta al viernes</th><th class="dc">Real</th><th class="dc">%</th><th>Estado</th></tr></thead>';
-    PA_MEMBERS.forEach(function(member){
+    planMiembros().forEach(function(member){
       PA_ITEMS.forEach(function(a){
         if(a.responsable!==member||!a.fechaAsig) return;
         var crItem=CRONO_ITEMS.find(function(x){return x.actividadId===a.id;});
@@ -9910,6 +9949,8 @@ function planExportPDF(detallado) {
   var numWeeks = window.PLAN_WEEKS || 3;
   var planStart = window.PLAN_START || today;
   var weeks = planGetWeeks(planStart, numWeeks);
+  var _miembrosPlan = planMiembros();
+  var _alcance = planAlcanceTexto();
   var genStr = today.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   var pLabel = numWeeks===4?'1 mes':numWeeks+(numWeeks===1?' semana':' semanas');
 
@@ -9977,7 +10018,7 @@ function planExportPDF(detallado) {
   var h='<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Plan de Trabajo C3NTRO'+(corte?' - Corte viernes':detallado?' - Detallado':'')+'</title><style>'+css+'</style></head><body>';
 
   h+='<div class="hdr"><div><div class="logo">C3NTRO Telecom</div><div style="font-size:10px;color:#6b7280;margin-top:2px">Coordinacion de Ingenieria</div></div>';
-  h+='<div class="rtitle"><h1>Plan de Trabajo del Equipo'+(corte?' - Corte al viernes':detallado?' - Detallado por dia':'')+'</h1><p>Proximas '+pLabel+' - '+genStr+'<br>Martha Raquel Muro Morales</p></div></div>';
+  h+='<div class="rtitle"><h1>Plan de Trabajo del Equipo'+(corte?' - Corte al viernes':detallado?' - Detallado por dia':'')+'</h1><p>Proximas '+pLabel+' - '+genStr+'<br>Plan de: <b>'+escapeHtml(_alcance)+'</b><br>Martha Raquel Muro Morales</p></div></div>';
   h+='<div class="pbt"><button onclick="window.print()">Exportar PDF / Imprimir</button></div>';
 
   // 1. PROYECTOS
@@ -10000,6 +10041,7 @@ function planExportPDF(detallado) {
       var wS=week[0].toISOString().slice(0,10),wE=week[4].toISOString().slice(0,10);
       PA_ITEMS.forEach(function(a){
         if(!a.fechaAsig) return;
+        if(_miembrosPlan.indexOf(a.responsable)<0) return;
         var e=a.fechaTermino||a.fechaAsig;
         if(a.fechaAsig<=wE&&e>=wS){var k=(a.proyecto||a.propietario||'Sin proyecto')+' - '+(a.tipo||'');pm[k]=(pm[k]||0)+1;}
       });
@@ -10022,7 +10064,7 @@ function planExportPDF(detallado) {
     h+='<table class="cal-table"><thead><tr><th class="ncel">Proyectista</th>';
     week.forEach(function(day){h+='<th>'+fDay(day)+'</th>';});
     h+='</tr></thead><tbody>';
-    PA_MEMBERS.forEach(function(member){
+    planMiembros().forEach(function(member){
       var col=gc(member),ini=gi(member);
       h+='<tr><td class="ncel"><span class="av" style="background:'+col+'">'+ini+'</span><span style="display:inline-block;vertical-align:middle;line-height:1.25">'+member.split(' ').slice(0,2).join('<br>')+'</span></td>';
       week.forEach(function(day){
@@ -10067,7 +10109,7 @@ function planExportPDF(detallado) {
     var wS=week[0].toISOString().slice(0,10),wE=week[4].toISOString().slice(0,10);
     h+='<div class="whdr">Semana '+(wi+1)+' - '+fWk(week)+'</div>';
     h+='<table class="lst"><thead><tr><th>Proyectista</th><th>'+(detallado?'Actividad / Subtareas':'Actividad')+'</th><th>'+(detallado?'Proyecto / Tipo &middot; Avance':'Proyecto / Tipo')+'</th><th>Folio</th><th>Inicio</th><th>Termino</th><th>Estatus</th></tr></thead>';
-    PA_MEMBERS.forEach(function(member){
+    planMiembros().forEach(function(member){
       var acts=PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return a.fechaAsig<=wE&&(a.fechaTermino||a.fechaAsig)>=wS;});
       acts.forEach(function(a){
         var col=gc(member),ini=gi(member);
