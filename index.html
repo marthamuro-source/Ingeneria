@@ -23433,6 +23433,79 @@ function segMount(tab){
   cfg.render();
 }
 
+// ── "Qué te toca hoy": lo mínimo por subtarea para cumplir el rendimiento del plan al cierre del día ──
+// Devuelve {tipo, lineas:[{st, estado, texto...}], siguiente, porConfirmar}
+function cronoHoyTeToca(a){
+  if(!a) return null;
+  const hoy = repDateKey(new Date());
+  if(a.estatus==='En revisión' || a.estatus==='Terminado' || a.estatus==='Terminado (máximo avance)') return null;
+  if(typeof CRONO_ITEMS==='undefined' || !CRONO_ITEMS.length){ try{ cronoLoad(); }catch(e){} }
+  const crono = (CRONO_ITEMS||[]).find(x=>x.actividadId===a.id);
+  if(!crono || !(crono.subtareas||[]).length) return null;
+  const porConfirmar = cronoSubsPorConfirmar(crono).length;
+  if(a.estatus==='En pausa') return {tipo:'pausa', lineas:[], porConfirmar};
+  const plan = cronoPlanDiario(a, crono);
+  if(!plan) return porConfirmar ? {tipo:'sin_plan', lineas:[], porConfirmar} : null;
+  const fechas = Object.keys(plan.dias).sort();
+  const lineas = [];
+  plan.filas.forEach(f=>{
+    const real = cronoRealPorDia(crono, f.st.id);
+    const cant = f.v.cantidad;
+    let acumHoy = 0, acumAyer = 0, realHoyAcum = 0, realAyer = 0;
+    fechas.forEach(ds=>{ const e = plan.dias[ds][f.st.id]||0; if(ds<=hoy) acumHoy += e; if(ds<hoy) acumAyer += e; });
+    Object.keys(real).forEach(ds=>{ if(ds<=hoy) realHoyAcum += real[ds]; if(ds<hoy) realAyer += real[ds]; });
+    acumHoy = Math.min(acumHoy, cant); acumAyer = Math.min(acumAyer, cant);
+    const esperadoHoy = (plan.dias[hoy] && plan.dias[hoy][f.st.id]) || 0;
+    const realHoy = real[hoy]||0;
+    const completa = realHoyAcum >= cant-1e-9;
+    if(completa && realHoy<=1e-9) return;                       // se terminó en días anteriores
+    if(esperadoHoy<=1e-9 && (acumHoy-realHoyAcum)<=1e-9) return; // hoy no se espera nada de esta subtarea
+    const falta = Math.max(0, acumHoy - realHoyAcum);
+    const atrasoPrev = Math.max(0, acumAyer - realAyer);
+    lineas.push({st:f.st, cant, unidad:f.st.unidad||'', esperadoHoy, acumHoy, realHoyAcum, realHoy, falta, atrasoPrev, completa,
+      terminaHoy: !!(f.fin && f.fin<=hoy), hecho: falta<=1e-9});
+  });
+  if(lineas.length) return {tipo:'dia', lineas, porConfirmar};
+  const prox = fechas.filter(d=>d>hoy)[0] || null;
+  return {tipo:'sin_trabajo', lineas:[], siguiente:prox, porConfirmar};
+}
+function cronoHoyHTML(a){
+  let r; try{ r = cronoHoyTeToca(a); }catch(e){ console.warn('hoyTeToca', e); return ''; }
+  if(!r) return '';
+  const fmtF = ds=>{ const d=new Date(ds+'T00:00:00'); return d.getDate()+'/'+(d.getMonth()+1); };
+  const box = (inner, color)=>`<div style="margin:-2px 0 2px 18px;padding:8px 10px;border-left:2px solid ${color};background:rgba(255,255,255,.02);border-radius:0 8px 8px 0;font-size:11px;color:var(--muted);line-height:1.5">${inner}</div>`;
+  let h = '';
+  if(r.porConfirmar){
+    h += `<div style="color:var(--amber);margin-bottom:4px">⏳ Tienes ${r.porConfirmar} subtarea${r.porConfirmar===1?'':'s'} por confirmar. <a href="#" onclick="paIrAsignarSubtareas('${a.id}',true);return false" style="color:var(--accent);text-decoration:underline">Confirma tu plan</a> para poder reportar.</div>`;
+  }
+  if(r.tipo==='pausa') return box(h+'⏸ Actividad en pausa: hoy no se espera avance.', 'var(--amber)');
+  if(r.tipo==='sin_plan') return h ? box(h,'var(--amber)') : '';
+  if(r.tipo==='sin_trabajo'){
+    return box(h+`Hoy no se espera avance de esta actividad${r.siguiente?` · retomas el <b>${fmtF(r.siguiente)}</b>`:''}.`, 'var(--border)');
+  }
+  const fu = n=>cronoFmtU(n);
+  const pend = r.lineas.filter(l=>!l.hecho);
+  const hechas = r.lineas.filter(l=>l.hecho);
+  h += `<div style="font-weight:600;color:var(--text);margin-bottom:3px">${pend.length?'🎯 Hoy te toca':'✅ Hoy ya cumpliste lo del plan'}</div>`;
+  pend.forEach(l=>{
+    const nom = segIndEsc(l.st.nombre||'');
+    const u = segIndEsc(l.unidad);
+    let t;
+    if(l.terminaHoy){
+      t = `<b style="color:var(--text)">Terminar hoy: ${nom}</b> — ${fu(l.cant)} ${u} en total; te faltan <b style="color:var(--amber)">${fu(l.cant-l.realHoyAcum)} ${u}</b> (llevas ${fu(l.realHoyAcum)}).`;
+    } else {
+      t = `<b style="color:var(--text)">${nom}</b>: llegar hoy a <b style="color:var(--amber)">${fu(l.acumHoy)} de ${fu(l.cant)} ${u}</b> acumulado — te faltan <b>${fu(l.falta)} ${u}</b> (llevas ${fu(l.realHoyAcum)}).`;
+    }
+    if(l.atrasoPrev>1e-9) t += ` <span style="color:var(--red)">Incluye ${fu(Math.min(l.atrasoPrev,l.falta))} ${u} de días anteriores.</span>`;
+    h += `<div style="margin:2px 0">• ${t}</div>`;
+  });
+  hechas.forEach(l=>{
+    h += `<div style="margin:2px 0;color:var(--green)">✓ ${segIndEsc(l.st.nombre||'')} — ${l.completa?'terminada':'cumplido lo de hoy'} (${fu(l.realHoyAcum)}/${fu(l.cant)} ${segIndEsc(l.unidad)})</div>`;
+  });
+  h += `<div style="margin-top:4px;font-size:10px;color:var(--dim)">Es el mínimo para cumplir el rendimiento del día; si avanzas más del plan, mejor (adelantas).</div>`;
+  return box(h, pend.length?'var(--amber)':'var(--green)');
+}
+
 // ── "Mis pendientes" (solo proyectista) — resumen visual de qué falta hacer ──
 function renderSegPendientes(){
   const el = document.getElementById('segPendientesMount');
@@ -23517,7 +23590,7 @@ function renderSegPendientes(){
   if(!ordenadas.length){
     html += `<div style="padding:24px;text-align:center;color:var(--dim);font-size:12px;border:0.5px dashed var(--border);border-radius:8px">🎉 No tienes asignaciones pendientes.</div>`;
   } else {
-    html += `<div style="display:flex;flex-direction:column;gap:6px;max-height:360px;overflow-y:auto;padding-right:4px">`;
+    html += `<div style="display:flex;flex-direction:column;gap:6px;max-height:560px;overflow-y:auto;padding-right:4px">`;
     html += ordenadas.map(a=>{
       const cfg = (typeof PA_STATUS_CFG!=='undefined' && PA_STATUS_CFG[a.estatus]) ? PA_STATUS_CFG[a.estatus] : {cls:'bgr',dot:'var(--dim)'};
       const _dpPend = (typeof paDiasEnPausa==='function') ? paDiasEnPausa(a) : 0;
@@ -23536,7 +23609,7 @@ function renderSegPendientes(){
           fechaTxt = `${faltan} día${faltan!==1?'s':''} hábil${faltan!==1?'es':''}`; fechaColor = faltan<=2 ? 'var(--amber)' : 'var(--dim)';
         }
       }
-      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;background:var(--surface2);border:0.5px solid var(--border);border-radius:8px">
+      return `<div style="display:flex;flex-direction:column;gap:4px"><div style="display:flex;align-items:center;gap:10px;padding:9px 10px;background:var(--surface2);border:0.5px solid var(--border);border-radius:8px">
         <span style="width:8px;height:8px;border-radius:50%;background:${cfg.dot};flex-shrink:0"></span>
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.folio||a.actividad||'—'}</div>
@@ -23545,7 +23618,7 @@ function renderSegPendientes(){
         <span class="badge ${cfg.cls}" style="font-size:9px;flex-shrink:0;white-space:nowrap">${a.estatus||'Sin iniciar'}</span>
         ${pausaBadgePend}
         <div style="font-size:11px;color:${fechaColor};font-weight:500;white-space:nowrap;flex-shrink:0;min-width:100px;text-align:right">${fechaTxt}</div>
-      </div>`;
+      </div>${cronoHoyHTML(a)}</div>`;
     }).join('');
     html += `</div>`;
   }
