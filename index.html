@@ -23410,9 +23410,17 @@ async function segRefrescarCalidad(){
   await calRevRecargarDeSupabase();
   if(segActiveTab==='calidad') renderSegCalidad(); // repintar con datos frescos
 }
+async function segRefrescarPendientes(){
+  renderSegPendientes(); // pintar de inmediato con lo que ya haya en memoria
+  try{
+    await paRefreshFromSupabase();
+    await cronoRecargarDeSupabase(); // el "Hoy te toca" depende del cronograma (subtareas y reportes) al día
+  }catch(e){ console.warn('segRefrescarPendientes', e); }
+  if(segActiveTab==='pendientes') renderSegPendientes(); // repintar con datos frescos
+}
 function segMount(tab){
   const mountMap = {
-    pendientes:{ target:'segPendientesMount', source:null,       render:()=>{ renderSegPendientes(); } },
+    pendientes:{ target:'segPendientesMount', source:null,       render:()=>{ segRefrescarPendientes(); } },
     udemy:    { target:'segUdemyMount',    source:'v-udemy',    render:()=>{ if(typeof renderUdemy==='function') renderUdemy(); } },
     reporteo: { target:'segReporteoMount', source:'v-reporteo', render:()=>{ if(typeof renderReporteoView==='function') renderReporteoView(); } },
     avance:   { target:'segAvanceMount',   source:null,         render:()=>{ segRefrescarAsignacion(); } },
