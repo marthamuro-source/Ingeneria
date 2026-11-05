@@ -7639,7 +7639,7 @@ function cronoPlanDiario(a, crono){
     if(c>0 && typeof paEnPausaEnFecha==='function' && paEnPausaEnFecha(a, ds)) c = 0;
     return c;
   };
-  const dias = {}, filas = [];
+  const dias = {}, filas = [], jor = {};
   let cursor = base, usado = 0, guard = 0;
   const siguienteDia = ()=>{ const d = new Date(cursor+'T00:00:00'); d.setDate(d.getDate()+1); cursor = repDateKey(d); usado = 0; };
   const hechos = new Set(), bloques = [];
@@ -7665,11 +7665,12 @@ function cronoPlanDiario(a, crono){
           fin[x.st.id] = cursor;
         });
         usado += take; resto -= take;
+        jor[cursor] = (jor[cursor]||0) + take;
       }
     }
     vals.forEach(x=>filas.push({st:x.st, v:x.v, inicio:ini[x.st.id]||null, fin:fin[x.st.id]||null, jornadas:cronoStDurPlan(x.v)}));
   });
-  return {dias, filas, base, fin: cursor};
+  return {dias, filas, jor, base, fin: cursor};
 }
 // Reportado por día para una subtarea (solo reportes por subtarea; los de porcentaje general no cuentan)
 function cronoRealPorDia(crono, stId){
@@ -15408,6 +15409,81 @@ function paCerrarCargaPeriodoModal(){
   if(modal) modal.classList.remove('open');
 }
 
+// ── Ocupación de tiempo por proyecto (combinación): lo REPORTADO manda; el PLAN completa los días sin reporte ──
+// Por cada día hábil de la persona (sin fines de semana, festivos ni vacaciones; viernes = 6/9):
+//  1) Lo reportado ese día (unidades ÷ rendimiento = jornadas) se atribuye al proyecto de la actividad.
+//  2) Si sobra jornada, se completa con lo PLANEADO de las actividades que ese día no reportaron (estimado).
+//  3) Si aún sobra, se reparte en partes iguales entre las actividades sin subtareas activas ese día (estimado).
+// Devuelve días-persona por proyecto, cuánto de eso es estimado, y los días hábiles disponibles.
+function paOcupacionPersona(name, rangeStart, rangeEnd){
+  if(typeof CRONO_ITEMS==='undefined' || !CRONO_ITEMS.length){ try{ cronoLoad(); }catch(e){} }
+  const corte = cronoFechaCorteReal();
+  const kS = repDateKey(rangeStart), kE0 = repDateKey(rangeEnd), kE = kE0<corte ? kE0 : corte;
+  const proyDe = a=>((a.proyecto||'').trim()||'Sin proyecto');
+  const acts = PA_ITEMS.filter(a=>a.responsable===name && a.tipo!=='Trabajo Operativo' && a.fechaAsig);
+  const out = {byProy:{}, nAct:{}, disp:0, asig:0, estTot:0};
+  const entregada = a=>(a.estatus==='En revisión'||a.estatus==='Terminado (máximo avance)'||a.estatus==='Terminado');
+  const info = acts.map(a=>{
+    const crono = CRONO_ITEMS.find(x=>x.actividadId===a.id);
+    const plan = crono ? cronoPlanDiario(a, crono) : null;
+    const entr = entregada(a) ? String(a.fechaEntregaProy||a.fechaTermino||'').slice(0,10)||null : null;
+    const real = {};
+    if(crono){
+      (crono.reportes||[]).forEach(r=>{
+        if(!r || r.modo==='general' || !r.subtareaId) return;
+        const f = String(r.fecha||'').slice(0,10); if(!f) return;
+        const st = (crono.subtareas||[]).find(x=>x.id===r.subtareaId); if(!st) return;
+        const upj = cronoStUnidPorJornada(cronoStPlanVals(st)) || 0;
+        const c = parseFloat(r.cantidad)||0;
+        if(upj>0 && c>0) real[f] = (real[f]||0) + c/upj;
+      });
+    }
+    let vent = null;
+    if(!plan) vent = {ini:a.fechaAsig, fin:entr || a.fechaTermino || a.fechaAsig};
+    else if(a.reapertura && a.reapertura.inicio){
+      const c0 = (a.reapertura.cerrados||[])[0];
+      if(c0 && c0.entrega) vent = {ini:a.fechaAsig, fin:c0.entrega};   // ciclo anterior a la reapertura
+    }
+    return {a, p:proyDe(a), plan, entr, real, vent};
+  });
+  const minF = info.length ? info.reduce((m,x)=>x.a.fechaAsig<m?x.a.fechaAsig:m, info[0].a.fechaAsig) : kS;
+  const ini = kS > minF ? kS : minF;
+  const acum = {}, est = {}, ids = {};
+  const sumar = (x, v, esEst)=>{
+    if(v<=1e-9) return;
+    acum[x.p] = (acum[x.p]||0) + v;
+    if(esEst) est[x.p] = (est[x.p]||0) + v;
+    (ids[x.p] = ids[x.p] || new Set()).add(x.a.id);
+  };
+  const d = new Date(ini+'T00:00:00');
+  let guard = 0;
+  while(guard++ < 4000){
+    const ds = repDateKey(d);
+    if(ds > kE) break;
+    const cap = cronoCapacidadDia(d, name);
+    d.setDate(d.getDate()+1);
+    if(cap<=1e-9) continue;
+    out.disp += cap;
+    // 1) reportado
+    const rep = info.map(x=>({x, v:x.real[ds]||0})).filter(o=>o.v>1e-9);
+    const sumR = rep.reduce((t,o)=>t+o.v,0);
+    const fR = sumR>cap ? cap/sumR : 1;
+    rep.forEach(o=>sumar(o.x, o.v*fR, false));
+    let rem = cap - Math.min(sumR, cap);
+    if(rem<=1e-9) continue;
+    // 2) planeado de quien no reportó ese día
+    const plan = info.filter(x=>x.plan && !(x.real[ds]>1e-9) && (!x.entr || ds<=x.entr)).map(x=>({x, v:(x.plan.jor && x.plan.jor[ds])||0})).filter(o=>o.v>1e-9);
+    const sumP = plan.reduce((t,o)=>t+o.v,0);
+    if(sumP>0){ const fP = Math.min(1, rem/sumP); plan.forEach(o=>sumar(o.x, o.v*fP, true)); rem -= sumP*fP; }
+    if(rem<=1e-9) continue;
+    // 3) sin subtareas: partes iguales entre las activas ese día
+    const sin = info.filter(x=>x.vent && ds>=x.vent.ini && ds<=x.vent.fin && !x.real[ds] && !(typeof paEnPausaEnFecha==='function' && paEnPausaEnFecha(x.a, ds)));
+    if(sin.length){ sin.forEach(x=>sumar(x, rem/sin.length, true)); }
+  }
+  Object.keys(acum).forEach(k=>{ out.byProy[k] = {d:acum[k], est:est[k]||0}; out.nAct[k] = ids[k].size; out.asig += acum[k]; out.estTot += est[k]||0; });
+  return out;
+}
+
 function paReporteCargaTodos(period){
   paCerrarCargaPeriodoModal();
   const now    = new Date();
@@ -15444,28 +15520,20 @@ function paReporteCargaTodos(period){
   // No se toma en cuenta "Trabajo Operativo": este reporte es solo carga de Proyecto,
   // Conectividad e Impresiones.
   const porPersona = nombresEquipo.map(name=>{
-    const all = PA_ITEMS.filter(a=>{
-      if(a.responsable!==name) return false;
-      if(a.tipo==='Trabajo Operativo') return false;
-      if(period==='all') return true;
-      const ref = a.fechaAsig ? new Date(a.fechaAsig+'T00:00:00') : new Date(a.createdAt||0);
-      return ref >= rangeStart && ref <= rangeEnd;
-    });
-    const byProy = {};
-    all.forEach(a=>{
-      const p = (a.proyecto||'').trim() || 'Sin proyecto';
-      byProy[p] = (byProy[p]||0) + 1;
-    });
+    const o = paOcupacionPersona(name, rangeStart, rangeEnd);
+    const byProy = {}, est = {};
+    Object.keys(o.byProy).forEach(k=>{ byProy[k] = o.byProy[k].d; est[k] = o.byProy[k].est; });
     const proySort = Object.keys(byProy).sort((a,b)=>{
       if(a==='Sin proyecto') return 1;
       if(b==='Sin proyecto') return -1;
       return byProy[b]-byProy[a];
     });
-    return { name, total: all.length, byProy, proySort };
+    const nAct = Object.keys(o.nAct).reduce((t,k)=>t+o.nAct[k],0);
+    return { name, total: o.asig, byProy, est, nActProy:o.nAct, nAct, disp:o.disp, estTot:o.estTot, proySort };
   });
 
   if(!porPersona.some(p=>p.total>0)){
-    alert(`Sin actividades en el período seleccionado (${periodoLabel}).`);
+    alert(`Sin tiempo asignado a proyectos en el período seleccionado (${periodoLabel}).`);
     return;
   }
 
@@ -15483,38 +15551,50 @@ function paReporteCargaTodos(period){
     items.forEach(i=>{ out[i.k] = i.base*10; });
     return out;
   }
-  function barrasHTML(byProy, proySort, total){
-    if(!total) return '<div style="font-size:11px;color:#9aa5b1;padding:6px 0">Sin actividades registradas en este período.</div>';
+  const fd1 = n=>{ n = Math.round(n*10)/10; return String(n); };
+  function barrasHTML(byProy, proySort, total, est, nActP){
+    if(!total) return '<div style="font-size:11px;color:#9aa5b1;padding:6px 0">Sin tiempo asignado a proyectos en este período.</div>';
     const cerrado = cerrarPct(byProy, proySort, total);
     return proySort.map(proy=>{
       const pct2 = Math.round(byProy[proy]/total*100);
+      const e = (est && est[proy]) || 0, na = (nActP && nActP[proy]) || 0;
       return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
         +'<div style="font-size:11px;font-weight:500;color:#1a1a2e;width:150px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+proy+'</div>'
         +'<div style="flex:1;height:10px;background:#e5e7eb;border-radius:5px;overflow:hidden">'
         +'<div style="width:'+pct2+'%;height:100%;background:#2a78d6;border-radius:5px"></div></div>'
-        +'<div style="font-size:11px;font-weight:700;color:#2a78d6;min-width:62px;text-align:right">'+pct2+'% ('+byProy[proy]+')</div>'
+        +'<div style="font-size:11px;font-weight:700;color:#2a78d6;min-width:150px;text-align:right">'+pct2+'% · '+fd1(byProy[proy])+' d'
+        +(na?'<span style="font-weight:500;color:#8a97a8;font-size:9.5px"> · '+na+' act.</span>':'')
+        +(e>0.05?'<span style="font-weight:500;color:#8a97a8;font-size:9.5px"> · '+fd1(e)+' d est.</span>':'')+'</div>'
         +'<div style="font-size:11px;font-weight:700;color:#0f2d6b;min-width:64px;text-align:right;border-left:1px solid #d5dfeb;padding-left:8px">≈ '+cerrado[proy]+'%</div>'
         +'</div>';
     }).join('');
   }
+  const resumenTiempo = (asig, disp, estTot)=>{
+    if(!disp) return 'Sin días hábiles disponibles';
+    return fd1(asig)+' de '+fd1(disp)+' d hábiles con proyecto ('+Math.round(asig/disp*100)+'%)'+(asig>0&&estTot>0.05?' · '+Math.round(estTot/asig*100)+'% estimado por plan':'');
+  };
 
   const personasHTML = porPersona.map(p=>{
     return `<div style="margin:16px 0;padding:14px 16px;background:#f8fafc;border:1px solid #e2eaf3;border-radius:8px;page-break-inside:avoid">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;gap:10px">
         <div style="font-size:11px;font-weight:700;color:#0f2744;text-transform:uppercase;letter-spacing:.06em">${p.name}</div>
-        <div style="font-size:10px;color:#888">${p.total} actividad${p.total!==1?'es':''}</div>
+        <div style="font-size:10px;color:#888;text-align:right">${resumenTiempo(p.total,p.disp,p.estTot)} · ${p.nAct} actividad${p.nAct!==1?'es':''}</div>
       </div>
-      ${barrasHTML(p.byProy, p.proySort, p.total)}
+      ${barrasHTML(p.byProy, p.proySort, p.total, p.est, p.nActProy)}
     </div>`;
   }).join('');
 
   // Bloque de coordinación: la distribución de la coordinadora es, por definición, la del equipo completo
   // (suma de las actividades de todos los proyectistas, mismos filtros de período y tipo).
-  const equipoByProy = {};
-  let equipoTotal = 0;
+  const equipoByProy = {}, equipoEst = {}, equipoNAct = {};
+  let equipoTotal = 0, equipoDisp = 0, equipoEstTot = 0, equipoNActTot = 0;
   porPersona.forEach(p=>{
-    equipoTotal += p.total;
-    Object.keys(p.byProy).forEach(k=>{ equipoByProy[k] = (equipoByProy[k]||0) + p.byProy[k]; });
+    equipoTotal += p.total; equipoDisp += p.disp; equipoEstTot += p.estTot; equipoNActTot += p.nAct;
+    Object.keys(p.byProy).forEach(k=>{
+      equipoByProy[k] = (equipoByProy[k]||0) + p.byProy[k];
+      equipoEst[k] = (equipoEst[k]||0) + (p.est[k]||0);
+      equipoNAct[k] = (equipoNAct[k]||0) + (p.nActProy[k]||0);
+    });
   });
   const equipoSort = Object.keys(equipoByProy).sort((a,b)=>{
     if(a==='Sin proyecto') return 1;
@@ -15524,10 +15604,10 @@ function paReporteCargaTodos(period){
   const coordHTML = `<div style="margin:16px 0 22px;padding:14px 16px;background:#eef4fc;border:1px solid #b9d0ee;border-left:4px solid #0f2d6b;border-radius:8px;page-break-inside:avoid">
       <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px">
         <div style="font-size:12px;font-weight:700;color:#0f2d6b;text-transform:uppercase;letter-spacing:.06em">Martha Muro <span style="font-weight:500;letter-spacing:0;text-transform:none;color:#4a6a94">· Coordinación de Ingeniería</span></div>
-        <div style="font-size:10px;color:#666">${equipoTotal} actividad${equipoTotal!==1?'es':''} del equipo</div>
+        <div style="font-size:10px;color:#666;text-align:right">${resumenTiempo(equipoTotal,equipoDisp,equipoEstTot)} · ${equipoNActTot} actividad${equipoNActTot!==1?'es':''}</div>
       </div>
-      <div style="font-size:10px;color:#6b7f99;margin-bottom:10px">Distribución según el trabajo del equipo completo (${nombresEquipo.length} proyectistas)</div>
-      ${barrasHTML(equipoByProy, equipoSort, equipoTotal)}
+      <div style="font-size:10px;color:#6b7f99;margin-bottom:10px">Distribución del tiempo del equipo completo (${nombresEquipo.length} proyectistas)</div>
+      ${barrasHTML(equipoByProy, equipoSort, equipoTotal, equipoEst, equipoNAct)}
     </div>`;
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
@@ -15549,7 +15629,7 @@ function paReporteCargaTodos(period){
   <div class="rpt-header">
     <div>
       <div class="co">C3NTRO Telecom</div>
-      <div class="dep">Coordinación de Ingeniería · Distribución de Carga por Proyecto — Todo el Equipo</div>
+      <div class="dep">Coordinación de Ingeniería · Ocupación de tiempo por proyecto — Todo el Equipo</div>
     </div>
     <div>
       <div class="doc-title">Reporte de equipo</div>
@@ -15562,7 +15642,7 @@ function paReporteCargaTodos(period){
   ${coordHTML}
   ${personasHTML}
 
-  <div style="font-size:9px;color:#aaa;margin-top:10px">El porcentaje en azul es el real; el valor "≈" es el mismo porcentaje cerrado a decenas.</div>
+  <div style="font-size:9px;color:#8a97a8;margin-top:10px;line-height:1.5"><b>Cómo se calcula.</b> Se mide tiempo, no número de actividades: cada día hábil (sin fines de semana, festivos ni vacaciones; viernes = 6/9) vale una jornada. Lo <b>reportado</b> ese día (unidades ÷ rendimiento de la subtarea) se atribuye al proyecto de la actividad. Si el día no se reportó completo, se completa con lo <b>planeado</b> de las actividades que no reportaron; las actividades sin subtareas se estiman repartiendo los días de su fecha de inicio a su entrega en partes iguales. Lo que viene del plan o de esa estimación aparece como "d est.". El porcentaje es la parte del tiempo asignado a proyectos que corresponde a cada uno; el valor "≈" es el mismo porcentaje cerrado a decenas. No incluye Trabajo Operativo.</div>
   <div class="rpt-footer">
     <span>C3NTRO Telecom · Coordinación de Ingeniería</span>
     <span>Todo el equipo · ${nombresEquipo.length} proyectistas</span>
