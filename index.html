@@ -15415,6 +15415,7 @@ function paCerrarCargaPeriodoModal(){
 //  2) Si sobra jornada, se completa con lo PLANEADO de las actividades que ese día no reportaron (estimado).
 //  3) Si aún sobra, se reparte en partes iguales entre las actividades sin subtareas activas ese día (estimado).
 // Devuelve días-persona por proyecto, cuánto de eso es estimado, y los días hábiles disponibles.
+const PA_OCUP_MIN_DIAS = 2;
 function paOcupacionPersona(name, rangeStart, rangeEnd){
   if(typeof CRONO_ITEMS==='undefined' || !CRONO_ITEMS.length){ try{ cronoLoad(); }catch(e){} }
   const corte = cronoFechaCorteReal();
@@ -15448,12 +15449,12 @@ function paOcupacionPersona(name, rangeStart, rangeEnd){
   });
   const minF = info.length ? info.reduce((m,x)=>x.a.fechaAsig<m?x.a.fechaAsig:m, info[0].a.fechaAsig) : kS;
   const ini = kS > minF ? kS : minF;
-  const acum = {}, est = {}, ids = {};
+  const porAct = {};   // tiempo por actividad dentro del periodo
   const sumar = (x, v, esEst)=>{
     if(v<=1e-9) return;
-    acum[x.p] = (acum[x.p]||0) + v;
-    if(esEst) est[x.p] = (est[x.p]||0) + v;
-    (ids[x.p] = ids[x.p] || new Set()).add(x.a.id);
+    const o = porAct[x.a.id] || (porAct[x.a.id] = {p:x.p, d:0, est:0});
+    o.d += v;
+    if(esEst) o.est += v;
   };
   const d = new Date(ini+'T00:00:00');
   let guard = 0;
@@ -15480,7 +15481,15 @@ function paOcupacionPersona(name, rangeStart, rangeEnd){
     const sin = info.filter(x=>x.vent && ds>=x.vent.ini && ds<=x.vent.fin && !x.real[ds] && !(typeof paEnPausaEnFecha==='function' && paEnPausaEnFecha(x.a, ds)));
     if(sin.length){ sin.forEach(x=>sumar(x, rem/sin.length, true)); }
   }
-  Object.keys(acum).forEach(k=>{ out.byProy[k] = {d:acum[k], est:est[k]||0}; out.nAct[k] = ids[k].size; out.asig += acum[k]; out.estTot += est[k]||0; });
+  // Las actividades de 2 días o menos en el periodo no entran a la distribución (el resto se reparte entre las demás)
+  Object.keys(porAct).forEach(id=>{
+    const o = porAct[id];
+    if(o.d <= PA_OCUP_MIN_DIAS + 1e-6) return;
+    const b = out.byProy[o.p] || (out.byProy[o.p] = {d:0, est:0});
+    b.d += o.d; b.est += o.est;
+    out.nAct[o.p] = (out.nAct[o.p]||0) + 1;
+    out.asig += o.d; out.estTot += o.est;
+  });
   return out;
 }
 
@@ -15533,7 +15542,7 @@ function paReporteCargaTodos(period){
   });
 
   if(!porPersona.some(p=>p.total>0)){
-    alert(`Sin tiempo asignado a proyectos en el período seleccionado (${periodoLabel}).`);
+    alert(`Sin actividades para distribuir en el período seleccionado (${periodoLabel}).`);
     return;
   }
 
@@ -15553,7 +15562,7 @@ function paReporteCargaTodos(period){
   }
   const fd1 = n=>{ n = Math.round(n*10)/10; return String(n); };
   function barrasHTML(byProy, proySort, total, est, nActP){
-    if(!total) return '<div style="font-size:11px;color:#9aa5b1;padding:6px 0">Sin tiempo asignado a proyectos en este período.</div>';
+    if(!total) return '<div style="font-size:11px;color:#9aa5b1;padding:6px 0">Sin actividades para distribuir en este período.</div>';
     const cerrado = cerrarPct(byProy, proySort, total);
     return proySort.map(proy=>{
       const pct2 = Math.round(byProy[proy]/total*100);
@@ -15562,23 +15571,20 @@ function paReporteCargaTodos(period){
         +'<div style="font-size:11px;font-weight:500;color:#1a1a2e;width:150px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+proy+'</div>'
         +'<div style="flex:1;height:10px;background:#e5e7eb;border-radius:5px;overflow:hidden">'
         +'<div style="width:'+pct2+'%;height:100%;background:#2a78d6;border-radius:5px"></div></div>'
-        +'<div style="font-size:11px;font-weight:700;color:#2a78d6;min-width:150px;text-align:right">'+pct2+'% · '+fd1(byProy[proy])+' d'
-        +(na?'<span style="font-weight:500;color:#8a97a8;font-size:9.5px"> · '+na+' act.</span>':'')
-        +(e>0.05?'<span style="font-weight:500;color:#8a97a8;font-size:9.5px"> · '+fd1(e)+' d est.</span>':'')+'</div>'
+        +'<div style="font-size:11px;font-weight:700;color:#2a78d6;min-width:92px;text-align:right">'+pct2+'% · '+fd1(byProy[proy])+' d</div>'
         +'<div style="font-size:11px;font-weight:700;color:#0f2d6b;min-width:64px;text-align:right;border-left:1px solid #d5dfeb;padding-left:8px">≈ '+cerrado[proy]+'%</div>'
         +'</div>';
     }).join('');
   }
   const resumenTiempo = (asig, disp, estTot)=>{
     if(!disp) return 'Sin días hábiles disponibles';
-    return fd1(asig)+' de '+fd1(disp)+' d hábiles con proyecto ('+Math.round(asig/disp*100)+'%)'+(asig>0&&estTot>0.05?' · '+Math.round(estTot/asig*100)+'% estimado por plan':'');
+    return fd1(asig)+' de '+fd1(disp)+' d hábiles con proyecto ('+Math.round(asig/disp*100)+'%)';
   };
 
   const personasHTML = porPersona.map(p=>{
     return `<div style="margin:16px 0;padding:14px 16px;background:#f8fafc;border:1px solid #e2eaf3;border-radius:8px;page-break-inside:avoid">
       <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;gap:10px">
         <div style="font-size:11px;font-weight:700;color:#0f2744;text-transform:uppercase;letter-spacing:.06em">${p.name}</div>
-        <div style="font-size:10px;color:#888;text-align:right">${resumenTiempo(p.total,p.disp,p.estTot)} · ${p.nAct} actividad${p.nAct!==1?'es':''}</div>
       </div>
       ${barrasHTML(p.byProy, p.proySort, p.total, p.est, p.nActProy)}
     </div>`;
@@ -15604,7 +15610,7 @@ function paReporteCargaTodos(period){
   const coordHTML = `<div style="margin:16px 0 22px;padding:14px 16px;background:#eef4fc;border:1px solid #b9d0ee;border-left:4px solid #0f2d6b;border-radius:8px;page-break-inside:avoid">
       <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px">
         <div style="font-size:12px;font-weight:700;color:#0f2d6b;text-transform:uppercase;letter-spacing:.06em">Martha Muro <span style="font-weight:500;letter-spacing:0;text-transform:none;color:#4a6a94">· Coordinación de Ingeniería</span></div>
-        <div style="font-size:10px;color:#666;text-align:right">${resumenTiempo(equipoTotal,equipoDisp,equipoEstTot)} · ${equipoNActTot} actividad${equipoNActTot!==1?'es':''}</div>
+        
       </div>
       <div style="font-size:10px;color:#6b7f99;margin-bottom:10px">Distribución del tiempo del equipo completo (${nombresEquipo.length} proyectistas)</div>
       ${barrasHTML(equipoByProy, equipoSort, equipoTotal, equipoEst, equipoNAct)}
@@ -15642,7 +15648,7 @@ function paReporteCargaTodos(period){
   ${coordHTML}
   ${personasHTML}
 
-  <div style="font-size:9px;color:#8a97a8;margin-top:10px;line-height:1.5"><b>Cómo se calcula.</b> Se mide tiempo, no número de actividades: cada día hábil (sin fines de semana, festivos ni vacaciones; viernes = 6/9) vale una jornada. Lo <b>reportado</b> ese día (unidades ÷ rendimiento de la subtarea) se atribuye al proyecto de la actividad. Si el día no se reportó completo, se completa con lo <b>planeado</b> de las actividades que no reportaron; las actividades sin subtareas se estiman repartiendo los días de su fecha de inicio a su entrega en partes iguales. Lo que viene del plan o de esa estimación aparece como "d est.". El porcentaje es la parte del tiempo asignado a proyectos que corresponde a cada uno; el valor "≈" es el mismo porcentaje cerrado a decenas. No incluye Trabajo Operativo.</div>
+  <div style="font-size:9px;color:#8a97a8;margin-top:10px;line-height:1.5">Se mide el tiempo dedicado a cada proyecto (cada día hábil vale una jornada; el viernes, 6/9; sin fines de semana, festivos ni vacaciones). El porcentaje es la parte del tiempo asignado a proyectos que corresponde a cada uno; el valor "≈" es el mismo porcentaje cerrado a decenas. No incluye Trabajo Operativo.</div>
   <div class="rpt-footer">
     <span>C3NTRO Telecom · Coordinación de Ingeniería</span>
     <span>Todo el equipo · ${nombresEquipo.length} proyectistas</span>
