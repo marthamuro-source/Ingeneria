@@ -9859,6 +9859,59 @@ function planCorteCSS(){
     +'.cmeta{font-size:8px;color:#6b7280;margin:4px 0 8px;line-height:1.4}'
     +'table.lst tr.pnota.cont td{background:#eef2ff!important;color:#3730a3;border-bottom:1px dashed #a5b4fc}';
 }
+// ── Meta final: ¿todavía llega a su fecha fin con la capacidad que le queda? (independiente del ritmo diario) ──
+// Capacidad restante en jornadas: días hábiles posteriores a "desde" hasta "fin" (incluido), sin vacaciones, festivos ni pausa.
+function cronoCapRestante(a, desde, fin){
+  if(!desde || !fin || fin<=desde) return 0;
+  let c = 0;
+  const d = new Date(desde+'T00:00:00'); d.setDate(d.getDate()+1);
+  const f = new Date(fin+'T00:00:00');
+  while(d<=f){
+    const k = repDateKey(d);
+    if(!(typeof paEnPausaEnFecha==='function' && paEnPausaEnFecha(a,k))) c += cronoCapacidadDia(d, a.responsable);
+    d.setDate(d.getDate()+1);
+  }
+  return c;
+}
+// Holgura (jornadas): ≥ ½ → Recuperable; entre 0 y ½ → En riesgo; negativa → No llega.
+// Si la fecha fin cae dentro de la semana evaluada, nunca puede ser "Recuperable" (como mucho En riesgo).
+function cronoMetaEstado(holg, cierraSemana){
+  let e = holg < -0.05 ? 'nollega' : holg < 0.5 ? 'riesgo' : 'recuperable';
+  if(cierraSemana && e==='recuperable') e = 'riesgo';
+  return e;
+}
+function cronoMetaLabel(e){ return {recuperable:'Recuperable', riesgo:'En riesgo', nollega:'No llega'}[e]||e; }
+function cronoMetaHolgTxt(h){ const r = Math.round(h*10)/10; return (r>=0?'+':'−')+Math.abs(r)+' d'; }
+// Devuelve {act:{estado,holg,pendJ,fin}, filas:{stId:{estado,holg,pendJ,fin}}}.
+// Es una proyección: lo pendiente se toma sobre lo medido hasta cump.hasta MÁS lo ya reportado en el día en curso
+// (ese avance sí cuenta para saber cuánto falta), pero entonces el día en curso deja de contar como capacidad
+// disponible (conservador: no se infla la holgura). La calificación de ritmo (%) sigue sin contar el día abierto.
+function cronoMetaFinal(a, cump, wE){
+  if(!a || !cump || !cump.plan) return null;
+  const hoyK = repDateKey(new Date());
+  const extraDe = f=>{ let x=0; Object.keys(f.real).forEach(ds=>{ if(ds>cump.hasta && ds<=hoyK) x+=f.real[ds]; }); return x; };
+  const hayHoy = cump.filas.some(f=>extraDe(f)>1e-9);
+  const hasta = hayHoy && hoyK>cump.hasta ? hoyK : cump.hasta;
+  const out = {act:null, filas:{}};
+  let pendCum = 0;
+  cump.filas.forEach(f=>{
+    const cant = f.v.cantidad;
+    const rea = Math.min(cant, f.rea + extraDe(f));
+    if(rea >= cant-1e-9) return;
+    const upj = cronoStUnidPorJornada(f.v) || 1;
+    pendCum += (cant - rea)/upj;
+    const fin = a.fechaTermino || f.fin || cump.plan.fin;   // el compromiso real es la fecha límite de la actividad
+    const holg = cronoCapRestante(a, hasta, fin) - pendCum;
+    out.filas[f.st.id] = {holg, pendJ:pendCum, fin, estado:cronoMetaEstado(holg, !!(wE && fin && fin<=wE))};
+  });
+  const finAct = a.fechaTermino || cump.plan.fin;
+  if(finAct && pendCum>1e-9){
+    const holg = cronoCapRestante(a, hasta, finAct) - pendCum;
+    out.act = {holg, pendJ:pendCum, fin:finAct, estado:cronoMetaEstado(holg, !!(wE && finAct<=wE))};
+  }
+  return out;
+}
+
 function planCorteSeccion(weeks, C){
   var esc=function(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
   var fd=C.fd, fq=C.fq;
@@ -9868,6 +9921,10 @@ function planCorteSeccion(weeks, C){
   var chipDe=function(e){
     var cls=(e==='cumple'||e==='completada')?'st-fin':e==='parcial'?'st-par':e==='atrasada'?'st-late':e==='adelantada'?'st-prog':'st-nuevo';
     return '<span class="stchip '+cls+'">'+esc(cronoCumpLabel(e))+'</span>';
+  };
+  var chipMeta=function(m){
+    var cls=m.estado==='recuperable'?'st-prog':m.estado==='riesgo'?'st-par':'st-late';
+    return '<span class="stchip '+cls+'" title="Meta final: pendiente '+fq(m.pendJ)+' jornada(s) vs. capacidad restante hasta '+esc(m.fin)+'">'+esc(cronoMetaLabel(m.estado))+'</span>';
   };
   var colDe=function(e){return (e==='cumple'||e==='completada'||e==='adelantada')?'#166534':e==='parcial'?'#92400e':e==='atrasada'?'#b91c1c':'#6b7280';};
   var ABIERTAS=['Sin iniciar','En progreso','En pausa'];
@@ -9931,6 +9988,8 @@ function planCorteSeccion(weeks, C){
         var col=C.gc(member), ini=C.gi(member);
         var cierra = !futuras.length && !vis.some(function(v){return v.cruza;});
         var estAct = weekEval && cump.pct!==null ? cump.estado : 'sin_inicio';
+        var MF = (!entr && weekEval) ? cronoMetaFinal(a,cump,wE) : null;
+        var ritmoPct = (cump.pct!==null) ? Math.round(cump.pct*100) : null;
         h+='<tbody><tr><td style="white-space:nowrap"><span class="av" style="background:'+col+'">'+ini+'</span>'+member.split(' ').slice(0,2).join(' ')+'</td>';
         h+='<td><b>'+esc(a.actividad||'--')+'</b></td>';
         var isCon=(a.tipo==='Conectividad (Bobinas)'||a.tipo==='Planos de Conectividad');
@@ -9940,7 +9999,9 @@ function planCorteSeccion(weeks, C){
         h+='<td></td><td></td>';
         h+='<td class="dc" style="font-weight:700;color:'+colDe(estAct)+'">'+(weekEval&&cump.pct!==null?Math.round(cump.pct*100)+'%':'&mdash;')+'</td>';
         var _enProc=(a.estatus==='En progreso' && wS<=hoyKey);
-        h+='<td>'+(weekEval&&cump.pct!==null?chipDe(cump.estado):(_enProc?'<span class="stchip st-prog" title="Ya inició: el día en curso se evalúa al cerrar">En proceso</span>':'<span class="stchip st-nuevo">Programada</span>'))+'</td></tr>';
+        var _chipAct = chipDe(cump.estado);
+        if(MF && MF.act && (cump.estado==='atrasada'||cump.estado==='parcial')) _chipAct = chipMeta(MF.act)+'<br><span style="font-size:7.5px;color:#6b7280">ritmo '+ritmoPct+'% &middot; fin '+fd(MF.act.fin)+' &middot; holgura '+cronoMetaHolgTxt(MF.act.holg)+'</span>';
+        h+='<td>'+(weekEval&&cump.pct!==null?_chipAct:(_enProc?'<span class="stchip st-prog" title="Ya inició: el día en curso se evalúa al cerrar">En proceso</span>':'<span class="stchip st-nuevo">Programada</span>'))+'</td></tr>';
         h+=planNotasFilas(a,crItem,12,fd);
         vis.forEach(function(v){
           var f=v.f, st=f.st;
@@ -9969,7 +10030,8 @@ function planCorteSeccion(weeks, C){
           else if(v.cruza) linea='<br><span style="font-size:7.5px;color:#3730a3">contin&uacute;a &rarr; '+fd(f.fin)+' (&asymp;'+Math.round(v.metaV/cant*100)+'% al viernes)</span>';
           else linea='<br><span style="font-size:7.5px;color:#166534">cierra el viernes</span>';
           var enCursoSub = (extraHoy>1e-9 && f.estado!=='completada');
-          var chip = (weekEval && enCursoSub && (f.estado==='sin_inicio'||f.estado==='adelantada')) ? '<span class="stchip st-prog">En curso hoy</span>' : weekEval ? chipDe(f.estado)+((f.atrasoDias>0.05&&f.estado!=='completada')?' <span style="font-size:7.5px;color:#b91c1c">&minus;'+fq(f.atrasoDias)+' d</span>':'') : '<span class="stchip st-nuevo">Programada</span>';
+          var mfF = (MF && MF.filas[st.id] && (f.estado==='atrasada'||f.estado==='parcial')) ? MF.filas[st.id] : null;
+          var chip = (weekEval && enCursoSub && (f.estado==='sin_inicio'||f.estado==='adelantada')) ? '<span class="stchip st-prog">En curso hoy</span>' : weekEval ? (mfF ? chipMeta(mfF)+'<br><span style="font-size:7.5px;color:#6b7280">ritmo '+(f.pct!==null?Math.round(f.pct*100):0)+'% &middot; holgura '+cronoMetaHolgTxt(mfF.holg)+'</span>' : chipDe(f.estado)+((f.atrasoDias>0.05&&f.estado!=='completada')?' <span style="font-size:7.5px;color:#b91c1c">&minus;'+fq(f.atrasoDias)+' d</span>':'')) : '<span class="stchip st-nuevo">Programada</span>';
           h+='<td>'+chip+linea+'</td></tr>';
         });
         if(futuras.length){
@@ -10005,7 +10067,8 @@ function planCorteSeccion(weeks, C){
   }
   h+='<div class="cmeta"><b>C&oacute;mo leer el corte.</b> Solo se listan subtareas cuyo plan toca la semana (si su plan termin&oacute; antes del lunes no aparece, est&eacute; cerrada o no). Una actividad ya entregada o terminada se ubica por su fecha real de entrega: si la entreg&oacute; antes del lunes no aparece. El d&iacute;a en curso (hoy) se eval&uacute;a al cerrar el d&iacute;a: lo que ya report&oacute; se ve en azul como &ldquo;en curso&rdquo; y no cuenta como atraso. Si una actividad est&aacute; en pausa toda la semana solo se indica el motivo y sus fechas programadas de inicio y fin, sin desglosar subtareas. Cada semana se corta en su viernes: de una actividad que sigue despu&eacute;s solo salen las subtareas que se alcanzan a tocar hasta ese d&iacute;a, y la que cruza el viernes indica cu&aacute;nto del plan le toca. '
     +'En cada d&iacute;a se muestra <b>reportado / esperado</b> (en la unidad de la subtarea): lo esperado sale del plan que el proyectista confirm&oacute; y de la fracci&oacute;n de jornada que le toca ese d&iacute;a (viernes = 6/9; vacaciones, festivos y pausas no se esperan). '
-    +'<b>Meta al viernes</b> es lo acumulado que deber&iacute;a llevar al cierre de la semana; <b>Real</b> y <b>%</b> se miden contra lo esperado a la fecha de evaluaci&oacute;n. Cumple &ge;95% &middot; parcial 80-94% &middot; atrasada &lt;80%. El % de la actividad se pondera por jornadas esperadas, sin que lo adelantado tape lo atrasado. Los reportes por porcentaje general no se miden.</div>';
+    +'<b>Meta al viernes</b> es lo acumulado que deber&iacute;a llevar al cierre de la semana; <b>Real</b> y <b>%</b> se miden contra lo esperado a la fecha de evaluaci&oacute;n. Cumple &ge;95% &middot; parcial 80-94% &middot; atrasada &lt;80%. El % de la actividad se pondera por jornadas esperadas, sin que lo adelantado tape lo atrasado. Los reportes por porcentaje general no se miden. '
+    +'<b>Estado de las atrasadas:</b> si una actividad o subtarea va por debajo del ritmo, se muestra su <b>meta final</b>: <b>Recuperable</b> (con la capacidad que le queda todav&iacute;a llega a su fecha fin y le sobra &frac12; d&iacute;a o m&aacute;s), <b>En riesgo</b> (le sobra menos de &frac12; d&iacute;a; si su fecha fin cae dentro de la semana, a lo m&aacute;s es En riesgo) o <b>No llega</b> (lo pendiente ya no cabe antes de su fecha fin). La holgura cuenta lo ya reportado en el d&iacute;a en curso como avance, pero ese d&iacute;a ya no se cuenta como capacidad disponible. El % es el ritmo, medido contra el plan hasta el &uacute;ltimo d&iacute;a cerrado.</div>';
   return h;
 }
 
