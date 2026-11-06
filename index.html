@@ -4430,8 +4430,8 @@ function isVac(nombre,dt){ return VACACIONES[nombre]?.has(repDateKey(dt)); }
 function isObligatorio(nombre,dt){ return !isWeekend(dt)&&!isFestivo(dt)&&!isVac(nombre,dt); }
 
 // ── Horario límite para reportar avance (solo proyectistas) ──
-// Después de las 7:15pm ya no se puede guardar el reporte del día — el horario de trabajo ya cerró.
-const REP_HORA_LIMITE = {h:19, m:15};
+// Después de las 7:30pm ya no se puede guardar el reporte del día — el horario de trabajo ya cerró.
+const REP_HORA_LIMITE = {h:19, m:30};
 function repHorarioCerrado(){
   const n = new Date();
   return (n.getHours()>REP_HORA_LIMITE.h) || (n.getHours()===REP_HORA_LIMITE.h && n.getMinutes()>=REP_HORA_LIMITE.m);
@@ -10433,7 +10433,7 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
   let html=`<div style="background:rgba(74,143,212,.05);border:0.5px solid rgba(74,143,212,.2);border-radius:10px;padding:14px 16px">
     <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;text-transform:capitalize">${esHoy?'📝 Reporte de hoy — ':''} ${fmtDia}</div>
     ${_bannerConf}
-    ${horarioCerrado?`<div style="margin-bottom:12px;padding:8px 10px;background:rgba(255,92,92,.08);border:0.5px solid rgba(255,92,92,.3);border-radius:8px;font-size:11.5px;color:var(--red)">⏰ Ya son las 7:15pm — el horario para reportar el avance de hoy ya cerró. No se puede guardar un reporte nuevo.</div>`:''}`;
+    ${horarioCerrado?`<div style="margin-bottom:12px;padding:8px 10px;background:rgba(255,92,92,.08);border:0.5px solid rgba(255,92,92,.3);border-radius:8px;font-size:11.5px;color:var(--red)">⏰ Ya son las 7:30pm — el horario para reportar el avance de hoy ya cerró. No se puede guardar un reporte nuevo.</div>`:''}`;
 
   // Reportes ya hechos hoy
   if(repsExistentes.length){
@@ -10539,7 +10539,7 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
       <button class="pa-btn pa-btn-ghost" onclick="calProyAgregarPendiente()" style="flex:1">
         ➕ Agregar otra subtarea
       </button>
-      <button class="pa-btn pa-btn-primary" onclick="calProyGuardarReporteHoy()" style="flex:1${horarioCerrado?';opacity:.45;cursor:not-allowed':''}" ${horarioCerrado?'disabled title="El horario para reportar ya cerró (7:15pm)"':''}>
+      <button class="pa-btn pa-btn-primary" onclick="calProyGuardarReporteHoy()" style="flex:1${horarioCerrado?';opacity:.45;cursor:not-allowed':''}" ${horarioCerrado?'disabled title="El horario para reportar ya cerró (7:30pm)"':''}>
         💾 Guardar reporte del día${pendientes.length?` (${pendientes.length+1})`:''}
       </button>
     </div>
@@ -10573,7 +10573,7 @@ function renderCalProyPanelHoyGeneral(fecha, repsExistentes, esHoy){
   let html=`<div style="background:rgba(74,143,212,.05);border:0.5px solid rgba(74,143,212,.2);border-radius:10px;padding:14px 16px">
     <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;text-transform:capitalize">${esHoy?'📝 Reporte de hoy — ':''} ${fmtDia}</div>
     <div style="font-size:10.5px;color:var(--dim);margin-bottom:10px">Modo general activo: reporta tu % de avance y qué hiciste, por cada actividad activa.</div>
-    ${horarioCerrado?`<div style="margin-bottom:12px;padding:8px 10px;background:rgba(255,92,92,.08);border:0.5px solid rgba(255,92,92,.3);border-radius:8px;font-size:11.5px;color:var(--red)">⏰ Ya son las 7:15pm — el horario para reportar el avance de hoy ya cerró. No se puede guardar un reporte nuevo.</div>`:''}`;
+    ${horarioCerrado?`<div style="margin-bottom:12px;padding:8px 10px;background:rgba(255,92,92,.08);border:0.5px solid rgba(255,92,92,.3);border-radius:8px;font-size:11.5px;color:var(--red)">⏰ Ya son las 7:30pm — el horario para reportar el avance de hoy ya cerró. No se puede guardar un reporte nuevo.</div>`:''}`;
 
   // Reportes ya hechos hoy (pueden incluir reportes viejos guardados cuando estaba activo el modo Subtareas)
   if(repsExistentes.length){
@@ -10693,7 +10693,7 @@ function renderCalProyPanelHoyGeneral(fecha, repsExistentes, esHoy){
       <button class="pa-btn pa-btn-ghost" onclick="calProyAgregarPendienteG()" style="flex:1">
         ➕ Agregar otra actividad
       </button>
-      <button class="pa-btn pa-btn-primary" onclick="calProyGuardarReporteHoyG()" style="flex:1${horarioCerrado?';opacity:.45;cursor:not-allowed':''}" ${horarioCerrado?'disabled title="El horario para reportar ya cerró (7:15pm)"':''}>
+      <button class="pa-btn pa-btn-primary" onclick="calProyGuardarReporteHoyG()" style="flex:1${horarioCerrado?';opacity:.45;cursor:not-allowed':''}" ${horarioCerrado?'disabled title="El horario para reportar ya cerró (7:30pm)"':''}>
         💾 Guardar reporte del día${pendientes.length?` (${pendientes.length+1})`:''}
       </button>
     </div>
@@ -10751,7 +10751,7 @@ function calProyQuitarPendienteG(idx){
 
 async function calProyGuardarReporteHoyG(){
   if(_userRole==='proyectista' && repHorarioCerrado()){
-    alert('⏰ Ya son las 7:15pm — el horario para reportar el avance de hoy ya cerró.\n\nEste reporte no se guardó. Cualquier duda, coméntalo con tu coordinador.');
+    alert('⏰ Ya son las 7:30pm — el horario para reportar el avance de hoy ya cerró.\n\nEste reporte no se guardó. Cualquier duda, coméntalo con tu coordinador.');
     return;
   }
   const fecha = window._calProyFechaHoy||repDateKey(new Date());
@@ -10909,7 +10909,7 @@ function calProyStChange(subtareas){
 
 async function calProyGuardarReporteHoy(){
   if(_userRole==='proyectista' && repHorarioCerrado()){
-    alert('⏰ Ya son las 7:15pm — el horario para reportar el avance de hoy ya cerró.\n\nEste reporte no se guardó. Cualquier duda, coméntalo con tu coordinador.');
+    alert('⏰ Ya son las 7:30pm — el horario para reportar el avance de hoy ya cerró.\n\nEste reporte no se guardó. Cualquier duda, coméntalo con tu coordinador.');
     return;
   }
   const fecha = window._calProyFechaHoy||repDateKey(new Date());
