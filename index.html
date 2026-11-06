@@ -2625,6 +2625,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 
       </div>
 
+      <!-- Tablero de pendientes: en proceso y por iniciar -->
+      <div id="paPendientes" style="margin-bottom:18px"></div>
+
       <!-- Filtros y tabla -->
 
       <div class="pa-sec-proyecto" id="paSection-Proyecto">
@@ -16789,8 +16792,72 @@ function rendReset(){
 }
 
 
+// ── Tablero general de pendientes: lo que está en proceso y lo ya considerado que aún no inicia ──
+let PA_PEND_COLAPSADO = {};
+function paPendToggle(k){ PA_PEND_COLAPSADO[k] = !PA_PEND_COLAPSADO[k]; paRenderPendientes(); }
+function paRenderPendientes(){
+  const host = document.getElementById('paPendientes'); if(!host) return;
+  const esc = t=>String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const hoy = repDateKey(new Date());
+  const soloMio = (typeof _userRole!=='undefined' && _userRole==='proyectista');
+  const base = PA_ITEMS.filter(a=>!soloMio || a.responsable===_miNombre);
+  const fmt = k=>{ if(!k) return '—'; const d=new Date(String(k).slice(0,10)+'T00:00:00'); return isNaN(d)?'—':d.toLocaleDateString('es-MX',{day:'numeric',month:'short'}).replace('.',''); };
+  const porTermino = (x,y)=>String(x.fechaTermino||'9999').localeCompare(String(y.fechaTermino||'9999')) || String(x.fechaAsig||'').localeCompare(String(y.fechaAsig||''));
+  const GRUPOS = [
+    {k:'proc',  titulo:'En proceso',  sub:'ya se está trabajando', col:'var(--accent)', items:base.filter(a=>a.estatus==='En progreso').sort(porTermino)},
+    {k:'ini',   titulo:'Por iniciar', sub:'ya consideradas, aún no arrancan', col:'var(--dim)', items:base.filter(a=>a.estatus==='Sin iniciar').sort(porTermino)},
+    {k:'pausa', titulo:'En pausa',    sub:'detenidas temporalmente', col:'var(--amber)', items:base.filter(a=>a.estatus==='En pausa').sort(porTermino)}
+  ].filter(g=>g.k!=='pausa' || g.items.length);
+  const total = GRUPOS.reduce((n,g)=>n+g.items.length,0);
+  const venc = GRUPOS.reduce((n,g)=>n+g.items.filter(a=>paEsVencida(a,hoy)).length,0);
+  const th = 'text-align:left;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);padding:6px 10px;border-bottom:1px solid var(--border);white-space:nowrap';
+  const td = 'padding:7px 10px;border-bottom:1px solid var(--border);font-size:12px;vertical-align:middle';
+  const fila = a=>{
+    const crono = (typeof CRONO_ITEMS!=='undefined') ? CRONO_ITEMS.find(x=>x.actividadId===a.id) : null;
+    const av = crono && (crono.subtareas||[]).length ? Math.round(cronoAvance(crono.subtareas)) : null;
+    const v = paEsVencida(a,hoy);
+    const cfg = PA_STATUS_CFG[a.estatus] || {cls:'bgr',dot:'var(--dim)'};
+    const dias = a.fechaTermino ? Math.round((new Date(a.fechaTermino+'T00:00:00')-new Date(hoy+'T00:00:00'))/86400000) : null;
+    const nota = v ? '<span style="color:var(--red);font-size:10px;font-weight:600"> ● Vencida</span>'
+               : dias===0 ? '<span style="color:var(--amber);font-size:10px;font-weight:600"> · vence hoy</span>'
+               : (dias!==null && dias>0 && dias<=2) ? `<span style="color:var(--amber);font-size:10px"> · en ${dias}d</span>` : '';
+    const iniRetraso = a.estatus==='Sin iniciar' && a.fechaAsig && a.fechaAsig<hoy;
+    const barra = av===null ? '<span style="color:var(--dim)">—</span>'
+      : `<div style="display:flex;align-items:center;gap:6px;min-width:84px"><div style="flex:1;height:5px;background:rgba(128,140,160,.2);border-radius:3px;overflow:hidden"><div style="width:${Math.min(100,av)}%;height:100%;background:var(--accent)"></div></div><span style="font-size:11px;color:var(--muted)">${av}%</span></div>`;
+    return `<tr${v?' style="background:rgba(255,92,92,.05)"':''}>
+      <td style="${td};font-family:var(--mono,monospace);font-size:11px;color:var(--accent);white-space:nowrap">${esc(a.folio||'—')}</td>
+      <td style="${td};max-width:320px"><div style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(a.actividad)}">${esc(a.actividad||'—')}</div><div style="font-size:10.5px;color:var(--dim)">${esc(a.proyecto||'')}${a.tipo?' · '+esc(a.tipo):''}</div></td>
+      <td style="${td};white-space:nowrap"><span class="badge ${cfg.cls}" style="font-size:10px">${esc(a.estatus)}</span></td>
+      <td style="${td};white-space:nowrap;color:${iniRetraso?'var(--amber)':'var(--text)'}" ${iniRetraso?'title="Debió iniciar y aún sigue sin iniciar"':''}>${fmt(a.fechaAsig)}</td>
+      <td style="${td};white-space:nowrap;color:${v?'var(--red)':'var(--text)'};font-weight:${v?700:400}">${fmt(a.fechaTermino)}${nota}</td>
+      <td style="${td};white-space:nowrap;color:var(--muted)">${esc(String(a.responsable||'—').split(' ').slice(0,2).join(' '))}</td>
+      <td style="${td}">${barra}</td></tr>`;
+  };
+  const secciones = GRUPOS.map(g=>{
+    const cerrado = !!PA_PEND_COLAPSADO[g.k];
+    const cuerpo = g.items.length
+      ? `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:860px"><colgroup><col style="width:7%"><col style="width:29%"><col style="width:12%"><col style="width:9%"><col style="width:16%"><col style="width:14%"><col style="width:13%"></colgroup><thead><tr><th style="${th}">Folio</th><th style="${th}">Actividad</th><th style="${th}">Estatus</th><th style="${th}">Inicio</th><th style="${th}">Término</th><th style="${th}">Responsable</th><th style="${th}">Avance</th></tr></thead><tbody>${g.items.map(fila).join('')}</tbody></table></div>`
+      : `<div style="padding:14px;font-size:12px;color:var(--dim)">Sin actividades en esta sección.</div>`;
+    return `<div style="border-top:1px solid var(--border)">
+      <div onclick="paPendToggle('${g.k}')" style="display:flex;align-items:center;gap:8px;padding:10px 16px;cursor:pointer;user-select:none">
+        <span style="width:8px;height:8px;border-radius:50%;background:${g.col}"></span>
+        <span style="font-size:12px;font-weight:700;color:var(--text)">${g.titulo}</span>
+        <span style="font-size:11px;color:var(--dim)">${g.sub}</span>
+        <span style="font-size:11px;font-weight:700;padding:1px 8px;border-radius:20px;background:var(--surface2);color:var(--muted)">${g.items.length}</span>
+        <span style="flex:1"></span><span style="font-size:10px;color:var(--dim)">${cerrado?'▼':'▲'}</span>
+      </div>${cerrado?'':cuerpo}</div>`;
+  }).join('');
+  host.innerHTML = `<div class="panel">
+    <div class="ph"><div><div class="pt">Pendientes</div><div class="ps">${soloMio?'Tus actividades':'Todo el equipo'} · ordenadas por fecha de término</div></div>
+      <div style="display:flex;gap:14px;font-size:11px;color:var(--muted);align-items:center">
+        <span><b style="color:var(--text)">${total}</b> abiertas</span>${venc?`<span style="color:var(--red)"><b>${venc}</b> vencidas</span>`:''}
+      </div></div>
+    ${secciones}</div>`;
+}
+
 function renderPanel(){
   paRenderAlerts();
+  try{ paRenderPendientes(); }catch(e){ console.warn('paRenderPendientes', e); }
 
   // Semáforo — cards clickables
   const avail = paAvailability();
