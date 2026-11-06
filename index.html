@@ -9510,7 +9510,7 @@ function planOpen() {
 function planBuildHTML() {
   var today = new Date();
   today.setHours(0,0,0,0);
-  var todayStr = today.toISOString().slice(0,10);
+  var todayStr = repDateKey(today);
   var numWeeks = window.PLAN_WEEKS || 3;
   var numWeeks = window.PLAN_WEEKS || 3;
   var planStart = window.PLAN_START || today;
@@ -9538,7 +9538,7 @@ function planBuildHTML() {
   h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:0.5px solid var(--border);background:rgba(255,255,255,.02);flex-wrap:wrap;gap:10px">';
   h += '<div><div style="font-size:15px;font-weight:700">📅 Plan de trabajo del equipo</div><div style="font-size:11px;color:var(--dim);margin-top:2px">Próximas '+periodLabel+' · desde hoy '+today.toLocaleDateString('es-MX',{day:'numeric',month:'long'})+'</div></div>';
   h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
-  var planStartStr = window.PLAN_START ? window.PLAN_START.toISOString().slice(0,10) : today.toISOString().slice(0,10);
+  var planStartStr = window.PLAN_START ? window.PLAN_START.toISOString().slice(0,10) : repDateKey(today);
   h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">';
   h += '<div style="display:flex;align-items:center;gap:6px">';
   h += '<span style="font-size:11px;color:var(--dim)">Desde:</span>';
@@ -9871,7 +9871,7 @@ function planCorteSeccion(weeks, C){
   };
   var colDe=function(e){return (e==='cumple'||e==='completada'||e==='adelantada')?'#166534':e==='parcial'?'#92400e':e==='atrasada'?'#b91c1c':'#6b7280';};
   var ABIERTAS=['Sin iniciar','En progreso','En pausa'];
-  var hoyKey=(typeof repDateKey==='function')?repDateKey(new Date()):new Date().toISOString().slice(0,10);
+  var hoyKey=(typeof repDateKey==='function')?repDateKey(new Date()):repDateKey(new Date());
   weeks.forEach(function(week,wi){
     var dias=week.map(function(d){return d.toISOString().slice(0,10);});
     var wS=dias[0], wE=dias[4];
@@ -10015,7 +10015,7 @@ function planExportPDF(detallado) {
   if(typeof cronoLoad==='function') cronoLoad();
   var today = new Date();
   today.setHours(0,0,0,0);
-  var todayStr = today.toISOString().slice(0,10);
+  var todayStr = repDateKey(today);
   var numWeeks = window.PLAN_WEEKS || 3;
   var planStart = window.PLAN_START || today;
   var weeks = planGetWeeks(planStart, numWeeks);
@@ -12487,7 +12487,7 @@ function sbiGuardar(marcarDado){
     momento: window._sbiCk_momento,
     estado: window._sbiCk_estado,
   };
-  const hoy = new Date().toISOString().slice(0,10);
+  const hoy = repDateKey(new Date());
 
   if(sbiEditId){
     const idx = SBI_ITEMS.findIndex(x=>x.id===sbiEditId);
@@ -12521,7 +12521,7 @@ function sbiMarcarDado(id){
     if(!confirm('Este feedback todavía no tiene contenido (S/B/I). ¿Marcarlo como dado igual?')) return;
   }
   f.estatus = 'dado';
-  f.fechaDado = f.fechaDado || new Date().toISOString().slice(0,10);
+  f.fechaDado = f.fechaDado || repDateKey(new Date());
   sbiSave();
   renderSbi();
 }
@@ -13947,7 +13947,7 @@ async function o2oSave(){
     estatusGlobal = sems.includes('r')?'r':sems.includes('y')?'y':sems.includes('g')?'g':'';
   }
 
-  const fechaISO=new Date().toISOString().slice(0,10);
+  const fechaISO=repDateKey(new Date());
   const evaluador=_miNombre||(_currentUser&&_currentUser.email)||'Administrador';
   const rec={
     id:'o2o_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),
@@ -14901,7 +14901,7 @@ function paRenderTipo(tipo){
   const filtResp= document.getElementById('paFiltResp-'+tipo)?.value||'';
   const filtEst = document.getElementById('paFiltEst-'+tipo)?.value||'';
   const s = paSortState[tipo]||{col:'fechaAsig',dir:-1};
-  const today = new Date().toISOString().slice(0,10);
+  const today = repDateKey(new Date());
 
   let items = PA_ITEMS.filter(a=>{
     if(a.tipo!==tipo) return false;
@@ -15247,7 +15247,7 @@ function paRenderAlerts(){
   // 5. Sin iniciar hace 3+ días hábiles
   const estancadas = PA_ITEMS.filter(a => {
     if(a.estatus!=='Sin iniciar' || !a.fechaAsig) return false;
-    const dias = paWorkdays(a.fechaAsig, today.toISOString().slice(0,10));
+    const dias = paWorkdays(a.fechaAsig, repDateKey(today));
     return dias!==null && dias >= 3;
   });
 
@@ -15330,7 +15330,7 @@ function paAlertFilter(kind){
   } else if(kind==='estancadas'){
     items = PA_ITEMS.filter(a => {
       if(a.estatus!=='Sin iniciar' || !a.fechaAsig) return false;
-      const dias = paWorkdays(a.fechaAsig, today.toISOString().slice(0,10));
+      const dias = paWorkdays(a.fechaAsig, repDateKey(today));
       return dias!==null && dias >= 3;
     });
     title = 'Sin iniciar hace 3+ días hábiles';
@@ -15351,7 +15351,7 @@ function paAlertFilter(kind){
     title = 'En revisión — posible dependencia externa';
     if(!items.length){ alert('Sin registros.'); return; }
     const lines = items.slice(0,15).map(a => {
-      const dias = a.fechaAsig ? paWorkdays(a.fechaAsig, today.toISOString().slice(0,10)) : null;
+      const dias = a.fechaAsig ? paWorkdays(a.fechaAsig, repDateKey(today)) : null;
       return `• ${a.actividad||'(sin nombre)'} ${a.folio?'['+a.folio+']':''} — ${a.responsable||'sin responsable'}${dias!==null?` (${dias}d desde asignación)`:''}`;
     });
     alert(`${title} (${items.length}):\n\n` + lines.join('\n') + (items.length>15?`\n\n…y ${items.length-15} más`:'') + `\n\nSugerencia: dar seguimiento interno o con el área externa correspondiente.`);
@@ -16448,7 +16448,7 @@ function renderDashResumen(){
   const total = PA_ITEMS.length;
   const terminadas = PA_ITEMS.filter(a=>a.estatus==='Terminado').length;
   const activas = total - terminadas;
-  const today = new Date().toISOString().slice(0,10);
+  const today = repDateKey(new Date());
   const enTiempo = PA_ITEMS.filter(a=>a.fechaReal && a.fechaTermino && a.fechaReal<=a.fechaTermino).length;
   const conReal = PA_ITEMS.filter(a=>a.fechaReal && a.fechaTermino).length;
   const pctTiempo = conReal ? Math.round(enTiempo/conReal*100) : 0;
@@ -16550,7 +16550,7 @@ function renderDashProductividad(){
     return ref >= cutoff;
   });
 
-  const today = now.toISOString().slice(0,10);
+  const today = repDateKey(now);
   const colors = ['#3dd68c','#4a8fd4','#f5a623','#ff7eb3','#a78bfa','#34d399','#fb923c'];
   const nameShort = n => (n||'Sin asignar').split(' ').slice(0,2).join(' ');
 
@@ -17238,7 +17238,7 @@ function paPausaResumen(a){
 function paAplicarEstatus(a, newEstatus){
   if(!a || a.estatus === newEstatus) return;
   if(typeof paEnsurePausaInicio==='function') paEnsurePausaInicio(a);
-  const hoy = new Date().toISOString().slice(0,10);
+  const hoy = repDateKey(new Date());
   if(a.estatus === 'En pausa' && a.pausaInicio){
     const diasEstePausa = paPausaElapsed(a.pausaInicio, hoy);
     a.diasEnPausaAcum = (a.diasEnPausaAcum||0) + diasEstePausa;
@@ -17353,7 +17353,7 @@ function paAjustarTerminosReapertura(){
 // el conteo de días empiece a correr en vez de quedarse congelado en 0 para siempre.
 function paEnsurePausaInicio(a){
   if(!a || a.estatus !== 'En pausa' || a.pausaInicio) return false;
-  a.pausaInicio = (a.updatedAt||a.createdAt||'').slice(0,10) || new Date().toISOString().slice(0,10);
+  a.pausaInicio = (()=>{ const t=a.updatedAt||a.createdAt; const d=t?new Date(t):null; return (d&&!isNaN(d)) ? repDateKey(d) : repDateKey(new Date()); })();
   return true;
 }
 
@@ -17379,7 +17379,7 @@ function paDiasEnPausa(a){
   // Reabierta: solo cuentan las pausas del ciclo actual (las anteriores ya quedaron en el ciclo cerrado)
   let dias = _ini ? (a.pausasHistorial||[]).filter(p=>p.inicio>=_ini).reduce((t,p)=>t+(p.dias||0),0) : (a.diasEnPausaAcum||0);
   if(a.estatus==='En pausa' && a.pausaInicio){
-    dias += paPausaElapsed(a.pausaInicio, new Date().toISOString().slice(0,10));
+    dias += paPausaElapsed(a.pausaInicio, repDateKey(new Date()));
     dias += paPausaPrioridadRestante(a); // cambio de prioridad: lo que falta por atender las actividades de delante
   }
   return dias;
@@ -17590,7 +17590,7 @@ function paOpenModal(id, preselectedTipo){
     document.getElementById('paFKm').value = '';
     document.getElementById('paFPropietario').value = '';
     document.getElementById('paFResponsable').value = '';
-    document.getElementById('paFAsig').value = new Date().toISOString().slice(0,10);
+    document.getElementById('paFAsig').value = repDateKey(new Date());
     document.getElementById('paFTermino').value = '';
     document.getElementById('paFFechaReal').value = '';
     document.getElementById('paFEstatus').value = 'Sin iniciar';
@@ -17677,10 +17677,10 @@ function paGuardar(){
     }
   } else {
     data.createdAt = data.updatedAt;
-    data.pausaInicio = data.estatus === 'En pausa' ? new Date().toISOString().slice(0,10) : null;
+    data.pausaInicio = data.estatus === 'En pausa' ? repDateKey(new Date()) : null;
     data.diasEnPausaAcum = 0;
     data.pausasHistorial = [];
-    data.fechaEntregaProy = (data.estatus==='En revisión' || data.estatus==='Terminado (máximo avance)' || data.estatus==='Terminado') ? new Date().toISOString().slice(0,10) : null;
+    data.fechaEntregaProy = (data.estatus==='En revisión' || data.estatus==='Terminado (máximo avance)' || data.estatus==='Terminado') ? repDateKey(new Date()) : null;
     data.devoluciones = 0;
     PA_ITEMS.unshift(data);
       if(data.responsable && typeof notifNuevaActividad==='function'){
@@ -17759,7 +17759,7 @@ function paExportCSV(){
   const blob = new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href=url; a.download='Panel_Actividades_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.href=url; a.download='Panel_Actividades_'+repDateKey(new Date())+'.csv';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(()=>URL.revokeObjectURL(url),3000);
 }
@@ -17926,7 +17926,7 @@ function usbOpenModal(id){
     document.getElementById('usbFObs').value = u.obs||'';
   } else {
     document.getElementById('usbModalId').value = '';
-    document.getElementById('usbFFecha').value = new Date().toISOString().slice(0,10);
+    document.getElementById('usbFFecha').value = repDateKey(new Date());
     document.getElementById('usbFCantidad').value = 1;
     document.getElementById('usbFFolio').value = '';
     document.getElementById('usbFProyecto').value = '';
@@ -17993,7 +17993,7 @@ function csvDoExport(){
   const items = csvGetFiltered();
   if(!items.length){ alert('No hay registros con esos filtros.'); return; }
   const cols=['Tipo','#Bobina','Folio','Actividad','Proyecto','Propietario','Responsable','F. Asignación','F. Término','F. Final Real','Km','Estatus','Notas','Enlace','Días Est.','Días Real','Observaciones','Creado'];
-  const today=new Date().toISOString().slice(0,10);
+  const today=repDateKey(new Date());
   const rows=items.map(a=>{
     const dEst=paWorkdays(a.fechaAsig,a.fechaTermino);
     const endR=a.fechaReal||today;
@@ -18123,7 +18123,7 @@ function pdmOpen(name){
 
   const {c, bg} = pcolor(name);
   const iniStr  = ini(name);
-  const today   = new Date().toISOString().slice(0,10);
+  const today   = repDateKey(new Date());
 
   // All activities for this person
   const all = PA_ITEMS.filter(a => a.responsable === name);
@@ -18308,7 +18308,7 @@ function pdmGeneratePDF(period){
   const name   = nameEl2.dataset.fullname || nameEl2.textContent;
   const now    = new Date();
   const y      = now.getFullYear();
-  const today  = now.toISOString().slice(0,10);
+  const today  = repDateKey(now);
   const genStr = now.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' · '+now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
 
   // Define period range
@@ -18371,7 +18371,7 @@ function pdmGeneratePDF(period){
   const enTiempoActs  = conFechaReal.filter(a=>a.fechaReal<=a.fechaTermino).length;
   const fueraTiempo   = conFechaReal.filter(a=>a.fechaReal>a.fechaTermino).length;
   const sinFechaActs  = all.filter(a=>!a.fechaTermino).length;
-  const enRiesgoActs  = all.filter(a=>paEsVencida(a, now.toISOString().slice(0,10))).length;
+  const enRiesgoActs  = all.filter(a=>paEsVencida(a, repDateKey(now))).length;
   const pctCumpl = conFechaReal.length ? Math.round(enTiempoActs/conFechaReal.length*100) : 0;
 
   const fmtS = d => d ? new Date(d+'T00:00:00').toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
@@ -19356,7 +19356,7 @@ function dirExportXLSX(fields, active, vacante){
     return {wch: widths[f.key]||18};
   });
   XLSX.utils.book_append_sheet(wb, ws, 'Directorio');
-  XLSX.writeFile(wb, `Directorio_Ingenieria_${now.toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb, `Directorio_Ingenieria_${repDateKey(now)}.xlsx`);
 }
 function dirExportPDF(fields, active, vacante){
   const now = new Date();
@@ -19797,7 +19797,7 @@ function ausRenderWeekGrid(){
   for(let i=0;i<5;i++){
     const d = new Date(monday); d.setDate(monday.getDate()+i);
     const dStr = d.toISOString().slice(0,10);
-    const isToday = dStr === today.toISOString().slice(0,10);
+    const isToday = dStr === repDateKey(today);
     const isHoliday = festIsHoliday(dStr);
 
     const homeToday = ausHomeOfficeFor(d);
@@ -19909,7 +19909,7 @@ function ausOpenModal(id){
     document.getElementById('ausModalId').value = '';
     document.getElementById('ausFPersona').value = PA_MEMBERS[0]||'';
     document.getElementById('ausFTipo').value = 'vacaciones';
-    document.getElementById('ausFInicio').value = new Date().toISOString().slice(0,10);
+    document.getElementById('ausFInicio').value = repDateKey(new Date());
     document.getElementById('ausFFin').value = '';
     document.getElementById('ausFNota').value = '';
   }
@@ -19954,7 +19954,7 @@ function ausDelete(id){
 // ── Estado de hoy para una persona (usado por el semáforo del Panel de control) ──
 function ausEstadoHoy(nombre){
   const today = new Date(); today.setHours(0,0,0,0);
-  const todayStr = today.toISOString().slice(0,10);
+  const todayStr = repDateKey(today);
 
   const ausencia = AUSENCIAS.find(a => a.persona===nombre && a.inicio<=todayStr && (a.fin||a.inicio)>=todayStr);
   if(ausencia){
@@ -20036,7 +20036,7 @@ function paExportPDF(){
     return `<span style="background:${map[s]||'#444'};color:#fff;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:600">${s}</span>`;
   };
 
-  const today = new Date().toISOString().slice(0,10);
+  const today = repDateKey(new Date());
 
   // ── Tablero de disponibilidad (misma lógica del semáforo del Panel de control) ──
   const availData = paAvailability().filter(a=>a.type!=='vacante');
@@ -20176,7 +20176,7 @@ function paExportPDF(){
       </table>
     </div>` : '';
 
-  const periodoStr = `${fmtFull(twoWeeksAgo.toISOString().slice(0,10))} – ${fmtFull(now.toISOString().slice(0,10))} ${now.getFullYear()}`;
+  const periodoStr = `${fmtFull(twoWeeksAgo.toISOString().slice(0,10))} – ${fmtFull(repDateKey(now))} ${now.getFullYear()}`;
 
   // ── Notas de Sergio (pendientes + cerradas) ──
   const fmtNotaDate = iso => { try{ return new Date(iso).toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'}); }catch(e){ return ''; } };
@@ -20927,7 +20927,7 @@ function srvSetEstado(e){ srvFiltroEstado = srvFiltroEstado===e ? 'todos' : e; s
 
 function srvRenderTable(){
   const tbody = document.getElementById('srvTbody'); if(!tbody) return;
-  const today = new Date().toISOString().slice(0,10);
+  const today = repDateKey(new Date());
   const fmtD = d => d ? new Date(d+'T00:00:00').toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
 
   let items = [...SRV_ITEMS];
@@ -21398,7 +21398,7 @@ function vacRenderCal(){
   const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                       'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const today = new Date(); today.setHours(0,0,0,0);
-  const todayStr = today.toISOString().slice(0,10);
+  const todayStr = repDateKey(today);
 
   for(let mi=0; mi<3; mi++){
     const month = startMonth + mi;
