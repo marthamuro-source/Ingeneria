@@ -17957,6 +17957,96 @@ function paSelectTipo(tipo){
 }
 
 // ─── MODAL DETALLE PROYECTISTA ────────────────────────────────────────────────
+// ── Calendario de la semana en el modal de la persona: qué días está ocupada (solo gráfico, para acomodar asignaciones) ──
+let PDM_SEM_OFF = 0;
+function pdmSemMover(d, name){ PDM_SEM_OFF = d===0 ? 0 : PDM_SEM_OFF + d; pdmRenderSemana(name); }
+function pdmOcupacionDia(name, ds, cache){
+  const d = new Date(ds+'T00:00:00');
+  if(FESTIVOS.includes(ds)) return {tipo:'festivo'};
+  if(cronoEsVacacionPersona(name, ds)) return {tipo:'vacaciones'};
+  const cap = cronoCapacidadDia(d, name);
+  const entregada = a=>(a.estatus==='En revisión'||a.estatus==='Terminado (máximo avance)'||a.estatus==='Terminado');
+  const items = [];
+  let sumPlan = 0, hayLibre = false;
+  PA_ITEMS.forEach(a=>{
+    if(a.responsable!==name || !a.fechaAsig) return;
+    const entr = entregada(a) ? String(a.fechaEntregaProy||a.fechaReal||a.fechaTermino||'').slice(0,10)||null : null;
+    if(entr && ds>entr) return;
+    let c = cache[a.id];
+    if(!c){
+      const cr = (CRONO_ITEMS||[]).find(x=>x.actividadId===a.id);
+      c = cache[a.id] = {plan: cr ? cronoPlanDiario(a, cr) : null};
+    }
+    if(c.plan){
+      const j = (c.plan.jor && c.plan.jor[ds]) || 0;
+      if(j>1e-9){ items.push({a, jor:j, sinPlan:false}); sumPlan += j; }
+    } else {
+      const fin = entr || a.fechaTermino || a.fechaAsig;
+      if(a.fechaAsig<=ds && ds<=fin && !paEnPausaEnFecha(a, ds)){ items.push({a, jor:0, sinPlan:true}); hayLibre = true; }
+    }
+  });
+  if(cap<=1e-9) return {tipo:'inhabil'};
+  let pct = sumPlan/cap;
+  if(hayLibre && pct<1) pct = 1;       // actividades sin desglose: se asume el día completo
+  const estado = items.length===0 ? 'libre' : pct>1.05 ? 'sobre' : pct>=0.95 ? 'ocupado' : 'parcial';
+  return {tipo:'dia', cap, items, pct, estado, sinDesglose:hayLibre && sumPlan<cap};
+}
+function pdmRenderSemana(name){
+  const host = document.getElementById('pdmSemana'); if(!host) return;
+  if(typeof CRONO_ITEMS==='undefined' || !CRONO_ITEMS.length){ try{ cronoLoad(); }catch(e){} }
+  const lun = cronoCumpLunes(PDM_SEM_OFF);
+  const dias = [0,1,2,3,4].map(i=>{ const d = new Date(lun); d.setDate(d.getDate()+i); return d; });
+  const hoyK = repDateKey(new Date());
+  const nom = ['Lun','Mar','Mié','Jue','Vie'];
+  const mes = d=>d.toLocaleDateString('es-MX',{day:'numeric',month:'short'}).replace('.','');
+  const PAL = ['#2a78d6','#1baf7a','#eda100','#9b59b6','#eb6834','#0ea5b7','#d6457a','#7a8a3a'];
+  const colorProy = p=>{ let h=0; String(p||'').split('').forEach(ch=>{ h=(h*31+ch.charCodeAt(0))>>>0; }); return PAL[h%PAL.length]; };
+  const cache = {};
+  const esc = t=>String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const E = {
+    libre:  {txt:'Libre',       bg:'rgba(61,214,140,.10)',  bd:'rgba(61,214,140,.55)', col:'var(--green)'},
+    parcial:{txt:'Parcial',     bg:'rgba(245,166,35,.10)',  bd:'rgba(245,166,35,.55)', col:'var(--amber)'},
+    ocupado:{txt:'Ocupado',     bg:'rgba(74,143,212,.12)',  bd:'rgba(74,143,212,.65)', col:'var(--accent)'},
+    sobre:  {txt:'Sobre-asignado', bg:'rgba(255,92,92,.10)', bd:'rgba(255,92,92,.6)',  col:'var(--red)'}
+  };
+  const celdas = dias.map((d,i)=>{
+    const ds = repDateKey(d);
+    const hoy = ds===hoyK;
+    const marco = hoy ? ';box-shadow:0 0 0 2px rgba(74,143,212,.35)' : '';
+    const head = `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><span style="font-size:11px;font-weight:700;color:${hoy?'var(--accent)':'var(--text)'}">${nom[i]} ${d.getDate()}</span>${hoy?'<span style="font-size:9px;color:var(--accent);font-weight:700">HOY</span>':''}</div>`;
+    const o = pdmOcupacionDia(name, ds, cache);
+    if(o.tipo==='vacaciones') return `<div style="min-height:104px;padding:8px;border-radius:8px;background:rgba(155,89,182,.10);border:1px solid rgba(155,89,182,.45)${marco}">${head}<div style="text-align:center;padding-top:10px"><div style="font-size:20px">🏖</div><div style="font-size:10px;font-weight:700;color:#a56cf0">VACACIONES</div></div></div>`;
+    if(o.tipo==='festivo' || o.tipo==='inhabil') return `<div style="min-height:104px;padding:8px;border-radius:8px;background:rgba(128,140,160,.10);border:1px solid var(--border)${marco}">${head}<div style="text-align:center;padding-top:14px;font-size:10px;font-weight:700;color:var(--dim)">${o.tipo==='festivo'?'FESTIVO':'NO LABORABLE'}</div></div>`;
+    const st = E[o.estado];
+    const barra = `<div style="height:5px;background:rgba(128,140,160,.18);border-radius:3px;overflow:hidden;margin-bottom:6px"><div style="width:${Math.min(100,Math.round(o.pct*100))}%;height:100%;background:${st.col}"></div></div>`;
+    const chips = o.items.slice(0,4).map(it=>{
+      const a = it.a;
+      const lbl = a.folio || a.actividad || a.proyecto || '—';
+      const tip = [a.proyecto, a.folio, a.actividad, it.sinPlan?'sin desglose de subtareas':'~'+(Math.round(it.jor*100)/100)+' jornada'].filter(Boolean).join(' · ');
+      return `<div title="${esc(tip)}" style="display:flex;align-items:center;gap:4px;margin-top:3px;font-size:9.5px;color:var(--text);overflow:hidden"><span style="width:7px;height:7px;border-radius:2px;background:${colorProy(a.proyecto)};flex-shrink:0"></span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(lbl)}</span></div>`;
+    }).join('');
+    const mas = o.items.length>4 ? `<div style="font-size:9px;color:var(--dim);margin-top:3px">+${o.items.length-4} más</div>` : '';
+    return `<div style="min-height:104px;padding:8px;border-radius:8px;background:${st.bg};border:1px solid ${st.bd}${marco}">${head}
+      <div style="font-size:10px;font-weight:700;color:${st.col};margin-bottom:4px">${st.txt}</div>${o.estado==='libre'?'':barra}${chips}${mas}</div>`;
+  }).join('');
+  const nameJs = String(name).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  const btn = 'font-size:11px;padding:3px 10px;border-radius:6px;border:0.5px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;font-family:var(--font)';
+  const titulo = PDM_SEM_OFF===0 ? 'Semana en curso' : PDM_SEM_OFF>0 ? 'Semana +'+PDM_SEM_OFF : 'Semana '+PDM_SEM_OFF;
+  host.innerHTML = `<div style="margin-bottom:18px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <span style="font-size:12px;font-weight:700;color:var(--text)">📅 ${titulo} · ${mes(dias[0])} – ${mes(dias[4])}</span>
+      <span style="flex:1"></span>
+      <button style="${btn}" onclick="pdmSemMover(-1,'${nameJs}')" title="Semana anterior">‹</button>
+      <button style="${btn}" onclick="pdmSemMover(0,'${nameJs}')">Hoy</button>
+      <button style="${btn}" onclick="pdmSemMover(1,'${nameJs}')" title="Semana siguiente">›</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px">${celdas}</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:9.5px;color:var(--dim)">
+      <span><b style="color:var(--green)">■</b> Libre</span><span><b style="color:var(--amber)">■</b> Parcial</span><span><b style="color:var(--accent)">■</b> Ocupado</span><span><b style="color:var(--red)">■</b> Sobre-asignado</span><span><b style="color:#a56cf0">■</b> Vacaciones</span>
+    </div>
+  </div>`;
+}
+
 function pdmOpen(name){
   const modal  = document.getElementById('pdmModal');
   const avatar = document.getElementById('pdmAvatar');
@@ -17987,10 +18077,7 @@ function pdmOpen(name){
   nameEl.dataset.fullname = name; // guardar nombre completo
 
   // KPIs
-  const retrasadas = activas.filter(a=>{
-    if(!a.fechaTermino) return false;
-    return new Date(a.fechaTermino+'T00:00:00') < new Date();
-  }).length;
+  const retrasadas = activas.filter(a=>paEsVencida(a)).length;
 
   kpis.innerHTML = `
     <div class="pdm-kpi"><div class="val" style="color:var(--accent)">${all.length}</div><div class="lbl">Total hist.</div></div>
@@ -18064,7 +18151,8 @@ function pdmOpen(name){
     </div>`;
   }
 
-  body.innerHTML = SECTIONS
+  PDM_SEM_OFF = 0;
+  body.innerHTML = '<div id="pdmSemana"></div>' + SECTIONS
     .filter(s => s.items.length > 0)
     .map(s => `
       <div class="pdm-section">
@@ -18072,6 +18160,7 @@ function pdmOpen(name){
         ${(s.label==='Terminadas' ? s.items : s.items.slice().sort((a,b)=>(a.fechaTermino||'9').localeCompare(b.fechaTermino||'9'))).map(actCard).join('')}
       </div>`)
     .join('') || `<div class="pdm-empty">Sin actividades registradas para este proyectista.</div>`;
+  try{ pdmRenderSemana(name); }catch(e){ console.warn('pdmRenderSemana', e); }
 
   modal.classList.add('open');
 }
