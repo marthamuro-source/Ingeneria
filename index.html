@@ -10068,8 +10068,8 @@ function planCorteSeccion(weeks, C){
             h+='<td><b>'+esc(a.actividad||'--')+'</b></td>';
             h+='<td><b>'+esc(a.proyecto||'--')+'</b><br><b style="font-size:9px;color:#374151">'+esc(a.tipo||'--')+'</b>'+(isConS&&a.numBobina?' &nbsp;Bna #'+esc(a.numBobina):'')+'</td>';
             h+='<td style="font-family:monospace;font-size:8px;color:#1a4fa0">'+esc(a.folio||'--')+'</td>';
-            h+='<td colspan="5" style="font-size:8.5px;color:#374151"><b style="color:#5b21b6">Planificada sin desglose</b> &middot; Inicio: <b>'+fd(a.fechaAsig)+'</b>'+(a.fechaTermino?' &middot; Entrega interna: <b>'+fd(a.fechaTermino)+'</b> &middot; Subida oficial: <b style="color:#9a3412">'+fd(cronoFechaOficial(a.fechaTermino))+'</b>':'')+' &middot; <b>'+esc(a.estatus||'')+'</b></td>';
-            h+='<td></td><td></td><td class="dc">&mdash;</td><td><span class="stchip st-prov">Falta asignar subtareas</span></td></tr></tbody>';
+            h+='<td colspan="5" style="font-size:8.5px;color:#374151"><b>Planificada sin desglose</b> &middot; Inicio: <b>'+fd(a.fechaAsig)+'</b>'+(a.fechaTermino?' &middot; Entrega interna: <b>'+fd(a.fechaTermino)+'</b> &middot; Subida oficial: <b style="color:#9a3412">'+fd(cronoFechaOficial(a.fechaTermino))+'</b>':'')+' &middot; <b>'+esc(a.estatus||'')+'</b></td>';
+            h+='<td></td><td></td><td class="dc">&mdash;</td><td><span class="stchip st-nuevo">Programada</span></td></tr></tbody>';
             return;
           }
           if(enVentana) noEval[a.id]={a:a,crItem:crItem};
@@ -10122,14 +10122,13 @@ function planCorteSeccion(weeks, C){
         var isCon=(a.tipo==='Conectividad (Bobinas)'||a.tipo==='Planos de Conectividad');
         h+='<td><b>'+esc(a.proyecto||'--')+'</b><br><b style="font-size:9px;color:#374151">'+esc(a.tipo||'--')+'</b>'+(isCon&&a.numBobina?' &nbsp;Bna #'+esc(a.numBobina):'')+'</td>';
         h+='<td style="font-family:monospace;font-size:8px;color:#1a4fa0">'+esc(a.folio||'--')+'</td>';
-        h+='<td colspan="5" style="font-size:8.5px;color:#374151">'+(entr?'Entregada: <b>'+fd(entr)+'</b>':(prov?'<b style="color:#5b21b6">Plan provisional</b>: termina <b>'+fd(plan.fin)+'</b>':'Pron&oacute;stico completo: <b>'+fd(plan.fin)+'</b>'))+(a.fechaTermino?' &middot; Entrega interna: <b>'+fd(a.fechaTermino)+'</b> &middot; Subida oficial: <b style="color:#9a3412">'+fd(cronoFechaOficial(a.fechaTermino))+'</b>':'')+' &middot; <b>'+esc(a.estatus||'')+'</b>'+(cierra?' &middot; <b style="color:#166534">cierra esta semana</b>':' &middot; <b style="color:#3730a3">contin&uacute;a despu&eacute;s del viernes</b>')+'</td>';
+        h+='<td colspan="5" style="font-size:8.5px;color:#374151">'+(entr?'Entregada: <b>'+fd(entr)+'</b>':'Pron&oacute;stico completo: <b>'+fd(plan.fin)+'</b>')+(a.fechaTermino?' &middot; Entrega interna: <b>'+fd(a.fechaTermino)+'</b> &middot; Subida oficial: <b style="color:#9a3412">'+fd(cronoFechaOficial(a.fechaTermino))+'</b>':'')+' &middot; <b>'+esc(a.estatus||'')+'</b>'+(cierra?' &middot; <b style="color:#166534">cierra esta semana</b>':' &middot; <b style="color:#3730a3">contin&uacute;a despu&eacute;s del viernes</b>')+'</td>';
         h+='<td></td><td></td>';
         h+='<td class="dc" style="font-weight:700;color:'+colDe(estAct)+'">'+(weekEval&&!prov&&cump.pct!==null?Math.round(cump.pct*100)+'%':'&mdash;')+'</td>';
         var _enProc=(a.estatus==='En progreso' && wS<=hoyKey);
         var _chipAct = chipDe(cump.estado);
         if(MF && MF.act && (cump.estado==='atrasada'||cump.estado==='parcial')) _chipAct = chipMeta(MF.act)+'<br><span style="font-size:7.5px;color:#6b7280">ritmo '+ritmoPct+'% &middot; fin '+fd(MF.act.fin)+' &middot; holgura '+cronoMetaHolgTxt(MF.act.holg)+'</span>';
-        h+='<td>'+(prov?'<span class="stchip st-prov" title="El proyectista aún no confirma sus subtareas">Programada &middot; por confirmar</span>':weekEval&&cump.pct!==null?_chipAct:(_enProc?'<span class="stchip st-prog" title="Ya inició: el día en curso se evalúa al cerrar">En proceso</span>':'<span class="stchip st-nuevo">Programada</span>'))+'</td></tr>';
-        if(prov) h+='<tr class="pnota prov"><td></td><td colspan="12"><b>&#128221; Plan provisional:</b> las subtareas ya est&aacute;n cargadas y el proyectista a&uacute;n no las confirma. Se muestra con el orden y el rendimiento tal como se cargaron; no se califica (ni cuenta como atraso) hasta que confirme.</td></tr>';
+        h+='<td>'+(prov?(_enProc?'<span class="stchip st-prog" title="Ya inició: el día en curso se evalúa al cerrar">En proceso</span>':'<span class="stchip st-nuevo">Programada</span>'):weekEval&&cump.pct!==null?_chipAct:(_enProc?'<span class="stchip st-prog" title="Ya inició: el día en curso se evalúa al cerrar">En proceso</span>':'<span class="stchip st-nuevo">Programada</span>'))+'</td></tr>';
         h+=planNotasFilas(a,crItem,12,fd);
         vis.forEach(function(v){
           var f=v.f, st=f.st;
@@ -10160,7 +10159,7 @@ function planCorteSeccion(weeks, C){
           var enCursoSub = (extraHoy>1e-9 && f.estado!=='completada');
           var mfF = (MF && MF.filas[st.id] && (f.estado==='atrasada'||f.estado==='parcial')) ? MF.filas[st.id] : null;
           var chip = (weekEval && enCursoSub && (f.estado==='sin_inicio'||f.estado==='adelantada')) ? '<span class="stchip st-prog">En curso hoy</span>' : weekEval ? (mfF ? chipMeta(mfF)+'<br><span style="font-size:7.5px;color:#6b7280">ritmo '+(f.pct!==null?Math.round(f.pct*100):0)+'% &middot; holgura '+cronoMetaHolgTxt(mfF.holg)+'</span>' : chipDe(f.estado)+((f.atrasoDias>0.05&&f.estado!=='completada')?' <span style="font-size:7.5px;color:#b91c1c">&minus;'+fq(f.atrasoDias)+' d</span>':'')) : '<span class="stchip st-nuevo">Programada</span>';
-          if(prov) chip='<span class="stchip st-prov">Programada &middot; por confirmar</span>';
+          if(prov) chip='<span class="stchip st-nuevo">Programada</span>';
           h+='<td>'+chip+linea+'</td></tr>';
         });
         if(futuras.length){
@@ -10175,7 +10174,7 @@ function planCorteSeccion(weeks, C){
   var ids=Object.keys(noEval);
   if(ids.length){
     h+='<div class="sec" style="margin-top:14px">No evaluables en este corte</div>';
-    h+='<div class="cmeta">Actividades abiertas del periodo que se reportan por porcentaje o cuyo plan no se puede calcular: no hay un rendimiento diario contra el cual compararlas. Se listan para que no se pierdan de vista. Las que a&uacute;n esperan que el proyectista confirme sus subtareas aparecen arriba como plan provisional, y las que a&uacute;n no tienen subtareas como planificadas sin desglose.</div>';
+    h+='<div class="cmeta">Actividades abiertas del periodo que se reportan por porcentaje o cuyo plan no se puede calcular: no hay un rendimiento diario contra el cual compararlas. Se listan para que no se pierdan de vista. Las actividades cuyas subtareas a&uacute;n no se confirman aparecen en el plan con su programaci&oacute;n, y las que a&uacute;n no tienen subtareas, como planificadas sin desglose.</div>';
     h+='<table class="lst"><thead><tr><th>Proyectista</th><th>Actividad</th><th>Proyecto / Tipo</th><th>Folio</th><th>Entrega interna / oficial</th><th>Avance reportado</th><th>Motivo</th></tr></thead><tbody>';
     ids.forEach(function(id){
       var a=noEval[id].a, crItem=noEval[id].crItem;
