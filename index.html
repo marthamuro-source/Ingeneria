@@ -3411,11 +3411,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           </div>
         </div>
         <div class="panel">
-          <div class="ph"><div><div class="pt">Vacaciones por persona</div><div class="ps">Se guardan automáticamente en el navegador</div></div></div>
+          <div class="ph"><div><div class="pt">Vacaciones y permisos por persona</div><div class="ps">Un permiso especial aplica solo a esa persona y ese día, y cuenta como día sin carga en el plan</div></div></div>
           <div class="pb" style="padding:12px 16px">
             <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
               <select id="vacPerson" style="flex:1;min-width:130px;font-family:var(--font);font-size:12px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text)"></select>
               <input type="date" id="vacDate" style="font-family:var(--font);font-size:12px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text)">
+              <select id="vacTipo" onchange="vacTipoChange()" style="font-family:var(--font);font-size:12px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text)"><option value="vac">Vacación</option><option value="permiso">Permiso especial</option></select>
+              <span id="vacPermExtra" style="display:none;gap:8px;flex-basis:100%;flex-wrap:wrap">
+                <select id="vacDur" style="font-family:var(--font);font-size:12px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text)"><option value="1">Día completo</option><option value="0.5">Medio día</option></select>
+                <input type="text" id="vacMotivo" placeholder="Motivo (opcional)" maxlength="80" style="flex:1;min-width:160px;font-family:var(--font);font-size:12px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text)">
+              </span>
               <button onclick="addVacacion()" style="font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--accent);cursor:pointer;font-family:var(--font)">+ Agregar</button>
             </div>
             <div id="vacList" style="display:flex;flex-wrap:wrap;gap:5px;max-height:90px;overflow-y:auto"></div>
@@ -4277,6 +4282,40 @@ const FEST_LABELS = {
 // vacaciones[nombre] = Set de 'YYYY-MM-DD'
 let VACACIONES = {};
 
+// ── Permisos especiales por persona y día: PERMISOS[nombre][fecha] = {fr:1 (día completo) | 0.5 (medio día), motivo} ──
+// Funcionan como vacaciones para el plan (la persona no tiene esa carga ese día), pero se capturan y muestran aparte.
+let PERMISOS = (()=>{ try{ return JSON.parse(localStorage.getItem('c3ntro_permisos_dia')||'{}')||{}; }catch(e){ return {}; } })();
+function permisosSaveLocal(){ try{ localStorage.setItem('c3ntro_permisos_dia', JSON.stringify(PERMISOS)); }catch(e){} }
+function cronoPermisoDia(nombre, key){
+  if(!nombre || !key) return null;
+  let m = PERMISOS[nombre];
+  if(!m){ Object.keys(PERMISOS).forEach(function(k){ if(nombre.indexOf(k.split(' ')[0])>=0 || k.indexOf(nombre.split(' ')[0])>=0) m = PERMISOS[k]; }); }
+  const r = m && m[key];
+  return r ? {fr: (r.fr>=1?1:(parseFloat(r.fr)||0.5)), motivo: r.motivo||''} : null;
+}
+async function savePermisoSupabase(persona, fecha, action, fr, motivo){
+  if(!_supa) return;
+  try{
+    if(action==='add') await _supa.from('permisos_dia').upsert({persona, fecha, fraccion:fr, motivo:motivo||null}, {onConflict:'persona,fecha'});
+    else await _supa.from('permisos_dia').delete().eq('persona', persona).eq('fecha', fecha);
+  }catch(e){ console.warn('savePermisoSupabase error', e); }
+}
+async function permisosLoadSupabase(){
+  if(!_supa) return;
+  try{
+    const {data, error} = await _supa.from('permisos_dia').select('persona,fecha,fraccion,motivo');
+    if(error || !data) return;                       // la tabla aún no existe: se sigue con lo guardado en el navegador
+    const remoto = {};
+    data.forEach(r=>{ (remoto[r.persona] = remoto[r.persona] || {})[String(r.fecha).slice(0,10)] = {fr:(parseFloat(r.fraccion)>=1?1:0.5), motivo:r.motivo||''}; });
+    // lo que solo estaba en este navegador (capturado antes de crear la tabla) se sube
+    Object.keys(PERMISOS).forEach(p=>Object.keys(PERMISOS[p]).forEach(f=>{
+      if(!(remoto[p] && remoto[p][f])){ (remoto[p] = remoto[p] || {})[f] = PERMISOS[p][f]; savePermisoSupabase(p, f, 'add', PERMISOS[p][f].fr, PERMISOS[p][f].motivo); }
+    }));
+    PERMISOS = remoto; permisosSaveLocal();
+    if(typeof renderVacList==='function' && document.getElementById('vacList')) renderVacList();
+  }catch(e){ console.warn('permisosLoadSupabase error', e); }
+}
+
 // ─── PERSISTENCE (Supabase) ──────────────────────────────────────────────────
 async function saveVacacionesSupabase(persona, fecha, action){
   if(!_supa) return;
@@ -4351,6 +4390,7 @@ async function loadFromSupabase(){
         VACACIONES[r.persona].add(r.fecha);
       });
     }
+    await permisosLoadSupabase();
   }catch(e){ console.warn('loadFromSupabase error',e); }
 }
 
@@ -4429,7 +4469,7 @@ function repParseDate(s){
 function repDateKey(dt){ if(!dt) return ''; const y=dt.getFullYear(),m=String(dt.getMonth()+1).padStart(2,'0'),d=String(dt.getDate()).padStart(2,'0'); return `${y}-${m}-${d}`; }
 function isWeekend(dt){ const d=dt.getDay(); return d===0||d===6; }
 function isFestivo(dt){ return FESTIVOS.includes(repDateKey(dt)); }
-function isVac(nombre,dt){ return VACACIONES[nombre]?.has(repDateKey(dt)); }
+function isVac(nombre,dt){ if(VACACIONES[nombre]?.has(repDateKey(dt))) return true; const pm = cronoPermisoDia(nombre, repDateKey(dt)); return !!(pm && pm.fr>=1); }
 function isObligatorio(nombre,dt){ return !isWeekend(dt)&&!isFestivo(dt)&&!isVac(nombre,dt); }
 
 // ── Horario límite para reportar avance (solo proyectistas) ──
@@ -4476,24 +4516,56 @@ function addFestivo(){
 }
 
 // ─── VACACIONES UI ────────────────────────────────────────────────────────────
+function vacTipoChange(){
+  const t = document.getElementById('vacTipo').value;
+  const x = document.getElementById('vacPermExtra'); if(x) x.style.display = t==='permiso' ? 'flex' : 'none';
+}
+function removePermiso(p,d){
+  if(_userRole === 'proyectista' && _miNombre && p !== _miNombre){ alert('Solo puedes modificar tus propios permisos.'); return; }
+  if(PERMISOS[p]){ delete PERMISOS[p][d]; if(!Object.keys(PERMISOS[p]).length) delete PERMISOS[p]; }
+  permisosSaveLocal(); savePermisoSupabase(p, d, 'remove');
+  renderVacList();
+  if(curView==='reporteo'&&REP_ROWS.length) renderReporteo();
+}
 function renderVacList(){
   const items=[];
   Object.entries(VACACIONES).forEach(([p,days])=>{
     [...days].sort().forEach(d=>{ items.push({p,d}); });
   });
-  document.getElementById('vacList').innerHTML = items.map(({p,d})=>{
+  const permItems=[];
+  Object.entries(PERMISOS).forEach(([p,m])=>{ Object.keys(m).sort().forEach(d=>permItems.push({p,d,pm:m[d]})); });
+  const permHtml = permItems.map(({p,d,pm})=>{
+    const [y,mo,day]=d.split('-');
+    const puedeEliminar = (_userRole !== 'proyectista') || (_miNombre && p === _miNombre);
+    const rm = puedeEliminar ? `<button onclick="removePermiso('${p}','${d}')" style="background:none;border:none;color:var(--amber);cursor:pointer;font-size:11px;padding:0">✕</button>` : '';
+    const tip = 'Permiso especial'+(pm.fr<1?' (medio día)':'')+(pm.motivo?': '+pm.motivo:'');
+    return `<span title="${String(tip).replace(/"/g,'&quot;')}" style="display:inline-flex;align-items:center;gap:4px;background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.35);color:var(--amber);font-size:11px;padding:3px 8px;border-radius:20px">📋 ${p.split(' ')[0]} ${parseInt(day)}/${parseInt(mo)}${pm.fr<1?' ½':''}${rm}</span>`;
+  }).join('');
+  document.getElementById('vacList').innerHTML = permHtml + items.map(({p,d})=>{
     const [y,mo,day]=d.split('-');
     const puedeEliminar = (_userRole !== 'proyectista') || (_miNombre && p === _miNombre);
     const removeVacBtn = puedeEliminar ? `<button onclick="removeVac('${p}','${d}')" style="background:none;border:none;color:#5de8dc;cursor:pointer;font-size:11px;padding:0">✕</button>` : '';
     return `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.2);color:#5de8dc;font-size:11px;padding:3px 8px;border-radius:20px">
       ${p.split(' ')[0]} ${parseInt(day)}/${parseInt(mo)}${removeVacBtn}
     </span>`;
-  }).join('') || '<span style="font-size:11px;color:var(--dim)">Sin vacaciones registradas</span>';
+  }).join('') || (permHtml ? '' : '<span style="font-size:11px;color:var(--dim)">Sin vacaciones ni permisos registrados</span>');
 }
 function addVacacion(){
   const p=document.getElementById('vacPerson').value;
   const d=document.getElementById('vacDate').value;
   if(!p||!d){ alert('Selecciona persona y fecha'); return; }
+  if(document.getElementById('vacTipo') && document.getElementById('vacTipo').value==='permiso'){
+    if(_userRole === 'proyectista' && _miNombre && p !== _miNombre){ alert('Solo puedes registrar tus propios permisos.'); return; }
+    if(VACACIONES[p] && VACACIONES[p].has(d)){ alert('Esa persona ya tiene vacaciones ese día.'); return; }
+    const fr = parseFloat(document.getElementById('vacDur').value)>=1 ? 1 : 0.5;
+    const motivo = (document.getElementById('vacMotivo').value||'').trim();
+    (PERMISOS[p] = PERMISOS[p] || {})[d] = {fr, motivo};
+    permisosSaveLocal(); savePermisoSupabase(p, d, 'add', fr, motivo);
+    document.getElementById('vacMotivo').value='';
+    renderVacList();
+    if(curView==='reporteo'&&REP_ROWS.length) renderReporteo();
+    return;
+  }
   // Proyectista solo puede agregar sus propias vacaciones
   if(_userRole === 'proyectista' && _miNombre && p !== _miNombre){
     alert('Solo puedes registrar tus propias vacaciones.'); return;
@@ -5583,6 +5655,8 @@ function justGet(fecha, persona){
   if(typeof VACACIONES!=='undefined' && VACACIONES[persona] && VACACIONES[persona].has(fecha)){
     return { motivo: 'Día vacacional', justificadoPor: 'Sistema', creado: '', esVacacion: true };
   }
+  const _pm = cronoPermisoDia(persona, fecha);
+  if(_pm && _pm.fr>=1) return { motivo: 'Permiso'+(_pm.motivo?': '+_pm.motivo:''), justificadoPor: 'Sistema', creado: '' };
   return null;
 }
 async function justLoad(){
@@ -5822,7 +5896,10 @@ function cronoCapacidadDia(fechaOrDate, persona){
   if(FESTIVOS.includes(repDateKey(d))) return 0;
   // Si se indica la persona, sus días de vacaciones no son laborables para ella: el trabajo se recorre.
   if(persona && cronoEsVacacionPersona(persona, repDateKey(d))) return 0;
-  return d.getDay()===5 ? CRONO_CAPACIDAD_VIERNES : 1;
+  const base = d.getDay()===5 ? CRONO_CAPACIDAD_VIERNES : 1;
+  // Permiso especial de la persona: día completo = sin capacidad; medio día = la mitad
+  if(persona){ const pm = cronoPermisoDia(persona, repDateKey(d)); if(pm) return pm.fr>=1 ? 0 : base*(1-pm.fr); }
+  return base;
 }
 
 // ── Avanza un cursor de fechas consumiendo "capacidad de jornada" fraccionaria ──
@@ -9624,7 +9701,11 @@ function planBuildHTML() {
           }
           if(vacSet && vacSet.has) isVac = vacSet.has(dayStr);
         }
-        // Día de vacaciones: no se muestran las actividades de ese día, solo "VACACIONES"
+        // Permiso especial de día completo: se trata como día sin carga, con su propia etiqueta
+        var _perm = cronoPermisoDia(member, dayStr);
+        var _isPerm = !!(_perm && _perm.fr>=1 && !isVac);
+        if(_isPerm) isVac = true;
+        // Día de vacaciones o permiso: no se muestran las actividades de ese día, solo la etiqueta
         if(isVac) dayActs = [];
 
         var cellBg0 = isToday?'rgba(42,120,214,.06)':'rgba(255,255,255,.02)';
@@ -9635,11 +9716,13 @@ function planBuildHTML() {
         h += '<div onclick="planCellClick(\'' + member.replace(/\'/g,"\\'") + '\',\'' + dayStr + '\')" style="min-height:54px;border-radius:6px;background:'+cellBg+';border:0.5px solid '+vacBord+';cursor:pointer;overflow:hidden;position:relative">';
         if(isVac && dayActs.length===0){
           h += '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">';
-          h += '<div style="font-size:14px">🏖</div>';
-          h += '<div style="font-size:8px;color:rgba(155,89,182,.8);font-weight:600">VACACIONES</div>';
+          h += '<div style="font-size:14px">'+(_isPerm?'📋':'🏖')+'</div>';
+          h += '<div style="font-size:8px;color:rgba(155,89,182,.8);font-weight:600">'+(_isPerm?'PERMISO':'VACACIONES')+'</div>';
           h += '</div>';
         } else if(isVac) {
-          h += '<div style="font-size:8px;color:rgba(155,89,182,.7);font-weight:600;padding:2px 4px">🏖 Vac</div>';
+          h += '<div style="font-size:8px;color:rgba(155,89,182,.7);font-weight:600;padding:2px 4px">'+(_isPerm?'📋 Permiso':'🏖 Vac')+'</div>';
+        } else if(_perm && _perm.fr<1) {
+          h += '<div style="font-size:8px;color:#b45309;font-weight:600;padding:2px 4px" title="'+String(_perm.motivo||'Permiso de medio día').replace(/"/g,'&quot;')+'">📋 Permiso ½ día</div>';
         }
 
         dayActs.forEach(function(a) {
@@ -9857,8 +9940,31 @@ function planCorteCSS(){
     +'table.lst td.dc{text-align:center;white-space:nowrap;font-size:8.5px;padding:5px 3px}'
     +'table.lst th.dc{text-align:center;padding:5px 3px}'
     +'.cmeta{font-size:8px;color:#6b7280;margin:4px 0 8px;line-height:1.4}'
-    +'table.lst tr.pnota.cont td{background:#eef2ff!important;color:#3730a3;border-bottom:1px dashed #a5b4fc}';
+    +'table.lst tr.pnota.cont td{background:#eef2ff!important;color:#3730a3;border-bottom:1px dashed #a5b4fc}'
+    +'.st-prov{background:#ede9fe;color:#5b21b6}table.lst tr.pnota.prov td{background:#f5f3ff!important;color:#5b21b6;border-bottom:1px dashed #c4b5fd}';
 }
+// ── Plan provisional: subtareas ya cargadas por el administrador que el proyectista aún no confirma ──
+// Se arma con el orden y el rendimiento tal como se cargaron para que la actividad figure en el plan; no se califica hasta que se confirme.
+function cronoCrProvisional(a, crItem){
+  if(!a || !crItem) return null;
+  const subs = crItem.subtareas || [];
+  if(!subs.length) return null;
+  if(subs.some(st=>st.confirmada!==false && !st.pendienteValidacion)) return null;   // ya hay un plan confirmado
+  const por = subs.filter(st=>st.confirmada===false && !st.pendienteValidacion);
+  if(!por.length) return null;
+  const hoyIso = repDateKey(new Date())+'T00:00:00Z';
+  const copia = por.map(st=>Object.assign({}, st, {confirmada:true, conf: st.conf || {en:hoyIso}}));
+  return Object.assign({}, crItem, {subtareas:copia, _provisional:true});
+}
+
+// ── Fecha oficial de subida: entrega interna (fechaTermino) + días hábiles de validación. Solo para dirección: el proyectista no la ve ni se mide contra ella ──
+const FECHA_OFICIAL_DIAS = 1;
+function cronoFechaOficial(fechaTermino){
+  if(!fechaTermino) return null;
+  return cronoAddWorkdays(String(fechaTermino).slice(0,10), FECHA_OFICIAL_DIAS);
+}
+function cronoVeFechaOficial(){ return (typeof _userRole!=='undefined') && (_userRole==='admin' || _userRole==='jefe'); }
+
 // ── Meta final: ¿todavía llega a su fecha fin con la capacidad que le queda? (independiente del ritmo diario) ──
 // Capacidad restante en jornadas: días hábiles posteriores a "desde" hasta "fin" (incluido), sin vacaciones, festivos ni pausa.
 function cronoCapRestante(a, desde, fin){
@@ -9944,8 +10050,27 @@ function planCorteSeccion(weeks, C){
         if(a.responsable!==member||!a.fechaAsig) return;
         var crItem=CRONO_ITEMS.find(function(x){return x.actividadId===a.id;});
         var cump=crItem?cronoCumplimiento(a,crItem,wE):null;
+        var prov=false;
+        if(!cump && crItem){
+          var crP=cronoCrProvisional(a,crItem);
+          if(crP){ var cumpP=cronoCumplimiento(a,crP,wE); if(cumpP){ cump=cumpP; crItem=crP; prov=true; } }
+        }
         if(!cump){
-          if(ABIERTAS.indexOf(a.estatus)>=0 && a.fechaAsig<=wE && (a.fechaTermino||a.fechaAsig)>=wS) noEval[a.id]={a:a,crItem:crItem};
+          var enVentana=(ABIERTAS.indexOf(a.estatus)>=0 && a.fechaAsig<=wE && (a.fechaTermino||a.fechaAsig)>=wS);
+          var subsAll=(crItem&&crItem.subtareas)||[];
+          var hayGen=((crItem&&crItem.reportes)||[]).some(function(r){return r.modo==='general';});
+          if(enVentana && !subsAll.length && !hayGen && !(a.reapertura&&a.reapertura.inicio)){
+            // Planificada pero aún sin subtareas asignadas (pendiente del administrador): figura en el plan, sin desglose ni calificación
+            var isConS=(a.tipo==='Conectividad (Bobinas)'||a.tipo==='Planos de Conectividad');
+            h+='<tbody><tr><td style="white-space:nowrap"><span class="av" style="background:'+C.gc(member)+'">'+C.gi(member)+'</span>'+member.split(' ').slice(0,2).join(' ')+'</td>';
+            h+='<td><b>'+esc(a.actividad||'--')+'</b></td>';
+            h+='<td><b>'+esc(a.proyecto||'--')+'</b><br><b style="font-size:9px;color:#374151">'+esc(a.tipo||'--')+'</b>'+(isConS&&a.numBobina?' &nbsp;Bna #'+esc(a.numBobina):'')+'</td>';
+            h+='<td style="font-family:monospace;font-size:8px;color:#1a4fa0">'+esc(a.folio||'--')+'</td>';
+            h+='<td colspan="5" style="font-size:8.5px;color:#374151"><b style="color:#5b21b6">Planificada sin desglose</b> &middot; Inicio: <b>'+fd(a.fechaAsig)+'</b>'+(a.fechaTermino?' &middot; Entrega interna: <b>'+fd(a.fechaTermino)+'</b> &middot; Subida oficial: <b style="color:#9a3412">'+fd(cronoFechaOficial(a.fechaTermino))+'</b>':'')+' &middot; <b>'+esc(a.estatus||'')+'</b></td>';
+            h+='<td></td><td></td><td class="dc">&mdash;</td><td><span class="stchip st-prov">Falta asignar subtareas</span></td></tr></tbody>';
+            return;
+          }
+          if(enVentana) noEval[a.id]={a:a,crItem:crItem};
           return;
         }
         var plan=cump.plan, fechas=Object.keys(plan.dias).sort();
@@ -9987,21 +10112,22 @@ function planCorteSeccion(weeks, C){
         if(!vis.length) return;
         var col=C.gc(member), ini=C.gi(member);
         var cierra = !futuras.length && !vis.some(function(v){return v.cruza;});
-        var estAct = weekEval && cump.pct!==null ? cump.estado : 'sin_inicio';
-        var MF = (!entr && weekEval) ? cronoMetaFinal(a,cump,wE) : null;
+        var estAct = weekEval && !prov && cump.pct!==null ? cump.estado : 'sin_inicio';
+        var MF = (!entr && weekEval && !prov) ? cronoMetaFinal(a,cump,wE) : null;
         var ritmoPct = (cump.pct!==null) ? Math.round(cump.pct*100) : null;
         h+='<tbody><tr><td style="white-space:nowrap"><span class="av" style="background:'+col+'">'+ini+'</span>'+member.split(' ').slice(0,2).join(' ')+'</td>';
         h+='<td><b>'+esc(a.actividad||'--')+'</b></td>';
         var isCon=(a.tipo==='Conectividad (Bobinas)'||a.tipo==='Planos de Conectividad');
         h+='<td><b>'+esc(a.proyecto||'--')+'</b><br><b style="font-size:9px;color:#374151">'+esc(a.tipo||'--')+'</b>'+(isCon&&a.numBobina?' &nbsp;Bna #'+esc(a.numBobina):'')+'</td>';
         h+='<td style="font-family:monospace;font-size:8px;color:#1a4fa0">'+esc(a.folio||'--')+'</td>';
-        h+='<td colspan="5" style="font-size:8.5px;color:#374151">'+(entr?'Entregada: <b>'+fd(entr)+'</b>':'Pron&oacute;stico completo: <b>'+fd(plan.fin)+'</b>')+(a.fechaTermino?' &middot; L&iacute;mite: '+fd(a.fechaTermino):'')+' &middot; <b>'+esc(a.estatus||'')+'</b>'+(cierra?' &middot; <b style="color:#166534">cierra esta semana</b>':' &middot; <b style="color:#3730a3">contin&uacute;a despu&eacute;s del viernes</b>')+'</td>';
+        h+='<td colspan="5" style="font-size:8.5px;color:#374151">'+(entr?'Entregada: <b>'+fd(entr)+'</b>':(prov?'<b style="color:#5b21b6">Plan provisional</b>: termina <b>'+fd(plan.fin)+'</b>':'Pron&oacute;stico completo: <b>'+fd(plan.fin)+'</b>'))+(a.fechaTermino?' &middot; Entrega interna: <b>'+fd(a.fechaTermino)+'</b> &middot; Subida oficial: <b style="color:#9a3412">'+fd(cronoFechaOficial(a.fechaTermino))+'</b>':'')+' &middot; <b>'+esc(a.estatus||'')+'</b>'+(cierra?' &middot; <b style="color:#166534">cierra esta semana</b>':' &middot; <b style="color:#3730a3">contin&uacute;a despu&eacute;s del viernes</b>')+'</td>';
         h+='<td></td><td></td>';
-        h+='<td class="dc" style="font-weight:700;color:'+colDe(estAct)+'">'+(weekEval&&cump.pct!==null?Math.round(cump.pct*100)+'%':'&mdash;')+'</td>';
+        h+='<td class="dc" style="font-weight:700;color:'+colDe(estAct)+'">'+(weekEval&&!prov&&cump.pct!==null?Math.round(cump.pct*100)+'%':'&mdash;')+'</td>';
         var _enProc=(a.estatus==='En progreso' && wS<=hoyKey);
         var _chipAct = chipDe(cump.estado);
         if(MF && MF.act && (cump.estado==='atrasada'||cump.estado==='parcial')) _chipAct = chipMeta(MF.act)+'<br><span style="font-size:7.5px;color:#6b7280">ritmo '+ritmoPct+'% &middot; fin '+fd(MF.act.fin)+' &middot; holgura '+cronoMetaHolgTxt(MF.act.holg)+'</span>';
-        h+='<td>'+(weekEval&&cump.pct!==null?_chipAct:(_enProc?'<span class="stchip st-prog" title="Ya inició: el día en curso se evalúa al cerrar">En proceso</span>':'<span class="stchip st-nuevo">Programada</span>'))+'</td></tr>';
+        h+='<td>'+(prov?'<span class="stchip st-prov" title="El proyectista aún no confirma sus subtareas">Programada &middot; por confirmar</span>':weekEval&&cump.pct!==null?_chipAct:(_enProc?'<span class="stchip st-prog" title="Ya inició: el día en curso se evalúa al cerrar">En proceso</span>':'<span class="stchip st-nuevo">Programada</span>'))+'</td></tr>';
+        if(prov) h+='<tr class="pnota prov"><td></td><td colspan="12"><b>&#128221; Plan provisional:</b> las subtareas ya est&aacute;n cargadas y el proyectista a&uacute;n no las confirma. Se muestra con el orden y el rendimiento tal como se cargaron; no se califica (ni cuenta como atraso) hasta que confirme.</td></tr>';
         h+=planNotasFilas(a,crItem,12,fd);
         vis.forEach(function(v){
           var f=v.f, st=f.st;
@@ -10012,8 +10138,8 @@ function planCorteSeccion(weeks, C){
           dias.forEach(function(ds){
             var e=plan.dias[ds]?(plan.dias[ds][st.id]||0):0, r=f.real[ds]||0;
             if(e<=1e-9 && r<=1e-9){ h+='<td class="dc" style="color:#d1d5db">&mdash;</td>'; return; }
-            if(ds>(f.hasta||cump.hasta)){
-              if(r>1e-9 && ds<=hoyKey) h+='<td class="dc" style="color:#1a4fa0;font-weight:700" title="Día en curso: ya reportó avance">'+fq(r)+'/'+fq(e)+'<br><span style="font-size:7px;font-weight:400">en curso</span></td>';
+            if(prov || ds>(f.hasta||cump.hasta)){
+              if(!prov && r>1e-9 && ds<=hoyKey) h+='<td class="dc" style="color:#1a4fa0;font-weight:700" title="Día en curso: ya reportó avance">'+fq(r)+'/'+fq(e)+'<br><span style="font-size:7px;font-weight:400">en curso</span></td>';
               else h+='<td class="dc" style="color:#9ca3af">'+(r>0?fq(r)+'/':'')+fq(e)+'</td>';
               return;
             }
@@ -10023,8 +10149,8 @@ function planCorteSeccion(weeks, C){
           });
           h+='<td class="dc">'+fq(v.metaV)+'</td>';
           var extraHoy=0; Object.keys(f.real).forEach(function(ds){ if(ds>(f.hasta||cump.hasta) && ds<=hoyKey) extraHoy+=f.real[ds]; });
-          h+='<td class="dc">'+(weekEval?fq(f.rea):'&mdash;')+(extraHoy>1e-9?'<br><span style="font-size:7.5px;color:#1a4fa0;font-weight:700">+'+fq(extraHoy)+' hoy</span>':'')+'</td>';
-          h+='<td class="dc" style="font-weight:700;color:'+colDe(f.estado)+'">'+(weekEval&&f.pct!==null?Math.round(f.pct*100)+'%':'&mdash;')+'</td>';
+          h+='<td class="dc">'+(weekEval&&!prov?fq(f.rea):'&mdash;')+(extraHoy>1e-9&&!prov?'<br><span style="font-size:7.5px;color:#1a4fa0;font-weight:700">+'+fq(extraHoy)+' hoy</span>':'')+'</td>';
+          h+='<td class="dc" style="font-weight:700;color:'+colDe(f.estado)+'">'+(weekEval&&!prov&&f.pct!==null?Math.round(f.pct*100)+'%':'&mdash;')+'</td>';
           var linea;
           if(f.estado==='completada') linea='';
           else if(v.cruza) linea='<br><span style="font-size:7.5px;color:#3730a3">contin&uacute;a &rarr; '+fd(f.fin)+' (&asymp;'+Math.round(v.metaV/cant*100)+'% al viernes)</span>';
@@ -10032,6 +10158,7 @@ function planCorteSeccion(weeks, C){
           var enCursoSub = (extraHoy>1e-9 && f.estado!=='completada');
           var mfF = (MF && MF.filas[st.id] && (f.estado==='atrasada'||f.estado==='parcial')) ? MF.filas[st.id] : null;
           var chip = (weekEval && enCursoSub && (f.estado==='sin_inicio'||f.estado==='adelantada')) ? '<span class="stchip st-prog">En curso hoy</span>' : weekEval ? (mfF ? chipMeta(mfF)+'<br><span style="font-size:7.5px;color:#6b7280">ritmo '+(f.pct!==null?Math.round(f.pct*100):0)+'% &middot; holgura '+cronoMetaHolgTxt(mfF.holg)+'</span>' : chipDe(f.estado)+((f.atrasoDias>0.05&&f.estado!=='completada')?' <span style="font-size:7.5px;color:#b91c1c">&minus;'+fq(f.atrasoDias)+' d</span>':'')) : '<span class="stchip st-nuevo">Programada</span>';
+          if(prov) chip='<span class="stchip st-prov">Programada &middot; por confirmar</span>';
           h+='<td>'+chip+linea+'</td></tr>';
         });
         if(futuras.length){
@@ -10046,8 +10173,8 @@ function planCorteSeccion(weeks, C){
   var ids=Object.keys(noEval);
   if(ids.length){
     h+='<div class="sec" style="margin-top:14px">No evaluables en este corte</div>';
-    h+='<div class="cmeta">Actividades abiertas del periodo que se reportan por porcentaje, no tienen subtareas asignadas o su plan sigue por confirmar: no hay un rendimiento diario contra el cual compararlas. Se listan para que no se pierdan de vista.</div>';
-    h+='<table class="lst"><thead><tr><th>Proyectista</th><th>Actividad</th><th>Proyecto / Tipo</th><th>Folio</th><th>Termino</th><th>Avance reportado</th><th>Motivo</th></tr></thead><tbody>';
+    h+='<div class="cmeta">Actividades abiertas del periodo que se reportan por porcentaje o cuyo plan no se puede calcular: no hay un rendimiento diario contra el cual compararlas. Se listan para que no se pierdan de vista. Las que a&uacute;n esperan que el proyectista confirme sus subtareas aparecen arriba como plan provisional, y las que a&uacute;n no tienen subtareas como planificadas sin desglose.</div>';
+    h+='<table class="lst"><thead><tr><th>Proyectista</th><th>Actividad</th><th>Proyecto / Tipo</th><th>Folio</th><th>Entrega interna / oficial</th><th>Avance reportado</th><th>Motivo</th></tr></thead><tbody>';
     ids.forEach(function(id){
       var a=noEval[id].a, crItem=noEval[id].crItem;
       var subs=(crItem&&crItem.subtareas)||[];
@@ -10061,14 +10188,15 @@ function planCorteSeccion(weeks, C){
       else { motivo='Sin subtareas medibles'; avance=fq(cronoAvance(subs))+'%'; }
       h+='<tr><td style="white-space:nowrap"><span class="av" style="background:'+C.gc(a.responsable)+'">'+C.gi(a.responsable)+'</span>'+esc((a.responsable||'').split(' ').slice(0,2).join(' '))+'</td>';
       h+='<td><b>'+esc(a.actividad||'--')+'</b></td><td><b>'+esc(a.proyecto||'--')+'</b><br><b style="font-size:9px;color:#374151">'+esc(a.tipo||'--')+'</b></td>';
-      h+='<td style="font-family:monospace;font-size:8px;color:#1a4fa0">'+esc(a.folio||'--')+'</td><td style="white-space:nowrap">'+fd(a.fechaTermino)+'</td><td>'+avance+'</td><td>'+esc(motivo)+'</td></tr>';
+      h+='<td style="font-family:monospace;font-size:8px;color:#1a4fa0">'+esc(a.folio||'--')+'</td><td style="white-space:nowrap">'+fd(a.fechaTermino)+(a.fechaTermino?'<br><span style="font-size:7.5px;color:#9a3412">oficial '+fd(cronoFechaOficial(a.fechaTermino))+'</span>':'')+'</td><td>'+avance+'</td><td>'+esc(motivo)+'</td></tr>';
     });
     h+='</tbody></table>';
   }
   h+='<div class="cmeta"><b>C&oacute;mo leer el corte.</b> Solo se listan subtareas cuyo plan toca la semana (si su plan termin&oacute; antes del lunes no aparece, est&eacute; cerrada o no). Una actividad ya entregada o terminada se ubica por su fecha real de entrega: si la entreg&oacute; antes del lunes no aparece. El d&iacute;a en curso (hoy) se eval&uacute;a al cerrar el d&iacute;a: lo que ya report&oacute; se ve en azul como &ldquo;en curso&rdquo; y no cuenta como atraso. Si una actividad est&aacute; en pausa toda la semana solo se indica el motivo y sus fechas programadas de inicio y fin, sin desglosar subtareas. Cada semana se corta en su viernes: de una actividad que sigue despu&eacute;s solo salen las subtareas que se alcanzan a tocar hasta ese d&iacute;a, y la que cruza el viernes indica cu&aacute;nto del plan le toca. '
     +'En cada d&iacute;a se muestra <b>reportado / esperado</b> (en la unidad de la subtarea): lo esperado sale del plan que el proyectista confirm&oacute; y de la fracci&oacute;n de jornada que le toca ese d&iacute;a (viernes = 6/9; vacaciones, festivos y pausas no se esperan). '
     +'<b>Meta al viernes</b> es lo acumulado que deber&iacute;a llevar al cierre de la semana; <b>Real</b> y <b>%</b> se miden contra lo esperado a la fecha de evaluaci&oacute;n. Cumple &ge;95% &middot; parcial 80-94% &middot; atrasada &lt;80%. El % de la actividad se pondera por jornadas esperadas, sin que lo adelantado tape lo atrasado. Los reportes por porcentaje general no se miden. '
-    +'<b>Estado de las atrasadas:</b> si una actividad o subtarea va por debajo del ritmo, se muestra su <b>meta final</b>: <b>Recuperable</b> (con la capacidad que le queda todav&iacute;a llega a su fecha fin y le sobra &frac12; d&iacute;a o m&aacute;s), <b>En riesgo</b> (le sobra menos de &frac12; d&iacute;a; si su fecha fin cae dentro de la semana, a lo m&aacute;s es En riesgo) o <b>No llega</b> (lo pendiente ya no cabe antes de su fecha fin). La holgura cuenta lo ya reportado en el d&iacute;a en curso como avance, pero ese d&iacute;a ya no se cuenta como capacidad disponible. El % es el ritmo, medido contra el plan hasta el &uacute;ltimo d&iacute;a cerrado.</div>';
+    +'<b>Estado de las atrasadas:</b> si una actividad o subtarea va por debajo del ritmo, se muestra su <b>meta final</b>: <b>Recuperable</b> (con la capacidad que le queda todav&iacute;a llega a su fecha fin y le sobra &frac12; d&iacute;a o m&aacute;s), <b>En riesgo</b> (le sobra menos de &frac12; d&iacute;a; si su fecha fin cae dentro de la semana, a lo m&aacute;s es En riesgo) o <b>No llega</b> (lo pendiente ya no cabe antes de su fecha fin). La holgura cuenta lo ya reportado en el d&iacute;a en curso como avance, pero ese d&iacute;a ya no se cuenta como capacidad disponible. El % es el ritmo, medido contra el plan hasta el &uacute;ltimo d&iacute;a cerrado. '
+    +'<b>Fechas:</b> la <b>entrega interna</b> es la fecha de t&eacute;rmino asignada al proyectista (con ella se mide todo); la <b>subida oficial</b> es esa fecha m&aacute;s '+FECHA_OFICIAL_DIAS+' d&iacute;a h&aacute;bil para validar y subir la informaci&oacute;n.</div>';
   return h;
 }
 
@@ -10206,12 +10334,15 @@ function planExportPDF(detallado) {
         var vs=typeof VACACIONES!=='undefined'&&VACACIONES?VACACIONES[member]:null;
         if(!vs&&typeof VACACIONES!=='undefined'&&VACACIONES){Object.keys(VACACIONES).forEach(function(k){if(member.indexOf(k.split(' ')[0])>=0)vs=VACACIONES[k];});}
         var isVac=vs&&vs.has&&vs.has(ds);
-        if(isVac) acts=[]; // día de vacaciones: solo se marca "Vacaciones", sin actividades
+        var _pm2=cronoPermisoDia(member,ds); var _isPerm2=!!(_pm2&&_pm2.fr>=1&&!isVac);
+        if(_isPerm2) isVac=true;
+        if(isVac) acts=[]; // día de vacaciones o permiso: solo se marca la etiqueta, sin actividades
         var isOnly=acts.length===1&&!isVac;
         h+='<td'+(isVac?' class="vc"':'')+' style="min-width:80px;padding:4px;vertical-align:top">';
         h+='<div class="day-cell">';
-        if(isVac&&acts.length===0){h+='<div class="cvac" style="flex:1;display:flex;align-items:center;justify-content:center">Vacaciones</div>';}
-        else if(isVac){h+='<div class="cvac">Vac</div>';}
+        if(isVac&&acts.length===0){h+='<div class="cvac" style="flex:1;display:flex;align-items:center;justify-content:center">'+(_isPerm2?'Permiso':'Vacaciones')+'</div>';}
+        else if(isVac){h+='<div class="cvac">'+(_isPerm2?'Perm':'Vac')+'</div>';}
+        else if(_pm2&&_pm2.fr<1){h+='<div class="cvac" style="background:#fef3c7;color:#92400e">Permiso ½</div>';}
         acts.forEach(function(a){
           var isProg=a.estatus==='En progreso';
           var isV=paEsVencida(a,todayStr);
@@ -10241,7 +10372,7 @@ function planExportPDF(detallado) {
   else weeks.forEach(function(week,wi){
     var wS=week[0].toISOString().slice(0,10),wE=week[4].toISOString().slice(0,10);
     h+='<div class="whdr">Semana '+(wi+1)+' - '+fWk(week)+'</div>';
-    h+='<table class="lst"><thead><tr><th>Proyectista</th><th>'+(detallado?'Actividad / Subtareas':'Actividad')+'</th><th>'+(detallado?'Proyecto / Tipo &middot; Avance':'Proyecto / Tipo')+'</th><th>Folio</th><th>Inicio</th><th>Termino</th><th>Estatus</th></tr></thead>';
+    h+='<table class="lst"><thead><tr><th>Proyectista</th><th>'+(detallado?'Actividad / Subtareas':'Actividad')+'</th><th>'+(detallado?'Proyecto / Tipo &middot; Avance':'Proyecto / Tipo')+'</th><th>Folio</th><th>Inicio</th><th>Termino interno &middot; oficial</th><th>Estatus</th></tr></thead>';
     planMiembros().forEach(function(member){
       var acts=PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return a.fechaAsig<=wE&&(a.fechaTermino||a.fechaAsig)>=wS;});
       acts.forEach(function(a){
@@ -10259,7 +10390,7 @@ function planExportPDF(detallado) {
         h+='<td><b>'+(a.proyecto||'--')+'</b><br><b style="font-size:9px;color:#374151">'+(a.tipo||'--')+'</b>'+(isConLst&&a.numBobina?' &nbsp;Bna #'+a.numBobina:'')+'</td>';
         h+='<td style="font-family:monospace;font-size:8px;color:#1a4fa0">'+(a.folio||'--')+'</td>';
         h+='<td style="white-space:nowrap">'+fd(a.fechaAsig)+'</td>';
-        h+='<td style="white-space:nowrap">'+fd(a.fechaTermino)+'</td>';
+        h+='<td style="white-space:nowrap">'+fd(a.fechaTermino)+(a.fechaTermino?'<br><span style="font-size:7.5px;color:#9a3412">oficial '+fd(cronoFechaOficial(a.fechaTermino))+'</span>':'')+'</td>';
         h+='<td style="color:'+ec+';font-weight:600">'+a.estatus+'</td></tr>';
         h+=planNotasFilas(a,crItem,6,fd);
         if(subs.length){
@@ -10294,6 +10425,7 @@ function planExportPDF(detallado) {
       });
     });
     h+='</table>';
+    h+='<div style="font-size:8px;color:#6b7280;margin:-2px 0 4px"><b>Termino interno</b> = fecha asignada al proyectista; <b>oficial</b> = esa fecha m&aacute;s '+FECHA_OFICIAL_DIAS+' d&iacute;a h&aacute;bil para validar y subir la informaci&oacute;n.</div>';
     if(detallado) h+='<div style="font-size:8px;color:#6b7280;margin:-2px 0 8px">En subtareas terminadas, Inicio y Termino son las fechas reales del reporteo. En las que siguen abiertas, Inicio es el primer reporte (si ya hay) y Termino es la programaci&oacute;n del trabajo que falta, seg&uacute;n su rendimiento.</div>';
   });
 
@@ -16866,16 +16998,23 @@ function paRenderPendientes(){
   const base = PA_ITEMS.filter(a=>!soloMio || a.responsable===_miNombre);
   const fmt = k=>{ if(!k) return '—'; const d=new Date(String(k).slice(0,10)+'T00:00:00'); return isNaN(d)?'—':d.toLocaleDateString('es-MX',{day:'numeric',month:'short'}).replace('.',''); };
   const porTermino = (x,y)=>String(x.fechaTermino||'9999').localeCompare(String(y.fechaTermino||'9999')) || String(x.fechaAsig||'').localeCompare(String(y.fechaAsig||''));
+  const verOf = cronoVeFechaOficial();
+  const diasHab = (de,a)=>{ // días hábiles entre dos fechas (a - de), negativo si a < de
+    if(a===de) return 0; const sg = a>de?1:-1; let n=0; const d=new Date((sg>0?de:a)+'T00:00:00'), f=new Date((sg>0?a:de)+'T00:00:00');
+    while(d<f){ d.setDate(d.getDate()+1); if(!isWeekend(d) && !FESTIVOS.includes(repDateKey(d))) n++; } return n*sg; };
+  const porOficial = (x,y)=>String(cronoFechaOficial(x.fechaTermino)||'9999').localeCompare(String(cronoFechaOficial(y.fechaTermino)||'9999'));
   const GRUPOS = [
+    ...(verOf ? [{k:'rev', titulo:'En revisión · por subir', sub:'ya entregadas por el proyectista, falta validar y subir', col:'var(--green)', items:base.filter(a=>a.estatus==='En revisión').sort(porOficial)}] : []),
     {k:'proc',  titulo:'En proceso',  sub:'ya se está trabajando', col:'var(--accent)', items:base.filter(a=>a.estatus==='En progreso').sort(porTermino)},
     {k:'ini',   titulo:'Por iniciar', sub:'ya consideradas, aún no arrancan', col:'var(--dim)', items:base.filter(a=>a.estatus==='Sin iniciar').sort(porTermino)},
     {k:'pausa', titulo:'En pausa',    sub:'detenidas temporalmente', col:'var(--amber)', items:base.filter(a=>a.estatus==='En pausa').sort(porTermino)}
-  ].filter(g=>g.k!=='pausa' || g.items.length);
-  const total = GRUPOS.reduce((n,g)=>n+g.items.length,0);
+  ].filter(g=>(g.k!=='pausa' && g.k!=='rev') || g.items.length);
+  const nRev = (GRUPOS.find(g=>g.k==='rev')||{items:[]}).items.length;
+  const total = GRUPOS.reduce((n,g)=>n+(g.k==='rev'?0:g.items.length),0);
   const venc = GRUPOS.reduce((n,g)=>n+g.items.filter(a=>paEsVencida(a,hoy)).length,0);
   const th = 'text-align:left;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);padding:6px 10px;border-bottom:1px solid var(--border);white-space:nowrap';
   const td = 'padding:7px 10px;border-bottom:1px solid var(--border);font-size:12px;vertical-align:middle';
-  const fila = a=>{
+  const fila = (a, gk)=>{
     const crono = (typeof CRONO_ITEMS!=='undefined') ? CRONO_ITEMS.find(x=>x.actividadId===a.id) : null;
     const av = crono && (crono.subtareas||[]).length ? Math.round(cronoAvance(crono.subtareas)) : null;
     const v = paEsVencida(a,hoy);
@@ -16885,6 +17024,21 @@ function paRenderPendientes(){
                : dias===0 ? '<span style="color:var(--amber);font-size:10px;font-weight:600"> · vence hoy</span>'
                : (dias!==null && dias>0 && dias<=2) ? `<span style="color:var(--amber);font-size:10px"> · en ${dias}d</span>` : '';
     const iniRetraso = a.estatus==='Sin iniciar' && a.fechaAsig && a.fechaAsig<hoy;
+    const ofi = a.fechaTermino ? cronoFechaOficial(a.fechaTermino) : null;
+    let ofiTd = '';
+    if(verOf){
+      let nOf = '', colOf = 'var(--text)', wOf = 400;
+      if(ofi){
+        const d = diasHab(hoy, ofi);
+        if(gk==='rev'){
+          if(d<0){ colOf='var(--red)'; wOf=700; nOf = `<div style="font-size:10px;color:var(--red);font-weight:600">Pasó la fecha de subida (${-d} d háb.)</div>`; }
+          else if(d===0){ colOf='var(--amber)'; wOf=700; nOf = '<div style="font-size:10px;color:var(--amber);font-weight:600">Se sube hoy a más tardar</div>'; }
+          else nOf = `<div style="font-size:10px;color:var(--dim)">Se sube a más tardar en ${d} d háb.</div>`;
+        } else if(ofi<hoy){ colOf='var(--red)'; wOf=600; }
+      }
+      ofiTd = `<td style="${td};white-space:nowrap;color:${colOf};font-weight:${wOf}">${fmt(ofi)}${nOf}</td>`;
+    }
+    const entTxt = (gk==='rev' && a.fechaEntregaProy) ? `<div style="font-size:10px;color:var(--dim)">entregó ${fmt(a.fechaEntregaProy)}</div>` : '';
     const barra = av===null ? '<span style="color:var(--dim)">—</span>'
       : `<div style="display:flex;align-items:center;gap:6px;min-width:84px"><div style="flex:1;height:5px;background:rgba(128,140,160,.2);border-radius:3px;overflow:hidden"><div style="width:${Math.min(100,av)}%;height:100%;background:var(--accent)"></div></div><span style="font-size:11px;color:var(--muted)">${av}%</span></div>`;
     return `<tr${v?' style="background:rgba(255,92,92,.05)"':''}>
@@ -16892,14 +17046,15 @@ function paRenderPendientes(){
       <td style="${td};max-width:320px"><div style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(a.actividad)}">${esc(a.actividad||'—')}</div><div style="font-size:10.5px;color:var(--dim)">${esc(a.proyecto||'')}${a.tipo?' · '+esc(a.tipo):''}</div></td>
       <td style="${td};white-space:nowrap"><span class="badge ${cfg.cls}" style="font-size:10px">${esc(a.estatus)}</span></td>
       <td style="${td};white-space:nowrap;color:${iniRetraso?'var(--amber)':'var(--text)'}" ${iniRetraso?'title="Debió iniciar y aún sigue sin iniciar"':''}>${fmt(a.fechaAsig)}</td>
-      <td style="${td};white-space:nowrap;color:${v?'var(--red)':'var(--text)'};font-weight:${v?700:400}">${fmt(a.fechaTermino)}${nota}</td>
+      <td style="${td};white-space:nowrap;color:${v?'var(--red)':'var(--text)'};font-weight:${v?700:400}">${fmt(a.fechaTermino)}${nota}${entTxt}</td>
+      ${ofiTd}
       <td style="${td};white-space:nowrap;color:var(--muted)">${esc(String(a.responsable||'—').split(' ').slice(0,2).join(' '))}</td>
       <td style="${td}">${barra}</td></tr>`;
   };
   const secciones = GRUPOS.map(g=>{
     const cerrado = !!PA_PEND_COLAPSADO[g.k];
     const cuerpo = g.items.length
-      ? `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:860px"><colgroup><col style="width:7%"><col style="width:29%"><col style="width:12%"><col style="width:9%"><col style="width:16%"><col style="width:14%"><col style="width:13%"></colgroup><thead><tr><th style="${th}">Folio</th><th style="${th}">Actividad</th><th style="${th}">Estatus</th><th style="${th}">Inicio</th><th style="${th}">Término</th><th style="${th}">Responsable</th><th style="${th}">Avance</th></tr></thead><tbody>${g.items.map(fila).join('')}</tbody></table></div>`
+      ? `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:${verOf?980:860}px"><colgroup>${verOf?'<col style="width:6%"><col style="width:24%"><col style="width:11%"><col style="width:8%"><col style="width:15%"><col style="width:15%"><col style="width:11%"><col style="width:10%">':'<col style="width:7%"><col style="width:29%"><col style="width:12%"><col style="width:9%"><col style="width:16%"><col style="width:14%"><col style="width:13%">'}</colgroup><thead><tr><th style="${th}">Folio</th><th style="${th}">Actividad</th><th style="${th}">Estatus</th><th style="${th}">Inicio</th><th style="${th}">${verOf?'Entrega interna':'Término'}</th>${verOf?`<th style="${th}">Subida oficial</th>`:''}<th style="${th}">Responsable</th><th style="${th}">Avance</th></tr></thead><tbody>${g.items.map(a=>fila(a,g.k)).join('')}</tbody></table></div>`
       : `<div style="padding:14px;font-size:12px;color:var(--dim)">Sin actividades en esta sección.</div>`;
     return `<div style="border-top:1px solid var(--border)">
       <div onclick="paPendToggle('${g.k}')" style="display:flex;align-items:center;gap:8px;padding:10px 16px;cursor:pointer;user-select:none">
@@ -16913,7 +17068,7 @@ function paRenderPendientes(){
   host.innerHTML = `<div class="panel">
     <div class="ph"><div><div class="pt">Pendientes</div><div class="ps">${soloMio?'Tus actividades':'Todo el equipo'} · ordenadas por fecha de término</div></div>
       <div style="display:flex;gap:14px;font-size:11px;color:var(--muted);align-items:center">
-        <span><b style="color:var(--text)">${total}</b> abiertas</span>${venc?`<span style="color:var(--red)"><b>${venc}</b> vencidas</span>`:''}
+        <span><b style="color:var(--text)">${total}</b> abiertas</span>${nRev?`<span style="color:var(--green)"><b>${nRev}</b> por subir</span>`:''}${venc?`<span style="color:var(--red)"><b>${venc}</b> vencidas</span>`:''}
       </div></div>
     ${secciones}</div>`;
 }
@@ -18094,6 +18249,8 @@ function pdmOcupacionDia(name, ds, cache){
   const d = new Date(ds+'T00:00:00');
   if(FESTIVOS.includes(ds)) return {tipo:'festivo'};
   if(cronoEsVacacionPersona(name, ds)) return {tipo:'vacaciones'};
+  const perm = cronoPermisoDia(name, ds);
+  if(perm && perm.fr>=1) return {tipo:'permiso', motivo:perm.motivo};
   const cap = cronoCapacidadDia(d, name);
   const entregada = a=>(a.estatus==='En revisión'||a.estatus==='Terminado (máximo avance)'||a.estatus==='Terminado');
   const items = [];
@@ -18119,7 +18276,7 @@ function pdmOcupacionDia(name, ds, cache){
   let pct = sumPlan/cap;
   if(hayLibre && pct<1) pct = 1;       // actividades sin desglose: se asume el día completo
   const estado = items.length===0 ? 'libre' : pct>1.05 ? 'sobre' : pct>=0.95 ? 'ocupado' : 'parcial';
-  return {tipo:'dia', cap, items, pct, estado, sinDesglose:hayLibre && sumPlan<cap};
+  return {tipo:'dia', cap, items, pct, estado, sinDesglose:hayLibre && sumPlan<cap, permMedio: (perm && perm.fr<1) ? perm : null};
 }
 function pdmRenderSemana(name){
   const host = document.getElementById('pdmSemana'); if(!host) return;
@@ -18146,6 +18303,7 @@ function pdmRenderSemana(name){
     const head = `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><span style="font-size:11px;font-weight:700;color:${hoy?'var(--accent)':'var(--text)'}">${nom[i]} ${d.getDate()}</span>${hoy?'<span style="font-size:9px;color:var(--accent);font-weight:700">HOY</span>':''}</div>`;
     const o = pdmOcupacionDia(name, ds, cache);
     if(o.tipo==='vacaciones') return `<div style="min-height:104px;padding:8px;border-radius:8px;background:rgba(155,89,182,.10);border:1px solid rgba(155,89,182,.45)${marco}">${head}<div style="text-align:center;padding-top:10px"><div style="font-size:20px">🏖</div><div style="font-size:10px;font-weight:700;color:#a56cf0">VACACIONES</div></div></div>`;
+    if(o.tipo==='permiso') return `<div style="min-height:104px;padding:8px;border-radius:8px;background:rgba(245,166,35,.10);border:1px solid rgba(245,166,35,.5)${marco}">${head}<div style="text-align:center;padding-top:10px"><div style="font-size:20px">📋</div><div style="font-size:10px;font-weight:700;color:var(--amber)">PERMISO</div>${o.motivo?`<div style="font-size:9px;color:var(--dim);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(o.motivo)}">${esc(o.motivo)}</div>`:''}</div></div>`;
     if(o.tipo==='festivo' || o.tipo==='inhabil') return `<div style="min-height:104px;padding:8px;border-radius:8px;background:rgba(128,140,160,.10);border:1px solid var(--border)${marco}">${head}<div style="text-align:center;padding-top:14px;font-size:10px;font-weight:700;color:var(--dim)">${o.tipo==='festivo'?'FESTIVO':'NO LABORABLE'}</div></div>`;
     const st = E[o.estado];
     const barra = `<div style="height:5px;background:rgba(128,140,160,.18);border-radius:3px;overflow:hidden;margin-bottom:6px"><div style="width:${Math.min(100,Math.round(o.pct*100))}%;height:100%;background:${st.col}"></div></div>`;
@@ -18157,7 +18315,7 @@ function pdmRenderSemana(name){
     }).join('');
     const mas = o.items.length>4 ? `<div style="font-size:9px;color:var(--dim);margin-top:3px">+${o.items.length-4} más</div>` : '';
     return `<div style="min-height:104px;padding:8px;border-radius:8px;background:${st.bg};border:1px solid ${st.bd}${marco}">${head}
-      <div style="font-size:10px;font-weight:700;color:${st.col};margin-bottom:4px">${st.txt}</div>${o.estado==='libre'?'':barra}${chips}${mas}</div>`;
+      <div style="font-size:10px;font-weight:700;color:${st.col};margin-bottom:4px">${st.txt}</div>${o.permMedio?`<div title="${esc(o.permMedio.motivo||'Permiso de medio día')}" style="font-size:9px;font-weight:700;color:var(--amber);margin-bottom:3px">📋 Permiso ½ día</div>`:''}${o.estado==='libre'?'':barra}${chips}${mas}</div>`;
   }).join('');
   const nameJs = String(name).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
   const btn = 'font-size:11px;padding:3px 10px;border-radius:6px;border:0.5px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;font-family:var(--font)';
@@ -18172,7 +18330,7 @@ function pdmRenderSemana(name){
     </div>
     <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px">${celdas}</div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:9.5px;color:var(--dim)">
-      <span><b style="color:var(--green)">■</b> Libre</span><span><b style="color:var(--amber)">■</b> Parcial</span><span><b style="color:var(--accent)">■</b> Ocupado</span><span><b style="color:var(--red)">■</b> Sobre-asignado</span><span><b style="color:#a56cf0">■</b> Vacaciones</span>
+      <span><b style="color:var(--green)">■</b> Libre</span><span><b style="color:var(--amber)">■</b> Parcial</span><span><b style="color:var(--accent)">■</b> Ocupado</span><span><b style="color:var(--red)">■</b> Sobre-asignado</span><span><b style="color:#a56cf0">■</b> Vacaciones</span><span><b style="color:var(--amber)">■</b> Permiso</span>
     </div>
   </div>`;
 }
@@ -24923,6 +25081,7 @@ async function supaLoadAll(){
       localStorage.setItem('c3ntro_vacaciones', JSON.stringify(saveObj));
       console.log('✅ Vacaciones cargadas');
     }
+    await permisosLoadSupabase();
 
     // 5. Festivos
     const { data: fests } = await _supa.from('festivos').select('*');
