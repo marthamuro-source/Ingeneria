@@ -4286,6 +4286,7 @@ let VACACIONES = {};
 // Funcionan como vacaciones para el plan (la persona no tiene esa carga ese día), pero se capturan y muestran aparte.
 let PERMISOS = (()=>{ try{ return JSON.parse(localStorage.getItem('c3ntro_permisos_dia')||'{}')||{}; }catch(e){ return {}; } })();
 function permisosSaveLocal(){ try{ localStorage.setItem('c3ntro_permisos_dia', JSON.stringify(PERMISOS)); }catch(e){} }
+function permEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function cronoPermisoDia(nombre, key){
   if(!nombre || !key) return null;
   let m = PERMISOS[nombre];
@@ -9718,11 +9719,12 @@ function planBuildHTML() {
           h += '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">';
           h += '<div style="font-size:14px">'+(_isPerm?'📋':'🏖')+'</div>';
           h += '<div style="font-size:8px;color:rgba(155,89,182,.8);font-weight:600">'+(_isPerm?'PERMISO':'VACACIONES')+'</div>';
+          if(_isPerm && _perm.motivo) h += '<div style="font-size:8px;color:#4b5563;font-weight:500;text-align:center;padding:0 4px;line-height:1.2">'+permEsc(_perm.motivo)+'</div>';
           h += '</div>';
         } else if(isVac) {
-          h += '<div style="font-size:8px;color:rgba(155,89,182,.7);font-weight:600;padding:2px 4px">'+(_isPerm?'📋 Permiso':'🏖 Vac')+'</div>';
+          h += '<div style="font-size:8px;color:rgba(155,89,182,.7);font-weight:600;padding:2px 4px">'+(_isPerm?'📋 Permiso'+(_perm.motivo?': '+permEsc(_perm.motivo):''):'🏖 Vac')+'</div>';
         } else if(_perm && _perm.fr<1) {
-          h += '<div style="font-size:8px;color:#b45309;font-weight:600;padding:2px 4px" title="'+String(_perm.motivo||'Permiso de medio día').replace(/"/g,'&quot;')+'">📋 Permiso ½ día</div>';
+          h += '<div style="font-size:8px;color:#b45309;font-weight:600;padding:2px 4px" title="'+permEsc(_perm.motivo||'Permiso de medio día')+'">📋 Permiso ½ día'+(_perm.motivo?': '+permEsc(_perm.motivo):'')+'</div>';
         }
 
         dayActs.forEach(function(a) {
@@ -9908,7 +9910,7 @@ function planNotasFilas(a, crItem, cols, fd){
   var h='';
         var pinf=(typeof cronoPronosticoInfo==='function')?cronoPronosticoInfo(a,crItem):null;
         if(pinf&&pinf.diasVac){
-          h+='<tr class="pnota vac"><td></td><td colspan="'+cols+'"><b>&#127796; Vacaciones:</b> la fecha pron&oacute;stico se recorri&oacute; <b>+'+pinf.diasVac+' d&iacute;a'+(pinf.diasVac===1?'':'s')+' por vacaciones</b>: de '+fd(pinf.sinVac)+' a <b>'+fd(pinf.fecha)+'</b>.</td></tr>';
+          h+='<tr class="pnota vac"><td></td><td colspan="'+cols+'"><b>&#127796; Vacaciones / permisos:</b> la fecha pron&oacute;stico se recorri&oacute; <b>+'+pinf.diasVac+' d&iacute;a'+(pinf.diasVac===1?'':'s')+' por vacaciones o permisos</b>: de '+fd(pinf.sinVac)+' a <b>'+fd(pinf.fecha)+'</b>.</td></tr>';
         }
         if(a.reapertura&&a.reapertura.inicio){
           var escR=function(t){return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
@@ -10340,9 +10342,9 @@ function planExportPDF(detallado) {
         var isOnly=acts.length===1&&!isVac;
         h+='<td'+(isVac?' class="vc"':'')+' style="min-width:80px;padding:4px;vertical-align:top">';
         h+='<div class="day-cell">';
-        if(isVac&&acts.length===0){h+='<div class="cvac" style="flex:1;display:flex;align-items:center;justify-content:center">'+(_isPerm2?'Permiso':'Vacaciones')+'</div>';}
-        else if(isVac){h+='<div class="cvac">'+(_isPerm2?'Perm':'Vac')+'</div>';}
-        else if(_pm2&&_pm2.fr<1){h+='<div class="cvac" style="background:#fef3c7;color:#92400e">Permiso ½</div>';}
+        if(isVac&&acts.length===0){h+='<div class="cvac" style="flex:1;display:flex;align-items:center;justify-content:center;text-align:center">'+(_isPerm2?'<div>Permiso'+(_pm2.motivo?'<div style="font-size:7.5px;font-weight:500;color:#4b5563;line-height:1.2;margin-top:2px">'+permEsc(_pm2.motivo)+'</div>':'')+'</div>':'Vacaciones')+'</div>';}
+        else if(isVac){h+='<div class="cvac">'+(_isPerm2?'Perm'+(_pm2.motivo?': '+permEsc(_pm2.motivo):''):'Vac')+'</div>';}
+        else if(_pm2&&_pm2.fr<1){h+='<div class="cvac" style="background:#fef3c7;color:#92400e" title="'+permEsc(_pm2.motivo||'Permiso de medio día')+'">Permiso ½'+(_pm2.motivo?': '+permEsc(_pm2.motivo):'')+'</div>';}
         acts.forEach(function(a){
           var isProg=a.estatus==='En progreso';
           var isV=paEsVencida(a,todayStr);
