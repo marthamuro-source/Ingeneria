@@ -14374,6 +14374,7 @@ function toggleEval(p){
 
 const VIDS=['overview','team','tasks','detalle','charts','reporteo','calidad','udemy','evaluaciones','panel','equipo','ausencias','dashboards','herramientas','seguimiento','segind','servicios','sbi','proyectos'];
 function goView(name){
+  if(name==='panel' && curView!=='panel') PA_PEND_ABIERTO = {};   // Pendientes siempre se muestra cerrado al entrar
   curView=name;
   VIDS.forEach(v=>{ const el=document.getElementById('v-'+v); if(el) el.style.display=v===name?'':'none'; });
   document.querySelectorAll('.ni').forEach(b=>{ try{ b.classList.toggle('on', b.getAttribute('onclick').includes("'"+name+"'")); }catch(e){} });
@@ -16988,8 +16989,8 @@ function rendReset(){
 
 
 // ── Tablero general de pendientes: lo que está en proceso y lo ya considerado que aún no inicia ──
-let PA_PEND_COLAPSADO = {};
-function paPendToggle(k){ PA_PEND_COLAPSADO[k] = !PA_PEND_COLAPSADO[k]; paRenderPendientes(); }
+let PA_PEND_ABIERTO = {};   // por defecto todas las secciones cerradas; se vuelven a cerrar cada vez que se entra al Panel de control
+function paPendToggle(k){ PA_PEND_ABIERTO[k] = !PA_PEND_ABIERTO[k]; paRenderPendientes(); }
 function paRenderPendientes(){
   const host = document.getElementById('paPendientes'); if(!host) return;
   const esc = t=>String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -17042,8 +17043,8 @@ function paRenderPendientes(){
     const barra = av===null ? '<span style="color:var(--dim)">—</span>'
       : `<div style="display:flex;align-items:center;gap:6px;min-width:84px"><div style="flex:1;height:5px;background:rgba(128,140,160,.2);border-radius:3px;overflow:hidden"><div style="width:${Math.min(100,av)}%;height:100%;background:var(--accent)"></div></div><span style="font-size:11px;color:var(--muted)">${av}%</span></div>`;
     return `<tr${v?' style="background:rgba(255,92,92,.05)"':''}>
-      <td style="${td};font-family:var(--mono,monospace);font-size:11px;color:var(--accent);white-space:nowrap">${esc(a.folio||'—')}</td>
-      <td style="${td};max-width:320px"><div style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(a.actividad)}">${esc(a.actividad||'—')}</div><div style="font-size:10.5px;color:var(--dim)">${esc(a.proyecto||'')}${a.tipo?' · '+esc(a.tipo):''}</div></td>
+      <td style="${td};font-family:var(--mono,monospace);font-size:10.5px;color:var(--accent);line-height:1.3;overflow-wrap:anywhere;word-break:break-word">${esc(a.folio||'—')}</td>
+      <td style="${td}"><div style="font-weight:600;color:var(--text);line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere" title="${esc(a.actividad)}">${esc(a.actividad||'—')}</div><div style="font-size:10.5px;color:var(--dim)">${esc(a.proyecto||'')}${a.tipo?' · '+esc(a.tipo):''}</div></td>
       <td style="${td};white-space:nowrap"><span class="badge ${cfg.cls}" style="font-size:10px">${esc(a.estatus)}</span></td>
       <td style="${td};white-space:nowrap;color:${iniRetraso?'var(--amber)':'var(--text)'}" ${iniRetraso?'title="Debió iniciar y aún sigue sin iniciar"':''}>${fmt(a.fechaAsig)}</td>
       <td style="${td};white-space:nowrap;color:${v?'var(--red)':'var(--text)'};font-weight:${v?700:400}">${fmt(a.fechaTermino)}${nota}${entTxt}</td>
@@ -17052,9 +17053,9 @@ function paRenderPendientes(){
       <td style="${td}">${barra}</td></tr>`;
   };
   const secciones = GRUPOS.map(g=>{
-    const cerrado = !!PA_PEND_COLAPSADO[g.k];
+    const cerrado = !PA_PEND_ABIERTO[g.k];
     const cuerpo = g.items.length
-      ? `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:${verOf?980:860}px"><colgroup>${verOf?'<col style="width:6%"><col style="width:24%"><col style="width:11%"><col style="width:8%"><col style="width:15%"><col style="width:15%"><col style="width:11%"><col style="width:10%">':'<col style="width:7%"><col style="width:29%"><col style="width:12%"><col style="width:9%"><col style="width:16%"><col style="width:14%"><col style="width:13%">'}</colgroup><thead><tr><th style="${th}">Folio</th><th style="${th}">Actividad</th><th style="${th}">Estatus</th><th style="${th}">Inicio</th><th style="${th}">${verOf?'Entrega interna':'Término'}</th>${verOf?`<th style="${th}">Subida oficial</th>`:''}<th style="${th}">Responsable</th><th style="${th}">Avance</th></tr></thead><tbody>${g.items.map(a=>fila(a,g.k)).join('')}</tbody></table></div>`
+      ? `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:${verOf?980:860}px"><colgroup>${verOf?'<col style="width:15%"><col style="width:22%"><col style="width:9%"><col style="width:7%"><col style="width:11%"><col style="width:12%"><col style="width:12%"><col style="width:12%">':'<col style="width:17%"><col style="width:27%"><col style="width:11%"><col style="width:8%"><col style="width:14%"><col style="width:12%"><col style="width:11%">'}</colgroup><thead><tr><th style="${th}">Folio</th><th style="${th}">Actividad</th><th style="${th}">Estatus</th><th style="${th}">Inicio</th><th style="${th}">${verOf?'Entrega interna':'Término'}</th>${verOf?`<th style="${th}">Subida oficial</th>`:''}<th style="${th}">Responsable</th><th style="${th}">Avance</th></tr></thead><tbody>${g.items.map(a=>fila(a,g.k)).join('')}</tbody></table></div>`
       : `<div style="padding:14px;font-size:12px;color:var(--dim)">Sin actividades en esta sección.</div>`;
     return `<div style="border-top:1px solid var(--border)">
       <div onclick="paPendToggle('${g.k}')" style="display:flex;align-items:center;gap:8px;padding:10px 16px;cursor:pointer;user-select:none">
