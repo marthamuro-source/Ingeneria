@@ -10160,7 +10160,12 @@ function planCorteSeccion(weeks, C){
         var _enProc=(a.estatus==='En progreso' && wS<=hoyKey);
         var _chipAct = chipDe(cump.estado);
         if(MF && MF.act && (cump.estado==='atrasada'||cump.estado==='parcial')) _chipAct = chipMeta(MF.act)+'<br><span style="font-size:7.5px;color:#6b7280">ritmo '+ritmoPct+'% &middot; fin '+fd(MF.act.fin)+' &middot; holgura '+cronoMetaHolgTxt(MF.act.holg)+'</span>';
-        h+='<td>'+(prov?(_enProc?'<span class="stchip st-prog" title="Ya inició: el día en curso se evalúa al cerrar">En proceso</span>':'<span class="stchip st-nuevo">Programada</span>'):weekEval&&cump.pct!==null?_chipAct:(_enProc?'<span class="stchip st-prog" title="Ya inició: el día en curso se evalúa al cerrar">En proceso</span>':'<span class="stchip st-nuevo">Programada</span>'))+'</td></tr>';
+        var _todasListas = !prov && !futuras.length && vis.length && vis.every(function(v){return v.f.estado==='completada';});
+        if(!weekEval && !prov && (entr || _todasListas)){
+          // Semana aún sin evaluar (p. ej. lunes antes del cierre): lo ya entregado/completado no puede figurar como "Programada"
+          _chipAct = entr ? '<span class="stchip st-fin" title="Ya se entregó">'+((a.estatus==='En revisión')?'En revisi&oacute;n':'Entregada')+'</span>' : chipDe('completada');
+        }
+        h+='<td>'+((!weekEval && !prov && (entr || _todasListas))?_chipAct:prov?(_enProc?'<span class="stchip st-prog" title="Ya inició: el día en curso se evalúa al cerrar">En proceso</span>':'<span class="stchip st-nuevo">Programada</span>'):weekEval&&cump.pct!==null?_chipAct:(_enProc?'<span class="stchip st-prog" title="Ya inició: el día en curso se evalúa al cerrar">En proceso</span>':'<span class="stchip st-nuevo">Programada</span>'))+'</td></tr>';
         h+=planNotasFilas(a,crItem,12,fd);
         vis.forEach(function(v){
           var f=v.f, st=f.st;
@@ -10190,7 +10195,7 @@ function planCorteSeccion(weeks, C){
           else linea='<br><span style="font-size:7.5px;color:#166534">cierra el viernes</span>';
           var enCursoSub = (extraHoy>1e-9 && f.estado!=='completada');
           var mfF = (MF && MF.filas[st.id] && (f.estado==='atrasada'||f.estado==='parcial')) ? MF.filas[st.id] : null;
-          var chip = (weekEval && enCursoSub && (f.estado==='sin_inicio'||f.estado==='adelantada')) ? '<span class="stchip st-prog">En curso hoy</span>' : weekEval ? (mfF ? chipMeta(mfF)+'<br><span style="font-size:7.5px;color:#6b7280">ritmo '+(f.pct!==null?Math.round(f.pct*100):0)+'% &middot; holgura '+cronoMetaHolgTxt(mfF.holg)+'</span>' : chipDe(f.estado)+((f.atrasoDias>0.05&&f.estado!=='completada')?' <span style="font-size:7.5px;color:#b91c1c">&minus;'+fq(f.atrasoDias)+' d</span>':'')) : '<span class="stchip st-nuevo">Programada</span>';
+          var chip = (weekEval && enCursoSub && (f.estado==='sin_inicio'||f.estado==='adelantada')) ? '<span class="stchip st-prog">En curso hoy</span>' : weekEval ? (mfF ? chipMeta(mfF)+'<br><span style="font-size:7.5px;color:#6b7280">ritmo '+(f.pct!==null?Math.round(f.pct*100):0)+'% &middot; holgura '+cronoMetaHolgTxt(mfF.holg)+'</span>' : chipDe(f.estado)+((f.atrasoDias>0.05&&f.estado!=='completada')?' <span style="font-size:7.5px;color:#b91c1c">&minus;'+fq(f.atrasoDias)+' d</span>':'')) : (f.estado==='completada' ? chipDe('completada') : (f.rea>1e-9 || (_enProc && f.inicio && f.inicio<=hoyKey)) ? '<span class="stchip st-prog" title="Ya inició: se evalúa al cerrar el día">En proceso</span>' : '<span class="stchip st-nuevo">Programada</span>');
           if(prov) chip='<span class="stchip st-nuevo">Programada</span>';
           h+='<td>'+chip+linea+'</td></tr>';
         });
