@@ -9682,14 +9682,14 @@ function planBuildHTML() {
       week.forEach(function(day) {
         var dayStr = day.toISOString().slice(0,10);
         var isToday = dayStr === todayStr;
-        var dayActs = PA_ITEMS.filter(function(a) {
+        var dayActs = planOrdenarActs(PA_ITEMS.filter(function(a) {
           if (a.responsable !== member) return false;
           if (!a.fechaAsig) return false;
           var start = a.fechaAsig;
           var end = a.fechaTermino || a.fechaAsig;
           if(dayStr < start || dayStr > end) return false;
           return !paEnPausaEnFecha(a, dayStr); // en pausa ese día: no se va a trabajar, no se pinta en el calendario
-        });
+        }));
         // Verificar vacaciones usando VACACIONES[nombre].has(fecha)
         var isVac = false;
         if(typeof VACACIONES !== 'undefined' && VACACIONES) {
@@ -9945,6 +9945,38 @@ function planCorteCSS(){
     +'table.lst tr.pnota.cont td{background:#eef2ff!important;color:#3730a3;border-bottom:1px dashed #a5b4fc}'
     +'.st-prov{background:#ede9fe;color:#5b21b6}table.lst tr.pnota.prov td{background:#f5f3ff!important;color:#5b21b6;border-bottom:1px dashed #c4b5fd}';
 }
+// ── Orden de ejecución por proyectista: primero lo ya entregado, luego lo que está en proceso (por cuándo arrancó),
+// luego lo que sigue por programación (por su primer día de trabajo en el plan) y al final lo pausado ──
+function planClaveEjecucion(a){
+  const entreg = (a.estatus==='En revisión'||a.estatus==='Terminado (máximo avance)'||a.estatus==='Terminado');
+  const cr = (typeof CRONO_ITEMS!=='undefined') ? CRONO_ITEMS.find(x=>x.actividadId===a.id) : null;
+  let primerRep = null;
+  if(cr) (cr.reportes||[]).forEach(r=>{ if(!r || r.modo==='general') return; const f = String(r.fecha||'').slice(0,10); if(f && (!primerRep || f<primerRep)) primerRep = f; });
+  let planIni = null;
+  try{
+    if(cr){
+      let pl = cronoPlanDiario(a, cr);
+      if(!pl){ const pv = cronoCrProvisional(a, cr); pl = pv ? cronoPlanDiario(a, pv) : null; }
+      if(pl){ const fs = Object.keys(pl.dias).sort(); planIni = fs[0] || pl.base || null; }
+    }
+  }catch(e){}
+  const asig = String(a.fechaAsig||'9999');
+  let grupo, f;
+  if(entreg){ grupo = 0; f = String(a.fechaEntregaProy||a.fechaReal||primerRep||planIni||asig).slice(0,10); }
+  else if(a.estatus==='En pausa'){ grupo = 3; f = planIni || asig; }
+  else if(a.estatus==='En progreso' || primerRep){ grupo = 1; f = primerRep || planIni || asig; }
+  else { grupo = 2; f = planIni || asig; }
+  return [grupo, f, String(a.fechaTermino||'9999'), asig, String(a.folio||'')];
+}
+function planOrdenarActs(lista){
+  const dec = lista.map((a,i)=>({a, i, k:planClaveEjecucion(a)}));
+  dec.sort((x,y)=>{
+    for(let n=0;n<x.k.length;n++){ if(x.k[n]!==y.k[n]) return x.k[n] < y.k[n] ? -1 : 1; }
+    return x.i - y.i;
+  });
+  return dec.map(d=>d.a);
+}
+
 // ── Plan provisional: subtareas ya cargadas por el administrador que el proyectista aún no confirma ──
 // Se arma con el orden y el rendimiento tal como se cargaron para que la actividad figure en el plan; no se califica hasta que se confirme.
 function cronoCrProvisional(a, crItem){
@@ -10048,7 +10080,7 @@ function planCorteSeccion(weeks, C){
     dias.forEach(function(ds,i){h+='<th class="dc">'+dn[i]+' '+fd(ds)+'</th>';});
     h+='<th class="dc">Meta al viernes</th><th class="dc">Real</th><th class="dc">%</th><th>Estado</th></tr></thead>';
     planMiembros().forEach(function(member){
-      PA_ITEMS.forEach(function(a){
+      planOrdenarActs(PA_ITEMS.filter(function(x){return x.responsable===member&&x.fechaAsig;})).forEach(function(a){
         if(a.responsable!==member||!a.fechaAsig) return;
         var crItem=CRONO_ITEMS.find(function(x){return x.actividadId===a.id;});
         var cump=crItem?cronoCumplimiento(a,crItem,wE):null;
@@ -10331,7 +10363,7 @@ function planExportPDF(detallado) {
       h+='<tr><td class="ncel"><span class="av" style="background:'+col+'">'+ini+'</span><span style="display:inline-block;vertical-align:middle;line-height:1.25">'+member.split(' ').slice(0,2).join('<br>')+'</span></td>';
       week.forEach(function(day){
         var ds=day.toISOString().slice(0,10);
-        var acts=PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return ds>=a.fechaAsig&&ds<=(a.fechaTermino||a.fechaAsig)&&!paEnPausaEnFecha(a,ds);});
+        var acts=planOrdenarActs(PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return ds>=a.fechaAsig&&ds<=(a.fechaTermino||a.fechaAsig)&&!paEnPausaEnFecha(a,ds);}));
         var vs=typeof VACACIONES!=='undefined'&&VACACIONES?VACACIONES[member]:null;
         if(!vs&&typeof VACACIONES!=='undefined'&&VACACIONES){Object.keys(VACACIONES).forEach(function(k){if(member.indexOf(k.split(' ')[0])>=0)vs=VACACIONES[k];});}
         var isVac=vs&&vs.has&&vs.has(ds);
@@ -10375,7 +10407,7 @@ function planExportPDF(detallado) {
     h+='<div class="whdr">Semana '+(wi+1)+' - '+fWk(week)+'</div>';
     h+='<table class="lst"><thead><tr><th>Proyectista</th><th>'+(detallado?'Actividad / Subtareas':'Actividad')+'</th><th>'+(detallado?'Proyecto / Tipo &middot; Avance':'Proyecto / Tipo')+'</th><th>Folio</th><th>Inicio</th><th>Termino interno &middot; oficial</th><th>Estatus</th></tr></thead>';
     planMiembros().forEach(function(member){
-      var acts=PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return a.fechaAsig<=wE&&(a.fechaTermino||a.fechaAsig)>=wS;});
+      var acts=planOrdenarActs(PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return a.fechaAsig<=wE&&(a.fechaTermino||a.fechaAsig)>=wS;}));
       acts.forEach(function(a){
         var col=gc(member),ini=gi(member);
         var isProg=a.estatus==='En progreso';
@@ -17455,6 +17487,108 @@ function paPausaResumen(a){
   return {pausas, totalDias, original, nueva, abierta:!!abierta};
 }
 
+// ── Reacomodo propuesto: al pausar o reanudar una actividad, las que siguen en la cadena de esa persona ──
+// La pausa recorre la entrega de la actividad; las siguientes (aún sin iniciar) conservan sus fechas y se encimarían.
+// Aquí se calcula cuánto habría que recorrerlas y se le muestra al administrador para que apruebe o edite cada fecha.
+function paDiasHabilesDespues(d1, d2){          // días hábiles en (d1, d2]
+  if(!d1 || !d2 || d2<=d1) return 0;
+  let n = 0; const c = new Date(d1+'T00:00:00'), f = new Date(d2+'T00:00:00');
+  while(c<f){ c.setDate(c.getDate()+1); if(!isWeekend(c) && !FESTIVOS.includes(repDateKey(c))) n++; }
+  return n;
+}
+function paIniPlan(x){                           // primer día de trabajo del plan (o su fecha de asignación)
+  try{
+    const cr = CRONO_ITEMS.find(y=>y.actividadId===x.id);
+    if(cr){
+      let pl = cronoPlanDiario(x, cr);
+      if(!pl){ const pv = cronoCrProvisional(x, cr); pl = pv ? cronoPlanDiario(x, pv) : null; }
+      if(pl){ const fs = Object.keys(pl.dias).sort(); if(fs[0]) return fs[0]; }
+    }
+  }catch(e){}
+  return String(x.fechaAsig||'').slice(0,10);
+}
+function paFinActividad(x){
+  let f = null;
+  try{ const pi = cronoPronosticoInfo(x); f = pi && pi.fecha; }catch(e){}
+  return String(f || x.fechaTermino || x.fechaAsig || '').slice(0,10);
+}
+function paCalcReacomodo(aId){
+  const A = PA_ITEMS.find(x=>x.id===aId);
+  if(!A || !A.responsable) return null;
+  const ENTREG = ['En revisión','Terminado (máximo avance)','Terminado'];
+  if(ENTREG.includes(A.estatus)) return null;
+  const res = paPausaResumen(A);
+  if(!res || !res.original || !res.nueva || res.nueva<=res.original) return null;
+  const d = paDiasHabilesDespues(res.original, res.nueva);
+  if(d<=0) return null;
+  const iniA = paIniPlan(A);
+  const sig = PA_ITEMS.filter(x=>x.id!==A.id && x.responsable===A.responsable && x.fechaAsig && x.estatus==='Sin iniciar'
+                                 && !((CRONO_ITEMS.find(y=>y.actividadId===x.id)||{}).reportes||[]).some(r=>r && r.modo!=='general'))
+                      .map(x=>({x, ini:paIniPlan(x)}))
+                      .filter(o=>o.ini>=iniA)
+                      .sort((p,q)=> p.ini<q.ini?-1 : p.ini>q.ini?1 : String(p.x.fechaTermino||'').localeCompare(String(q.x.fechaTermino||'')));
+  let prevEnd = res.nueva;
+  const props = [];
+  sig.forEach(o=>{
+    const B = o.x, finB = paFinActividad(B);
+    let shift = 0;
+    if(o.ini <= prevEnd){
+      const needed = paDiasHabilesDespues(o.ini, cronoAddWorkdays(prevEnd, 1));
+      shift = Math.min(needed, d);
+    }
+    if(shift>0){
+      props.push({b:B, shift, asig:cronoAddWorkdays(B.fechaAsig, shift), term:B.fechaTermino ? cronoAddWorkdays(B.fechaTermino, shift) : null});
+      prevEnd = cronoAddWorkdays(finB, shift);
+    } else if(finB > prevEnd){ prevEnd = finB; }
+  });
+  return props.length ? {a:A, res, d, props} : null;
+}
+function paProponerReacomodo(aId){
+  if(!cronoVeFechaOficial()) return;                       // solo admin / jefe deciden fechas
+  if(document.getElementById('paReacomodoBg')) return;
+  const r = paCalcReacomodo(aId);
+  if(!r) return;
+  const esc = t=>String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const fmt = k=>{ const d=new Date(String(k).slice(0,10)+'T00:00:00'); return isNaN(d)?'—':d.toLocaleDateString('es-MX',{day:'numeric',month:'short'}).replace('.',''); };
+  const inp = 'font-family:var(--font);font-size:12px;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text)';
+  const filas = r.props.map((p,i)=>`<div style="display:grid;grid-template-columns:auto 1fr;gap:4px 10px;align-items:center;padding:10px 0;border-top:1px solid var(--border)">
+      <input type="checkbox" id="paRea_c${i}" checked style="grid-row:span 2">
+      <div><div style="font-size:12px;font-weight:600;color:var(--text)">${esc(p.b.actividad||'—')}</div>
+        <div style="font-size:10.5px;color:var(--dim)">${esc(p.b.folio||'')} · ${esc(p.b.proyecto||'')} · recorrer ${p.shift} día${p.shift===1?'':'s'} hábil${p.shift===1?'':'es'}</div></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--muted)">
+        <span>Inicio <span style="text-decoration:line-through;color:var(--dim)">${fmt(p.b.fechaAsig)}</span> →</span><input type="date" id="paRea_a${i}" value="${p.asig}" style="${inp}">
+        ${p.term?`<span>Término <span style="text-decoration:line-through;color:var(--dim)">${fmt(p.b.fechaTermino)}</span> →</span><input type="date" id="paRea_t${i}" value="${p.term}" style="${inp}">`:''}
+      </div></div>`).join('');
+  const bg = document.createElement('div');
+  bg.id = 'paReacomodoBg'; bg.className = 'pa-modal-bg open'; bg.style.zIndex = '100002';
+  bg.innerHTML = `<div class="pa-modal" style="max-width:640px;padding:20px 22px;max-height:86vh;overflow:auto" onclick="event.stopPropagation()">
+    <div class="pa-modal-title" style="margin-bottom:6px">↻ Reacomodar las actividades que siguen</div>
+    <div style="font-size:12px;color:var(--text);margin-bottom:4px"><b>${esc(r.a.folio||r.a.actividad||'La actividad')}</b> (${esc(String(r.a.responsable).split(' ').slice(0,2).join(' '))}) ${r.a.estatus==='En pausa'?'está en pausa':'salió de pausa'} y su entrega se recorrió <b>${fmt(r.res.original)} → ${fmt(r.res.nueva)}</b> (+${r.d} día${r.d===1?'':'s'} hábil${r.d===1?'':'es'}).</div>
+    <div style="font-size:11.5px;color:var(--dim);margin-bottom:6px">Estas actividades de la misma persona aún no inician y quedarían encimadas. Propongo recorrerlas; edita o desmarca las que no quieras mover.</div>
+    ${filas}
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+      <button class="pa-btn pa-btn-ghost" id="paReaNo">Dejar como están</button>
+      <button class="pa-btn pa-btn-primary" id="paReaSi">Aplicar seleccionadas</button>
+    </div></div>`;
+  document.body.appendChild(bg);
+  const cerrar = ()=>bg.remove();
+  bg.querySelector('#paReaNo').addEventListener('click', cerrar);
+  bg.addEventListener('click', cerrar);
+  bg.querySelector('#paReaSi').addEventListener('click', ()=>{
+    let n = 0;
+    r.props.forEach((p,i)=>{
+      if(!document.getElementById('paRea_c'+i).checked) return;
+      const a = document.getElementById('paRea_a'+i).value, t = document.getElementById('paRea_t'+i);
+      if(a) p.b.fechaAsig = a;
+      if(t && t.value) p.b.fechaTermino = t.value;
+      p.b.updatedAt = new Date().toISOString();
+      paSave(p.b); n++;
+    });
+    cerrar();
+    if(n){ try{ renderPanel(); }catch(e){} }
+  });
+}
+
 function paAplicarEstatus(a, newEstatus){
   if(!a || a.estatus === newEstatus) return;
   if(typeof paEnsurePausaInicio==='function') paEnsurePausaInicio(a);
@@ -17505,7 +17639,9 @@ function paAplicarEstatus(a, newEstatus){
     }
   }
   window._paNotaReabTmp = null;
+  const _cambioPausa = (a.estatus==='En pausa') !== (newEstatus==='En pausa');
   a.estatus = newEstatus;
+  if(_cambioPausa){ const _id = a.id; setTimeout(()=>{ try{ paProponerReacomodo(_id); }catch(e){ console.warn('paProponerReacomodo', e); } }, 450); }
 }
 
 // ── Reapertura desde "Terminado (máximo avance)" ──
