@@ -1463,6 +1463,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
       Proyectos
     </button>
+    <button class="ni" id="navBitacoraBtn" onclick="goView(&#39;bitacora&#39;)" style="display:none" title="Visible para administrador y jefes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h12a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2z"></path><path d="M8 9h6M8 13h6M8 17h3"></path><path d="M18 8h2v12"></path></svg>
+      Bitácora
+    </button>
     <span id="notifBellLabel" style="display:none">Sin notificaciones</span>
   </nav>
   <!-- Footer fijo al fondo del sidebar -->
@@ -2499,6 +2503,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       </div>
       <div class="pa-modal-body" id="sbiEjemplosBody"></div>
     </div>
+  </div>
+
+  <!-- BITÁCORA (hilo por actividad — administrador y jefes) -->
+  <div id="v-bitacora" style="display:none">
+    <div class="topbar" id="bitTopbar"></div>
+    <div class="content" id="bitMount"></div>
   </div>
 
   <!-- PROYECTOS (carpetas + tablas de seguimiento a la medida — solo administrador) -->
@@ -5829,9 +5839,11 @@ function cronoCatMover(id, direccion){
 }
 function cronoLoad(){
   try{ CRONO_ITEMS = JSON.parse(localStorage.getItem(CRONO_KEY)||'[]'); }catch(e){ CRONO_ITEMS=[]; }
+  try{ bitSnapCrono(); }catch(e){}
 }
 function cronoSave(itemsToSync){
   localStorage.setItem(CRONO_KEY, JSON.stringify(CRONO_ITEMS));
+  try{ bitOnCronoLote(itemsToSync); }catch(e){ console.warn('bitacora', e); }   // reportes y subtareas → bitácora
   try{ if(typeof paAjustarTerminosReapertura==='function') paAjustarTerminosReapertura(); }catch(e){ console.warn('reapertura ajuste', e); }
   if(!_supa) return; // Sin verificar SUPA_ONLINE — _supa es suficiente
   const toSync = itemsToSync ? (Array.isArray(itemsToSync)?itemsToSync:[itemsToSync]) : CRONO_ITEMS;
@@ -6679,6 +6691,7 @@ async function cronoRecargarDeSupabase(){
       }));
       console.log('✅ CRONO_ITEMS cargados:', CRONO_ITEMS.length, 'items');
       localStorage.setItem(CRONO_KEY, JSON.stringify(CRONO_ITEMS));
+      try{ bitSnapCrono(); }catch(e){}
     } else {
       console.warn('⚠ Supabase devolvió 0 rows de cronograma');
     }
@@ -15005,7 +15018,7 @@ function toggleEval(p){
   renderEvaluaciones();
 }
 
-const VIDS=['overview','team','tasks','detalle','charts','reporteo','calidad','udemy','evaluaciones','panel','equipo','ausencias','dashboards','herramientas','seguimiento','segind','servicios','sbi','proyectos'];
+const VIDS=['overview','team','tasks','detalle','charts','reporteo','calidad','udemy','evaluaciones','panel','equipo','ausencias','dashboards','herramientas','seguimiento','segind','servicios','sbi','proyectos','bitacora'];
 function goView(name){
   if(name==='panel' && curView!=='panel') PA_PEND_ABIERTO = {};   // Pendientes siempre se muestra cerrado al entrar
   curView=name;
@@ -15013,6 +15026,7 @@ function goView(name){
   document.querySelectorAll('.ni').forEach(b=>{ try{ b.classList.toggle('on', b.getAttribute('onclick').includes("'"+name+"'")); }catch(e){} });
   if(name==='dashboards') dashShowGaleria();
   refresh();
+  if(name==='bitacora' && bitPuedeVer()) bitCargar().then(()=>{ if(curView==='bitacora') bitRenderVista(); });
 }
 
 function refresh(){
@@ -15032,6 +15046,7 @@ function refresh(){
   else if(curView==='ausencias') renderAusencias();
   else if(curView==='sbi') renderSbi();
   else if(curView==='proyectos') renderProyectos();
+  else if(curView==='bitacora'){ bitLoadLocalSiVacio(); bitRenderVista(); }
   else if(curView==='herramientas') herrRenderGrid();
   else if(curView==='charts' && ROWS.length>0) setTimeout(buildCharts,30);
 }
@@ -15454,6 +15469,525 @@ const PA_STATUS_CFG = {
   'Terminado':    {cls:'bg',  dot:'var(--green)'},
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// BITÁCORA · un hilo (estilo correo) por actividad: proyecto · folio · proyectista.
+// Se llena sola con los movimientos y admite notas/indicaciones. Visible solo para admin y jefes.
+// Datos: tabla "bitacora" en Supabase (+ copia local). No modifica ninguna otra tabla.
+// ═══════════════════════════════════════════════════════════════════════════
+const BIT_KEY = 'c3ntro_bitacora_v1';
+let BIT_ITEMS = [];            // entradas (caché local + remoto)
+let BIT_LISTO = false;         // ya se tomó la "foto" inicial de las actividades
+let BIT_SNAP = {};             // foto de cada actividad (para detectar qué cambió)
+let BIT_CSNAP = {};            // foto de las subtareas por actividad
+let BIT_SEL = null;            // actividad seleccionada en la vista
+let BIT_F = { q:'', resp:'', est:'activas' };
+const BIT_ETIQUETAS = ['Indicación','Corrección','Aviso','Interno'];
+const BIT_ICONOS = { asignada:'📌', inicio:'▶️', avance:'📝', subtarea:'🧩', fechas:'📅', pausa:'⏸', reanudacion:'⏯', revision:'📤', terminado:'✅', correccion:'↩️', reapertura:'🔄', reasignada:'👤', datos:'✎', nota:'💬', eliminada:'🗑', estatus:'•', base:'🗂' };
+
+function bitPuedeVer(){ return (typeof _userRole!=='undefined') && (_userRole==='admin' || _userRole==='jefe'); }
+function bitEsc(t){ return String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function bitFd(k){ if(!k) return '—'; const d = new Date(String(k).slice(0,10)+'T00:00:00'); return isNaN(d)?'—':d.toLocaleDateString('es-MX',{day:'numeric',month:'short'}).replace('.',''); }
+function bitIdTs(id){ const m = String(id||'').match(/(\d{12,13})/); return m ? parseInt(m[1],10) : 0; }
+
+// ── Almacenamiento local + Supabase ──
+function bitLoadLocal(){
+  try{ const l = JSON.parse(localStorage.getItem(BIT_KEY)||'[]'); if(Array.isArray(l)) BIT_ITEMS = l; }catch(e){ BIT_ITEMS = []; }
+}
+function bitSaveLocal(){
+  try{
+    if(BIT_ITEMS.length>6000){ BIT_ITEMS.sort((a,b)=>String(a.ts).localeCompare(String(b.ts))); BIT_ITEMS = BIT_ITEMS.slice(-6000); }
+    localStorage.setItem(BIT_KEY, JSON.stringify(BIT_ITEMS));
+  }catch(e){}
+}
+function bitRow(e){
+  return { id:e.id, actividad_id:e.actividadId, folio:e.folio||null, proyecto:e.proyecto||null, responsable:e.responsable||null,
+           tipo:e.tipo||'nota', etiqueta:e.etiqueta||null, titulo:e.titulo||null, detalle:e.detalle||null, autor:e.autor||null,
+           interno:!!e.interno, ts:e.ts, ...((e.adjuntos&&e.adjuntos.length&&!window._bitSinAdjuntos)?{adjuntos:e.adjuntos}:{}) };
+}
+function bitFromRow(r){
+  return { id:r.id, actividadId:r.actividad_id, folio:r.folio||'', proyecto:r.proyecto||'', responsable:r.responsable||'',
+           tipo:r.tipo||'nota', etiqueta:r.etiqueta||'', titulo:r.titulo||'', detalle:r.detalle||'', autor:r.autor||'',
+           interno:!!r.interno, ts:r.ts, adjuntos:Array.isArray(r.adjuntos)?r.adjuntos:[] };
+}
+function bitError(error){
+  console.warn('⚠️ bitacora:', error);
+  const msg = (error.message||'')+' '+(error.code||'');
+  if(/does not exist|schema cache|could not find the table|42P01|PGRST205/i.test(msg)){ window._bitTablaFalta = true; window._bitErr = null; }
+  else window._bitErr = error.message || error.code || 'error desconocido';
+}
+async function bitEnviar(entradas){
+  if(typeof _supa==='undefined' || !_supa || window._bitTablaFalta) return;
+  try{
+    let { error } = await _supa.from('bitacora').upsert(entradas.map(bitRow), {onConflict:'id', ignoreDuplicates:true});
+    if(error && /adjuntos/i.test(error.message||'') && !window._bitSinAdjuntos){
+      window._bitSinAdjuntos = true;       // falta la columna "adjuntos": se guarda el texto y los adjuntos quedan solo en este navegador
+      ({ error } = await _supa.from('bitacora').upsert(entradas.map(bitRow), {onConflict:'id', ignoreDuplicates:true}));
+    }
+    if(error){ bitError(error); return; }
+    window._bitErr = null;
+    entradas.forEach(e=>{ delete e.pend; });
+    bitSaveLocal();
+  }catch(e){ console.warn('bitacora envío', e); }
+}
+async function bitCargar(){
+  bitLoadLocalSiVacio();
+  if(typeof _supa==='undefined' || !_supa || window._bitTablaFalta) return false;
+  try{
+    const { data, error } = await _supa.from('bitacora').select('*').order('ts',{ascending:true}).limit(8000);
+    if(error){ bitError(error); return false; }
+    window._bitErr = null;
+    const remotas = new Map((data||[]).map(r=>[r.id, bitFromRow(r)]));
+    const pendientes = BIT_ITEMS.filter(e=>e.pend && !remotas.has(e.id));
+    const antes = BIT_ITEMS.length;
+    BIT_ITEMS = [...remotas.values(), ...pendientes];
+    bitSaveLocal();
+    if(pendientes.length) bitEnviar(pendientes);
+    return BIT_ITEMS.length!==antes;
+  }catch(e){ console.warn('bitacora carga', e); return false; }
+}
+function bitLoadLocalSiVacio(){ if(!BIT_ITEMS.length) bitLoadLocal(); }
+
+// ── Registrar un movimiento ──
+function bitLog(a, tipo, titulo, detalle, extra){
+  try{
+    if(!a) return null;
+    extra = extra || {};
+    const e = {
+      id: extra.id || ('b_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)),
+      actividadId: a.id, folio: a.folio||'', proyecto: a.proyecto||'', responsable: a.responsable||'',
+      tipo, etiqueta: extra.etiqueta||'', titulo, detalle: detalle||'',
+      autor: extra.autor || ((typeof _miNombre!=='undefined' && _miNombre) ? _miNombre : 'Sistema'),
+      interno: !!extra.interno, ts: extra.ts || new Date().toISOString(), pend: true,
+      adjuntos: Array.isArray(extra.adjuntos) ? extra.adjuntos : []
+    };
+    bitLoadLocalSiVacio();
+    if(BIT_ITEMS.some(x=>x.id===e.id)) return null;      // ya estaba registrado
+    BIT_ITEMS.push(e); bitSaveLocal();
+    bitEnviar([e]);
+    try{ if(typeof curView!=='undefined' && curView==='bitacora') bitRenderVista(); bitRefrescarModal(); }catch(_){}
+    return e;
+  }catch(err){ console.warn('bitLog', err); return null; }
+}
+
+// ── Detección de cambios en actividades ──
+function bitSnapA(a){
+  return { est:a.estatus||'', ini:a.fechaAsig||'', fin:a.fechaTermino||'', resp:a.responsable||'', folio:a.folio||'', proyecto:a.proyecto||'',
+           act:a.actividad||'', tipo:a.tipo||'', dev:a.devoluciones||0, notas:a.notas||'' };
+}
+function bitSnapAll(){
+  try{ (PA_ITEMS||[]).forEach(a=>{ BIT_SNAP[a.id] = bitSnapA(a); }); BIT_LISTO = true; }catch(e){}
+}
+function bitSnapCrono(){
+  try{
+    (CRONO_ITEMS||[]).forEach(it=>{
+      const m = {}; (it.subtareas||[]).forEach(st=>{ m[st.id] = { n:st.nombre, conf: st.confirmada!==false, pv: !!st.pendienteValidacion }; });
+      BIT_CSNAP[it.actividadId] = m;
+    });
+  }catch(e){}
+}
+function bitFinal(e){ return e==='En revisión' || e==='Terminado (máximo avance)' || e==='Terminado'; }
+function bitOnActividad(a){
+  if(!BIT_LISTO || !a || !a.id) return;
+  const prev = BIT_SNAP[a.id], cur = bitSnapA(a);
+  BIT_SNAP[a.id] = cur;
+  if(!prev){
+    const t = bitIdTs(a.id);
+    if(/^pa_/.test(a.id) && t && Date.now()-t < 120000){
+      const of = (typeof cronoVeFechaOficial==='function' && cronoVeFechaOficial() && a.fechaTermino && typeof cronoFechaOficial==='function') ? cronoFechaOficial(a.fechaTermino) : null;
+      bitLog(a, 'asignada', 'Actividad asignada a '+(a.responsable||'—'),
+        [a.tipo&&('Tipo: '+a.tipo), a.proyecto&&('Proyecto: '+a.proyecto), a.folio&&('Folio: '+a.folio), a.actividad&&('Actividad: '+a.actividad),
+         'Inicio: '+bitFd(a.fechaAsig)+' · Entrega interna: '+bitFd(a.fechaTermino)+(of?' · Subida oficial: '+bitFd(of):'')].filter(Boolean).join('\n'),
+        { id:'asg|'+a.id });
+    }
+    return;
+  }
+  const de = prev.est, a2 = cur.est;
+  if(de !== a2){
+    if(a2==='En pausa'){
+      const pr = a.pausaPrioridad && a.pausaPrioridad.ids && a.pausaPrioridad.ids.length ? '\nPasan por delante: '+a.pausaPrioridad.ids.map(id=>{ const b=PA_ITEMS.find(x=>x.id===id); return b?(b.folio||b.actividad):id; }).join(', ') : '';
+      bitLog(a,'pausa','Puesta en pausa', (a.pausaMotivo?'Motivo: '+a.pausaMotivo:'Sin motivo capturado')+pr);
+    } else if(de==='En pausa'){
+      const h = (a.pausasHistorial||[]).slice(-1)[0];
+      bitLog(a,'reanudacion','Reanudada'+(a2!=='En progreso'?' → '+a2:''), h ? ('Estuvo '+h.dias+' día'+(h.dias===1?'':'s')+' en pausa'+(h.motivo?' · Motivo: '+h.motivo:'')) : '');
+    } else if(!bitFinal(de) && bitFinal(a2)){
+      if(a2==='En revisión'){
+        let cmp = '';
+        if(a.fechaEntregaProy && a.fechaTermino){
+          const tarde = a.fechaEntregaProy > String(a.fechaTermino).slice(0,10) && typeof paDiasHabilesDespues==='function' ? paDiasHabilesDespues(String(a.fechaTermino).slice(0,10), a.fechaEntregaProy) : 0;
+          cmp = tarde>0 ? ' (entregó '+tarde+' día'+(tarde===1?'':'s')+' hábil'+(tarde===1?'':'es')+' después de la entrega interna)' : ' (a tiempo)';
+        }
+        bitLog(a,'revision','Entregada a revisión', 'Entrega del proyectista: '+bitFd(a.fechaEntregaProy)+' · Entrega interna: '+bitFd(a.fechaTermino)+cmp);
+      } else if(a2==='Terminado'){
+        bitLog(a,'terminado','Terminada', 'Entrega del proyectista: '+bitFd(a.fechaEntregaProy)+(a.fechaReal?' · Fecha final real: '+bitFd(a.fechaReal):''));
+      } else {
+        bitLog(a,'terminado','Cerrada al máximo avance','Se cierra con lo avanzado; queda pendiente lo que falte.');
+      }
+    } else if(bitFinal(de) && !bitFinal(a2)){
+      if(de==='Terminado (máximo avance)'){
+        bitLog(a,'reapertura','Reabierta para completar lo pendiente', (a.reapertura&&a.reapertura.nota)?('Nota: '+a.reapertura.nota):'');
+      } else {
+        bitLog(a,'correccion','Regresada a progreso por corrección', 'Devolución #'+(a.devoluciones||cur.dev||1)+(a2!=='En progreso'?' · Nuevo estatus: '+a2:''));
+      }
+    } else if(bitFinal(de) && bitFinal(a2)){
+      if(a2==='Terminado') bitLog(a,'terminado','Terminada (subida oficial)', a.fechaReal?'Fecha final real: '+bitFd(a.fechaReal):'');
+      else bitLog(a,'estatus','Estatus: '+de+' → '+a2,'');
+    } else if(de==='Sin iniciar' && a2==='En progreso'){
+      bitLog(a,'inicio','Inició (en progreso)','');
+    } else {
+      bitLog(a,'estatus','Estatus: '+de+' → '+a2,'');
+    }
+  }
+  if(prev.ini!==cur.ini || prev.fin!==cur.fin){
+    const l = [];
+    if(prev.ini!==cur.ini) l.push('Inicio: '+bitFd(prev.ini)+' → '+bitFd(cur.ini));
+    if(prev.fin!==cur.fin) l.push('Entrega interna: '+bitFd(prev.fin)+' → '+bitFd(cur.fin));
+    const mot = window._bitMotivoFechas;
+    bitLog(a,'fechas', mot ? 'Fechas movidas · '+mot : 'Fechas modificadas', l.join('\n'));
+  }
+  if(prev.resp!==cur.resp) bitLog(a,'reasignada','Reasignada: '+(prev.resp||'—')+' → '+(cur.resp||'—'),'');
+  const dl = [];
+  if(prev.act!==cur.act) dl.push('Actividad: «'+prev.act+'» → «'+cur.act+'»');
+  if(prev.folio!==cur.folio) dl.push('Folio: '+(prev.folio||'—')+' → '+(cur.folio||'—'));
+  if(prev.proyecto!==cur.proyecto) dl.push('Proyecto: '+(prev.proyecto||'—')+' → '+(cur.proyecto||'—'));
+  if(prev.tipo!==cur.tipo) dl.push('Tipo: '+(prev.tipo||'—')+' → '+(cur.tipo||'—'));
+  if(dl.length) bitLog(a,'datos','Datos de la actividad modificados', dl.join('\n'));
+  if(prev.notas!==cur.notas && cur.notas) bitLog(a,'nota','Nota de la actividad', cur.notas, {etiqueta:'Aviso'});
+}
+
+// ── Detección de cambios en el cronograma (subtareas y reportes de avance) ──
+function bitOnCrono(item){
+  if(!item || !item.actividadId) return;
+  const a = (PA_ITEMS||[]).find(x=>x.id===item.actividadId); if(!a) return;
+  const ahora = Date.now(), ventana = 10*60*1000;
+  // Reportes de avance (solo los recién creados, para no re-registrar el historial)
+  (item.reportes||[]).forEach(r=>{
+    const t = bitIdTs(r.id); if(!t || ahora-t>ventana) return;
+    const ts = new Date(t).toISOString();
+    if(r.modo==='general'){
+      bitLog(a,'avance','Reporte de avance: '+(r.avance!=null?r.avance+'%':'—'), [r.descripcion, r.estatus&&('Estatus: '+r.estatus)].filter(Boolean).join('\n'), {id:'rep|'+r.id, autor:r.quien||undefined, ts});
+    } else {
+      bitLog(a,'avance','Avance: '+(r.subtareaNombre||'subtarea')+' · '+r.cantidad+' '+(r.unidad||''),
+        [r.nota, r.estatus&&('Estatus de la subtarea: '+r.estatus), r.bajoRendimiento?('⚠ Por debajo del rendimiento esperado ('+r.rendimientoEsperado+' '+(r.unidad||'')+'/día)'):''].filter(Boolean).join('\n'),
+        {id:'rep|'+r.id, autor:r.quien||undefined, ts});
+    }
+  });
+  const prev = BIT_CSNAP[item.actividadId];
+  const cur = {};
+  (item.subtareas||[]).forEach(st=>{
+    cur[st.id] = { n:st.nombre, conf: st.confirmada!==false, pv: !!st.pendienteValidacion };
+    const t = bitIdTs(st.id);
+    if(t && ahora-t<=ventana && (!prev || !prev[st.id])){
+      bitLog(a,'subtarea','Subtarea agregada: '+st.nombre,
+        [(st.cantidad!=null?st.cantidad:'')+' '+(st.unidad||'')+' · rendimiento '+st.rendimiento+(st.tipo==='dias_por_unidad'?' d/u':' /día'), st.propuestaPor&&st.pendienteValidacion?('Propuesta por '+st.propuestaPor+' · pendiente de validación'):'' ].filter(Boolean).join('\n'),
+        {id:'sta|'+st.id, ts:new Date(t).toISOString()});
+    }
+    const p = prev && prev[st.id];
+    if(p){
+      if(p.pv && !st.pendienteValidacion) bitLog(a,'subtarea','Subtarea validada: '+st.nombre,'',{id:'sva|'+st.id});
+      if(!p.conf && st.confirmada!==false) bitLog(a,'subtarea','Subtarea confirmada: '+st.nombre,'',{id:'scf|'+st.id+'|'+((st.conf&&st.conf.en)||'')});
+    }
+  });
+  if(prev){ Object.keys(prev).forEach(id=>{ if(!cur[id]) bitLog(a,'subtarea','Subtarea eliminada: '+prev[id].n,'',{id:'srm|'+id+'|'+Date.now()}); }); }
+  BIT_CSNAP[item.actividadId] = cur;
+}
+function bitOnCronoLote(items){
+  try{ (items ? (Array.isArray(items)?items:[items]) : (CRONO_ITEMS||[])).forEach(bitOnCrono); }catch(e){ console.warn('bitOnCronoLote', e); }
+}
+// Reenvío de entradas que quedaron pendientes (sin conexión o sin tabla)
+setTimeout(()=>{ try{ bitLoadLocal(); const p = BIT_ITEMS.filter(e=>e.pend); if(p.length) bitEnviar(p); }catch(e){} }, 5000);
+
+// ── Notas / indicaciones manuales ──
+function bitNota(actId, texto, etiqueta, adjuntos){
+  const a = (PA_ITEMS||[]).find(x=>x.id===actId) || bitInfoActividad(actId);
+  texto = String(texto||'').trim(); adjuntos = adjuntos || [];
+  if(!a || (!texto && !adjuntos.length)) return null;
+  return bitLog(a, 'nota', etiqueta ? etiqueta : (adjuntos.length && !texto ? 'Evidencia' : 'Nota'), texto, { etiqueta: etiqueta||'', interno: etiqueta==='Interno', adjuntos });
+}
+// ── Adjuntos (imágenes y evidencia) ──
+const BIT_MAX_ARCHIVO = 10*1024*1024, BIT_MAX_INLINE = 380*1024;
+function bitTam(n){ return n>=1048576 ? (n/1048576).toFixed(1)+' MB' : Math.max(1,Math.round(n/1024))+' KB'; }
+function bitComprimir(file){
+  return new Promise((resolve)=>{
+    const url = URL.createObjectURL(file); const img = new Image();
+    img.onload = ()=>{
+      const M = 1600; let w = img.width, h = img.height; const k = Math.min(1, M/Math.max(w,h)); w = Math.round(w*k); h = Math.round(h*k);
+      const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(img,0,0,w,h);
+      c.toBlob(b=>{ URL.revokeObjectURL(url); resolve(b||file); }, 'image/jpeg', 0.82);
+    };
+    img.onerror = ()=>{ URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+function bitLeerDataUrl(blob){ return new Promise((res,rej)=>{ const r = new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(blob); }); }
+async function bitSubirAdjunto(file, actId){
+  const esImg = /^image\//.test(file.type||'') && !/svg/.test(file.type||'');
+  if(file.size > BIT_MAX_ARCHIVO*(esImg?3:1)) throw new Error('"'+file.name+'" pesa '+bitTam(file.size)+'; el máximo es '+bitTam(BIT_MAX_ARCHIVO)+'.');
+  let blob = file, nombre = file.name || ('imagen_'+Date.now()+'.png'), tipo = file.type || 'application/octet-stream';
+  if(esImg){ blob = await bitComprimir(file); tipo = 'image/jpeg'; nombre = nombre.replace(/\.[a-z0-9]+$/i,'')+'.jpg'; }
+  if(blob.size > BIT_MAX_ARCHIVO) throw new Error('"'+nombre+'" pesa '+bitTam(blob.size)+'; el máximo es '+bitTam(BIT_MAX_ARCHIVO)+'.');
+  const seguro = nombre.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9._-]+/g,'_');
+  const path = String(actId).replace(/[^a-zA-Z0-9_-]/g,'')+'/'+Date.now()+'_'+Math.random().toString(36).slice(2,6)+'_'+seguro;
+  if(typeof _supa!=='undefined' && _supa && !window._bitStorageFalta){
+    try{
+      const { error } = await _supa.storage.from('bitacora').upload(path, blob, { contentType: tipo, upsert:false });
+      if(!error){ const u = _supa.storage.from('bitacora').getPublicUrl(path); return { nombre, tipo, tam: blob.size, url: u.data.publicUrl, path }; }
+      window._bitStorageFalta = true; window._bitStorageMsg = error.message || error.code || 'error desconocido';
+      console.warn('bitacora storage:', error);
+    }catch(e){ window._bitStorageFalta = true; window._bitStorageMsg = String(e&&e.message||e); }
+  }
+  // Sin almacenamiento disponible: las imágenes chicas se guardan dentro del propio hilo
+  if(esImg && blob.size <= BIT_MAX_INLINE) return { nombre, tipo, tam: blob.size, url: await bitLeerDataUrl(blob), inline:true };
+  throw new Error('No se pudo subir "'+nombre+'" porque falta el almacenamiento de la bitácora en Supabase (bucket "bitacora"). '+(esImg?'La imagen pesa demasiado para guardarla sin él.':'Los archivos que no son imagen lo necesitan.'));
+}
+function bitVerImagen(url){
+  const bg = document.createElement('div'); bg.style.cssText = 'position:fixed;inset:0;z-index:4600;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:20px';
+  bg.innerHTML = `<img src="${bitEsc(url)}" style="max-width:96vw;max-height:92vh;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.6)">`;
+  bg.onclick = ()=>bg.remove(); document.body.appendChild(bg);
+}
+async function bitBorrarNota(id){
+  const e = BIT_ITEMS.find(x=>x.id===id); if(!e || e.tipo!=='nota') return;
+  if(!confirm('¿Eliminar esta nota del hilo?')) return;
+  BIT_ITEMS = BIT_ITEMS.filter(x=>x.id!==id); bitSaveLocal();
+  if(typeof _supa!=='undefined' && _supa && !window._bitTablaFalta){ try{ const r = await _supa.from('bitacora').delete().eq('id', id); if(r.error) bitError(r.error); }catch(_){}
+    const rutas = (e.adjuntos||[]).map(x=>x.path).filter(Boolean); if(rutas.length){ try{ await _supa.storage.from('bitacora').remove(rutas); }catch(_){} } }
+  if(curView==='bitacora') bitRenderVista(); bitRefrescarModal();
+}
+function bitInfoActividad(actId){
+  const l = BIT_ITEMS.filter(e=>e.actividadId===actId); if(!l.length) return null;
+  const u = l[l.length-1]; return { id:actId, folio:u.folio, proyecto:u.proyecto, responsable:u.responsable, actividad:'', estatus:'' };
+}
+
+// ── Construcción de hilos ──
+function bitEntradasDe(actId){
+  const l = BIT_ITEMS.filter(e=>e.actividadId===actId).sort((x,y)=>String(x.ts).localeCompare(String(y.ts)));
+  const a = (PA_ITEMS||[]).find(x=>x.id===actId);
+  if(a && !l.some(e=>e.tipo==='asignada')){
+    // Actividad anterior a la bitácora: se muestra un arranque virtual (no se guarda)
+    l.unshift({ id:'virt|'+actId, actividadId:actId, tipo:'base', titulo:'Registro inicial (antes de la bitácora)', autor:'Sistema', ts:a.createdAt||'1970-01-01T00:00:00Z', virtual:true,
+      detalle:[a.responsable&&('Asignada a '+a.responsable), 'Inicio: '+bitFd(a.fechaAsig)+' · Entrega interna: '+bitFd(a.fechaTermino), 'Estatus al iniciar la bitácora: '+(a.estatus||'—')].filter(Boolean).join('\n') });
+  }
+  return l;
+}
+function bitHilos(){
+  const mapa = {};
+  (PA_ITEMS||[]).forEach(a=>{ mapa[a.id] = { id:a.id, folio:a.folio||'', proyecto:a.proyecto||'Sin proyecto', responsable:a.responsable||'', actividad:a.actividad||'', estatus:a.estatus||'', n:0, ultimo:a.updatedAt||a.createdAt||'', viva:true, tipo:a.tipo||'' }; });
+  BIT_ITEMS.forEach(e=>{
+    let h = mapa[e.actividadId];
+    if(!h) h = mapa[e.actividadId] = { id:e.actividadId, folio:e.folio, proyecto:e.proyecto||'Sin proyecto', responsable:e.responsable, actividad:'(actividad eliminada)', estatus:'Eliminada', n:0, ultimo:'', viva:false, tipo:'' };
+    h.n++; if(String(e.ts)>String(h.ultimo)) h.ultimo = e.ts;
+  });
+  return Object.values(mapa);
+}
+function bitAbierta(h){ return ['Sin iniciar','En progreso','En pausa','En revisión'].includes(h.estatus); }
+function bitRel(ts){
+  if(!ts) return '';
+  const d = new Date(ts); if(isNaN(d)) return '';
+  const m = Math.round((Date.now()-d.getTime())/60000);
+  if(m<1) return 'ahora'; if(m<60) return 'hace '+m+' min'; const h = Math.round(m/60); if(h<24) return 'hace '+h+' h';
+  const dd = Math.round(h/24); if(dd<30) return 'hace '+dd+' d'; return d.toLocaleDateString('es-MX',{day:'numeric',month:'short',year:'2-digit'}).replace('.','');
+}
+function bitCss(){
+  if(document.getElementById('bitStyle')) return;
+  const s = document.createElement('style'); s.id = 'bitStyle';
+  s.textContent = `
+  .bit-wrap{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:14px;align-items:start}
+  .bit-lista{border:1px solid var(--border);border-radius:10px;background:var(--surface);overflow:hidden;max-height:calc(100vh - 210px);overflow-y:auto}
+  .bit-fil{display:flex;gap:6px;flex-wrap:wrap;padding:10px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:2}
+  .bit-fil input,.bit-fil select{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:6px 9px;color:var(--text);font-size:12px;font-family:var(--font)}
+  .bit-fil input{flex:1;min-width:140px}
+  .bit-proy{padding:9px 12px 4px;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent)}
+  .bit-row{display:block;padding:9px 12px;border-top:1px solid var(--border);cursor:pointer}
+  .bit-row:hover{background:rgba(74,143,212,.07)}.bit-row.on{background:rgba(74,143,212,.15)}
+  .bit-row .t1{display:flex;gap:6px;align-items:baseline;font-size:12px;color:var(--text)}
+  .bit-row .t1 b{font-family:monospace;font-size:11px;color:var(--accent);font-weight:600}
+  .bit-row .t2{display:flex;gap:8px;align-items:center;margin-top:3px;font-size:10.5px;color:var(--dim)}
+  .bit-chip{font-size:10px;border:1px solid var(--border);border-radius:10px;padding:1px 8px;color:var(--dim);white-space:nowrap}
+  .bit-chip.n{background:rgba(74,143,212,.14);border-color:rgba(74,143,212,.4);color:var(--accent)}
+  .bit-hilo{border:1px solid var(--border);border-radius:10px;background:var(--surface);display:flex;flex-direction:column;max-height:calc(100vh - 210px);min-height:420px}
+  .bit-hd{padding:14px 16px;border-bottom:1px solid var(--border)}
+  .bit-hd h3{margin:0 0 6px;font-size:14px;color:var(--text);font-weight:600;line-height:1.35}
+  .bit-hd .meta{display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--dim);align-items:center}
+  .bit-msgs{flex:1;overflow-y:auto;padding:12px 16px}
+  .bit-dia{text-align:center;font-size:10.5px;color:var(--dim);margin:14px 0 8px;display:flex;align-items:center;gap:10px}
+  .bit-dia:before,.bit-dia:after{content:"";flex:1;height:1px;background:var(--border)}
+  .bit-msg{display:flex;gap:10px;margin-bottom:10px}
+  .bit-ic{width:30px;height:30px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+  .bit-body{flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px}
+  .bit-body.nota{border-color:rgba(74,143,212,.5);background:rgba(74,143,212,.08)}
+  .bit-body.virt{opacity:.75;border-style:dashed}
+  .bit-ti{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+  .bit-ti b{font-size:12.5px;color:var(--text)}
+  .bit-ti .who{font-size:10.5px;color:var(--dim);margin-left:auto;white-space:nowrap}
+  .bit-det{font-size:12px;color:var(--text);margin-top:4px;white-space:pre-wrap;word-break:break-word;opacity:.9}
+  .bit-etq{font-size:10px;border-radius:10px;padding:1px 8px;border:1px solid var(--border);color:var(--dim)}
+  .bit-etq.Indicación{color:var(--accent);border-color:rgba(74,143,212,.6)}.bit-etq.Corrección{color:var(--red);border-color:rgba(255,92,92,.6)}
+  .bit-etq.Aviso{color:var(--amber);border-color:rgba(245,166,35,.6)}.bit-etq.Interno{color:#b389f0;border-color:rgba(179,137,240,.6)}
+  .bit-comp{border-top:1px solid var(--border);padding:10px 14px;display:flex;flex-direction:column;gap:8px;background:var(--surface)}
+  .bit-comp textarea{width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:var(--font);font-size:12.5px;resize:vertical;min-height:54px}
+  .bit-comp .fila{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+  .bit-comp select{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:6px 9px;color:var(--text);font-size:12px}
+  .bit-aviso{font-size:11.5px;border-radius:8px;padding:8px 12px;margin-bottom:10px;background:rgba(245,166,35,.10);border:1px solid rgba(245,166,35,.4);color:var(--amber)}
+  .bit-vacio{padding:40px 20px;text-align:center;color:var(--dim);font-size:12.5px}
+  .bit-adj{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .bit-img{max-width:190px;max-height:140px;border-radius:8px;border:1px solid var(--border);cursor:zoom-in;object-fit:cover}
+  .bit-file{display:inline-flex;gap:6px;align-items:center;font-size:12px;color:var(--accent);border:1px solid var(--border);border-radius:8px;padding:5px 10px;text-decoration:none;background:var(--surface)}
+  .bit-file span{color:var(--dim);font-size:10.5px}
+  .bit-prev{display:flex;flex-wrap:wrap;gap:6px}.bit-prev:empty{display:none}
+  .bit-pv{display:inline-flex;align-items:center;gap:6px;font-size:11px;border:1px solid var(--border);border-radius:8px;padding:3px 8px;background:var(--surface2);color:var(--text)}
+  .bit-pv img{width:26px;height:26px;object-fit:cover;border-radius:4px}.bit-pv b{cursor:pointer;color:var(--dim)}.bit-pv b:hover{color:var(--red)}
+  .bit-del{cursor:pointer;color:var(--dim);font-size:11px;margin-left:6px}.bit-del:hover{color:var(--red)}
+  @media(max-width:900px){.bit-wrap{grid-template-columns:1fr}.bit-lista,.bit-hilo{max-height:none}}
+  `;
+  document.head.appendChild(s);
+}
+function bitAvisoHtml(){
+  let h = '';
+  if(window._bitTablaFalta) h += `<div class="bit-aviso">La bitácora se está guardando solo en este navegador porque Supabase no encuentra la tabla "bitacora". Corre en el SQL Editor el SQL de la bitácora (tabla, permisos y <b>notify pgrst, 'reload schema';</b>).</div>`;
+  if(window._bitStorageFalta) h += `<div class="bit-aviso">Las imágenes se están guardando dentro del hilo (solo las chicas) porque falta el almacenamiento "bitacora" en Supabase${window._bitStorageMsg?' ('+bitEsc(window._bitStorageMsg)+')':''}. Corre el SQL de la bitácora para poder adjuntar archivos y fotos grandes.</div>`;
+  if(window._bitSinAdjuntos) h += `<div class="bit-aviso">Los adjuntos solo se ven en este navegador porque falta la columna "adjuntos" en la tabla bitacora de Supabase: <b>alter table bitacora add column if not exists adjuntos jsonb;</b></div>`;
+  if(window._bitErr) h += `<div class="bit-aviso">No se pudo guardar la bitácora en Supabase (se guardó en este navegador). Motivo: <b>${bitEsc(window._bitErr)}</b></div>`;
+  return h;
+}
+
+// ── Hilo de una actividad (se usa en la vista y en el cuadro 📜) ──
+function bitPintaHilo(host, actId){
+  if(!host) return;
+  const a = (PA_ITEMS||[]).find(x=>x.id===actId);
+  const info = a || bitInfoActividad(actId);
+  if(!info){ host.innerHTML = `<div class="bit-vacio">Elige una actividad de la lista para ver su hilo.</div>`; return; }
+  const l = bitEntradasDe(actId);
+  const of = (a && a.fechaTermino && typeof cronoFechaOficial==='function') ? cronoFechaOficial(a.fechaTermino) : null;
+  let msgs = '', diaPrev = '';
+  l.forEach(e=>{
+    const d = new Date(e.ts); const dk = isNaN(d)?'':d.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
+    if(dk && dk!==diaPrev && !e.virtual){ msgs += `<div class="bit-dia">${bitEsc(dk)}</div>`; diaPrev = dk; }
+    const hora = (!e.virtual && !isNaN(d)) ? d.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}) : '';
+    const esNota = e.tipo==='nota';
+    const puedeBorrar = esNota && (_userRole==='admin' || e.autor===_miNombre);
+    msgs += `<div class="bit-msg"><div class="bit-ic">${BIT_ICONOS[e.tipo]||'•'}</div>
+      <div class="bit-body ${esNota?'nota':''} ${e.virtual?'virt':''}">
+        <div class="bit-ti"><b>${bitEsc(e.titulo)}</b>${e.etiqueta&&esNota?`<span class="bit-etq ${bitEsc(e.etiqueta)}">${bitEsc(e.etiqueta)}</span>`:''}<span class="who">${bitEsc(e.autor||'')}${hora?' · '+hora:''}${puedeBorrar?`<span class="bit-del" onclick="bitBorrarNota('${bitEsc(e.id)}')" title="Eliminar nota">🗑</span>`:''}</span></div>
+        ${e.detalle?`<div class="bit-det">${bitEsc(e.detalle)}</div>`:''}
+        ${(e.adjuntos&&e.adjuntos.length)?`<div class="bit-adj">${e.adjuntos.map(x=>/^image\//.test(x.tipo||'')?`<img class="bit-img" src="${bitEsc(x.url)}" alt="${bitEsc(x.nombre)}" title="${bitEsc(x.nombre)}" onclick="bitVerImagen(this.src)">`:`<a class="bit-file" href="${bitEsc(x.url)}" target="_blank" rel="noopener">📎 ${bitEsc(x.nombre)} <span>${bitTam(x.tam||0)}</span></a>`).join('')}</div>`:''}
+      </div></div>`;
+  });
+  if(!msgs) msgs = `<div class="bit-vacio">Todavía no hay movimientos en este hilo.</div>`;
+  const est = info.estatus || '';
+  host.innerHTML = `<div class="bit-hd">
+      <h3>${bitEsc(info.proyecto||'Sin proyecto')} · <span style="font-family:monospace;color:var(--accent)">${bitEsc(info.folio||'sin folio')}</span>${info.actividad?' — '+bitEsc(info.actividad):''}</h3>
+      <div class="meta"><span class="bit-chip n">👤 ${bitEsc(info.responsable||'Sin asignar')}</span>${est?`<span class="bit-chip">${bitEsc(est)}</span>`:''}
+        ${a?`<span>Inicio ${bitFd(a.fechaAsig)} · Entrega interna ${bitFd(a.fechaTermino)}${of?' · Subida oficial '+bitFd(of):''}</span>`:''}</div></div>
+    <div class="bit-msgs">${msgs}</div>
+    <div class="bit-comp">
+      <textarea class="bit-txt" placeholder="Escribe una indicación o nota para este hilo… (Ctrl+Enter para enviar). También puedes pegar o arrastrar imágenes."></textarea>
+      <div class="bit-prev"></div><div class="bit-adjerr" style="font-size:11px;color:var(--red)"></div>
+      <div class="fila"><button class="pa-btn pa-btn-ghost bit-clip" style="font-size:12px;margin-right:auto" title="Adjuntar imágenes o evidencia">📎 Adjuntar</button><input type="file" class="bit-file-in" multiple style="display:none" accept="image/*,.pdf,.kmz,.kml,.dwg,.dxf,.xls,.xlsx,.csv,.doc,.docx,.zip,.txt"><span style="font-size:11px;color:var(--dim)">Etiqueta</span>
+        <select class="bit-etqsel"><option value="">Sin etiqueta</option>${BIT_ETIQUETAS.map(x=>`<option>${x}</option>`).join('')}</select>
+        <button class="pa-btn pa-btn-primary bit-env" style="font-size:12px">Enviar nota</button></div></div>`;
+  const msgsEl = host.querySelector('.bit-msgs'); if(msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight;
+  const txt = host.querySelector('.bit-txt'), sel = host.querySelector('.bit-etqsel');
+  const pend = [];                                  // adjuntos ya subidos, esperando enviar la nota
+  const prev = host.querySelector('.bit-prev'), err = host.querySelector('.bit-adjerr'), btn = host.querySelector('.bit-env');
+  const pintaPrev = ()=>{ prev.innerHTML = pend.map((x,i)=>`<span class="bit-pv">${/^image\//.test(x.tipo)?`<img src="${bitEsc(x.url)}">`:'📎'} <span>${bitEsc(x.nombre)}</span> <b data-i="${i}" title="Quitar">✕</b></span>`).join('');
+    prev.querySelectorAll('b').forEach(b=>b.onclick=()=>{ pend.splice(parseInt(b.dataset.i,10),1); pintaPrev(); }); };
+  const agregar = async files=>{
+    err.textContent=''; const arr = [...files]; if(!arr.length) return;
+    btn.disabled = true; btn.textContent = 'Subiendo…';
+    for(const f of arr){ try{ pend.push(await bitSubirAdjunto(f, actId)); pintaPrev(); }catch(e){ err.textContent = e.message||String(e); } }
+    btn.disabled = false; btn.textContent = 'Enviar nota';
+  };
+  const enviar = ()=>{ const v = txt.value.trim(); if(!v && !pend.length) return; bitNota(actId, v, sel.value, pend.slice()); txt.value=''; pend.length=0; };
+  btn.onclick = enviar;
+  txt.onkeydown = ev=>{ if(ev.key==='Enter' && (ev.ctrlKey||ev.metaKey)){ ev.preventDefault(); enviar(); } };
+  const fin = host.querySelector('.bit-file-in');
+  host.querySelector('.bit-clip').onclick = ()=>fin.click();
+  fin.onchange = ()=>{ agregar(fin.files); fin.value=''; };
+  txt.addEventListener('paste', ev=>{ const fs = [...(ev.clipboardData&&ev.clipboardData.files||[])]; if(fs.length){ ev.preventDefault(); agregar(fs); } });
+  host.ondragover = ev=>{ if(ev.dataTransfer && [...ev.dataTransfer.types].includes('Files')) ev.preventDefault(); };
+  host.ondrop = ev=>{ if(ev.dataTransfer && ev.dataTransfer.files.length){ ev.preventDefault(); agregar(ev.dataTransfer.files); } };
+}
+
+// ── Vista general (menú) ──
+function bitRenderVista(){
+  if(!bitPuedeVer()) return;
+  bitCss();
+  const top = document.getElementById('bitTopbar'), mount = document.getElementById('bitMount');
+  if(!top || !mount) return;
+  top.innerHTML = `<div><h1>Bitácora</h1><div style="font-size:11.5px;color:var(--dim);margin-top:2px">Un hilo por actividad: cada movimiento queda registrado y puedes dejar indicaciones.</div></div>
+    <button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="bitRecargar()">↻ Actualizar</button>`;
+  // Conservar el foco del buscador mientras se repinta
+  const qPrev = document.getElementById('bitQ'); const enfoque = qPrev && document.activeElement===qPrev;
+  const hilos = bitHilos();
+  const norm = s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const q = norm(BIT_F.q);
+  const textoPorAct = {}; if(q){ BIT_ITEMS.forEach(e=>{ textoPorAct[e.actividadId] = (textoPorAct[e.actividadId]||'')+' '+norm(e.titulo+' '+e.detalle); }); }
+  const resps = [...new Set(hilos.map(h=>h.responsable).filter(Boolean))].sort();
+  let vis = hilos.filter(h=>{
+    if(!q && BIT_F.est==='activas' && !bitAbierta(h)) return false;      // al buscar se incluyen también las terminadas
+    if(!q && BIT_F.est==='cerradas' && bitAbierta(h)) return false;
+    if(BIT_F.resp && h.responsable!==BIT_F.resp) return false;
+    if(q && !norm([h.proyecto,h.folio,h.actividad,h.responsable].join(' ')).includes(q) && !(textoPorAct[h.id]||'').includes(q)) return false;
+    return true;
+  });
+  const porProy = {};
+  vis.forEach(h=>{ (porProy[h.proyecto] = porProy[h.proyecto]||[]).push(h); });
+  const proys = Object.keys(porProy).sort((x,y)=>{
+    const ux = porProy[x].reduce((m,h)=>String(h.ultimo)>m?String(h.ultimo):m,''), uy = porProy[y].reduce((m,h)=>String(h.ultimo)>m?String(h.ultimo):m,'');
+    return uy.localeCompare(ux);
+  });
+  let lista = '';
+  proys.forEach(p=>{
+    lista += `<div class="bit-proy">${bitEsc(p)} <span style="color:var(--dim);font-weight:400">· ${porProy[p].length}</span></div>`;
+    porProy[p].sort((x,y)=>String(y.ultimo).localeCompare(String(x.ultimo))).forEach(h=>{
+      lista += `<div class="bit-row ${BIT_SEL===h.id?'on':''}" data-id="${bitEsc(h.id)}"><div class="t1"><b>${bitEsc(h.folio||'s/f')}</b><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bitEsc(h.actividad)}</span></div>
+        <div class="t2"><span>👤 ${bitEsc((h.responsable||'—').split(' ').slice(0,2).join(' '))}</span><span class="bit-chip">${bitEsc(h.estatus||'—')}</span>${h.n?`<span class="bit-chip n">${h.n} mov.</span>`:''}<span style="margin-left:auto">${bitEsc(bitRel(h.ultimo))}</span></div></div>`;
+    });
+  });
+  if(!lista) lista = `<div class="bit-vacio">No hay actividades con esos filtros.</div>`;
+  mount.innerHTML = bitAvisoHtml()+`<div class="bit-wrap">
+    <div class="bit-lista"><div class="bit-fil"><input id="bitQ" placeholder="Buscar proyecto, folio, proyectista o texto…" value="${bitEsc(BIT_F.q)}">
+      <select id="bitEst"><option value="activas" ${BIT_F.est==='activas'?'selected':''}>Activas</option><option value="cerradas" ${BIT_F.est==='cerradas'?'selected':''}>Terminadas</option><option value="todas" ${BIT_F.est==='todas'?'selected':''}>Todas</option></select>
+      <select id="bitResp"><option value="">Todos los proyectistas</option>${resps.map(r=>`<option ${BIT_F.resp===r?'selected':''}>${bitEsc(r)}</option>`).join('')}</select></div>${lista}</div>
+    <div class="bit-hilo" id="bitHilo"></div></div>`;
+  bitPintaHilo(document.getElementById('bitHilo'), BIT_SEL);
+  const q2 = document.getElementById('bitQ');
+  q2.oninput = ()=>{ BIT_F.q = q2.value; bitRenderVista(); };
+  document.getElementById('bitEst').onchange = e=>{ BIT_F.est = e.target.value; bitRenderVista(); };
+  document.getElementById('bitResp').onchange = e=>{ BIT_F.resp = e.target.value; bitRenderVista(); };
+  mount.querySelectorAll('.bit-row').forEach(r=>r.onclick=()=>{ BIT_SEL = r.dataset.id; bitRenderVista(); });
+  if(enfoque){ q2.focus(); q2.setSelectionRange(q2.value.length, q2.value.length); }
+}
+async function bitRecargar(){ await bitCargar(); if(curView==='bitacora') bitRenderVista(); bitRefrescarModal(); }
+function bitAbrirVista(actId){ if(actId) BIT_SEL = actId; goView('bitacora'); }
+
+// ── Cuadro 📜 desde cada actividad ──
+let BIT_MODAL_ACT = null;
+function bitAbrirHilo(actId){
+  if(!bitPuedeVer()) return;
+  bitCss();
+  BIT_MODAL_ACT = actId;
+  document.getElementById('bitModalBg')?.remove();
+  const bg = document.createElement('div'); bg.id = 'bitModalBg'; bg.className = 'pa-modal-bg open'; bg.style.zIndex = '4300';
+  bg.innerHTML = `<div class="pa-modal" style="max-width:760px;width:94vw;padding:0;display:flex;flex-direction:column;max-height:90vh" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)"><div class="pa-modal-title" style="margin:0">📜 Bitácora de la actividad</div>
+      <div><button class="pa-btn pa-btn-ghost" style="font-size:11px" onclick="bitCerrarModal();bitAbrirVista('${bitEsc(actId)}')">Ver todos los hilos</button> <button onclick="bitCerrarModal()" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer">&times;</button></div></div>
+    <div id="bitModalAviso" style="padding:0 16px"></div>
+    <div class="bit-hilo" id="bitModalHilo" style="border:0;border-radius:0;max-height:none;min-height:0;flex:1;overflow:hidden"></div></div>`;
+  bg.onclick = e=>{ if(e.target===bg) bitCerrarModal(); };
+  document.body.appendChild(bg);
+  bitRefrescarModal();
+  bitCargar().then(()=>bitRefrescarModal());
+}
+function bitCerrarModal(){ document.getElementById('bitModalBg')?.remove(); BIT_MODAL_ACT = null; }
+function bitRefrescarModal(){
+  const h = document.getElementById('bitModalHilo'); if(!h || !BIT_MODAL_ACT) return;
+  const av = document.getElementById('bitModalAviso'); if(av) av.innerHTML = bitAvisoHtml();
+  const txt = h.querySelector('.bit-txt'); const keep = txt ? txt.value : ''; const etq = h.querySelector('.bit-etqsel') ? h.querySelector('.bit-etqsel').value : '';
+  bitPintaHilo(h, BIT_MODAL_ACT);
+  const t2 = h.querySelector('.bit-txt'); if(t2 && keep){ t2.value = keep; } const e2 = h.querySelector('.bit-etqsel'); if(e2 && etq) e2.value = etq;
+}
+
+
 // ─── PANEL DE ACTIVIDADES — DATA ────────────────────────────────────────────
 let PA_ITEMS = (()=>{
   // Si hay conexión a Supabase, supaLoadAll() sobreescribirá esto
@@ -15466,6 +16000,7 @@ let PA_ITEMS = (()=>{
 PA_ITEMS.forEach(a=>{ if(a.estatus==='Pendiente') a.estatus='Sin iniciar'; });
 // Deduplicar por id (por si acaso)
 PA_ITEMS = PA_ITEMS.filter((a,i,arr)=>arr.findIndex(x=>x.id===a.id)===i);
+try{ bitSnapAll(); }catch(e){}
 
 
 function paSave(modifiedItem){
@@ -15838,7 +16373,7 @@ function paRenderTipo(tipo){
       : `<td style="color:var(--text);font-size:11px;white-space:nowrap">${a.fechaReal?fmtD(a.fechaReal):'<span style="color:var(--dim)">—</span>'}${realBadge}</td>`;
 
     const acciones = (_userRole !== 'proyectista')
-      ? `<td style="padding-right:10px;white-space:nowrap"><button class="et-act-btn" onclick="paDuplicarActividad('${a.id}')" title="Crear una nueva actividad precargada con estos mismos datos">⧉</button><button class="et-act-btn" onclick="paOpenModal('${a.id}')" title="Editar">✎</button><button class="et-act-btn del" onclick="paDelete('${a.id}')" title="Eliminar">✕</button></td>`
+      ? `<td style="padding-right:10px;white-space:nowrap"><button class="et-act-btn" onclick="paDuplicarActividad('${a.id}')" title="Crear una nueva actividad precargada con estos mismos datos">⧉</button><button class="et-act-btn" onclick="bitAbrirHilo('${a.id}')" title="Bitácora de esta actividad">📜</button><button class="et-act-btn" onclick="paOpenModal('${a.id}')" title="Editar">✎</button><button class="et-act-btn del" onclick="paDelete('${a.id}')" title="Eliminar">✕</button></td>`
       : `<td></td>`;
     const dCells = `<td style="text-align:center">${dEstCell}</td><td style="text-align:center">${dRealCell}</td>`;
     const enlaceTd = `<td style="text-align:center;width:32px">${enlaceCell}</td>`;
@@ -18176,6 +18711,7 @@ function paProponerReacomodo(aId){
   bg.addEventListener('click', cerrar);
   bg.querySelector('#paReaSi').addEventListener('click', ()=>{
     let n = 0;
+    window._bitMotivoFechas = 'reacomodo por pausa/reanudación de '+(r.a.folio||r.a.actividad||'otra actividad');
     r.props.forEach((p,i)=>{
       if(!document.getElementById('paRea_c'+i).checked) return;
       const a = document.getElementById('paRea_a'+i).value, t = document.getElementById('paRea_t'+i);
@@ -18184,6 +18720,7 @@ function paProponerReacomodo(aId){
       p.b.updatedAt = new Date().toISOString();
       paSave(p.b); n++;
     });
+    window._bitMotivoFechas = null;
     cerrar();
     if(n){ try{ renderPanel(); }catch(e){} }
   });
@@ -18699,6 +19236,7 @@ function paDuplicarActividad(id){
 
 function paDelete(id){
   if(!confirm('¿Eliminar esta actividad?')) return;
+  try{ const _ba = PA_ITEMS.find(x=>x.id===id); if(_ba) bitLog(_ba,'eliminada','Actividad eliminada',''); delete BIT_SNAP[id]; }catch(e){}
   PA_ITEMS = PA_ITEMS.filter(x=>x.id!==id);
   paSave();
   if(typeof supaSyncDeleteActividad==='function') supaSyncDeleteActividad(id);
@@ -21414,6 +21952,11 @@ function applyRole(role, nombre){
   var proyBtn = document.getElementById('navProyectosBtn');
   if(proyBtn) proyBtn.style.display = (role==='admin') ? '' : 'none';
   if(role !== 'admin' && curView === 'proyectos') goView('seguimiento');
+
+  // Bitácora: hilos por actividad, visible para administrador y jefes
+  var bitBtn = document.getElementById('navBitacoraBtn');
+  if(bitBtn) bitBtn.style.display = (role==='admin' || role==='jefe') ? '' : 'none';
+  if(role === 'proyectista' && curView === 'bitacora') goView('seguimiento');
 
   // Seguimiento individual: oculto a proyectistas hasta que el administrador lo active
   if(typeof segIndApplyAccess==='function') segIndApplyAccess();
@@ -24652,6 +25195,7 @@ async function paRefreshFromSupabase(){
         createdAt:a.created_at, updatedAt:a.updated_at,
       }));
       localStorage.setItem('c3ntro_panel_actividades', JSON.stringify(PA_ITEMS));
+      try{ bitSnapAll(); }catch(e){}
     }
   }catch(e){ console.warn('paRefreshFromSupabase exception:', e); }
 }
@@ -25801,6 +26345,7 @@ async function supaLoadAll(){
       }));
       localStorage.setItem('c3ntro_panel_actividades', JSON.stringify(PA_ITEMS));
       console.log('✅ Actividades:', PA_ITEMS.length);
+      try{ bitSnapAll(); }catch(e){}
     }
 
     // 2. Notas Raquel
@@ -26325,6 +26870,7 @@ function supaStartRealtime(){
           if(r.estatus) act.estatus = r.estatus;
           if(r.notas !== undefined) act.notas = r.notas;
           if(r.km !== undefined) act.km = r.km;
+          try{ BIT_SNAP[act.id] = bitSnapA(act); }catch(e){}
           if(curView==='panel') renderPanel();
           if(curView==='seguimiento') renderSegAvance();
         }
@@ -26336,6 +26882,7 @@ function supaStartRealtime(){
 
 // Actividades — guardar (se llama desde paSave existente)
 async function supaSyncActividad(a){
+  try{ bitOnActividad(a); }catch(e){ console.warn('bitacora', e); }   // registra en la bitácora lo que cambió
   if(!SUPA_ONLINE){ console.warn('⚠️ supaSyncActividad: sin conexión Supabase'); return; }
   if(!a || !a.id){ console.warn('⚠️ supaSyncActividad: actividad sin id', a); return; }
   const payload = {
