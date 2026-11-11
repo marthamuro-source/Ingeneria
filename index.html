@@ -15768,17 +15768,58 @@ function bitEntradasDe(actId){
   }
   return l;
 }
+// Un hilo = una asignación: todas las actividades con el mismo proyecto + folio comparten hilo (sin folio: una por actividad)
+function bitClaveDe(proyecto, folio, actId){
+  const f = String(folio||'').trim().toLowerCase();
+  return f ? 'f|'+String(proyecto||'').trim().toLowerCase()+'|'+f : 'a|'+actId;
+}
+function bitClaveEntrada(e, paMapa){
+  const a = paMapa ? paMapa[e.actividadId] : (PA_ITEMS||[]).find(x=>x.id===e.actividadId);
+  return a ? bitClaveDe(a.proyecto, a.folio, a.id) : bitClaveDe(e.proyecto, e.folio, e.actividadId);
+}
+function bitResolver(ref){
+  if(!ref) return null;
+  const a = (PA_ITEMS||[]).find(x=>x.id===ref);
+  if(a) return bitClaveDe(a.proyecto, a.folio, a.id);
+  const e = BIT_ITEMS.find(x=>x.actividadId===ref);
+  if(e) return bitClaveEntrada(e);
+  return ref;       // ya es una clave de hilo
+}
 function bitHilos(){
-  const mapa = {};
-  (PA_ITEMS||[]).forEach(a=>{ mapa[a.id] = { id:a.id, folio:a.folio||'', proyecto:a.proyecto||'Sin proyecto', responsable:a.responsable||'', actividad:a.actividad||'', estatus:a.estatus||'', n:0, ultimo:a.updatedAt||a.createdAt||'', viva:true, tipo:a.tipo||'' }; });
+  const mapa = {}, paMapa = {};
+  const get = (k, b)=> mapa[k] || (mapa[k] = { id:k, folio:b.folio||'', proyecto:b.proyecto||'Sin proyecto', responsables:[], acts:[], ids:[], n:0, ultimo:'' });
+  const addResp = (h, r)=>{ if(r && !h.responsables.includes(r)) h.responsables.push(r); };
+  (PA_ITEMS||[]).forEach(a=>{
+    paMapa[a.id] = a;
+    const h = get(bitClaveDe(a.proyecto, a.folio, a.id), a);
+    h.acts.push({ id:a.id, nombre:a.actividad||'', estatus:a.estatus||'', responsable:a.responsable||'', viva:true });
+    h.ids.push(a.id); addResp(h, a.responsable);
+    const u = a.updatedAt||a.createdAt||''; if(String(u)>String(h.ultimo)) h.ultimo = u;
+  });
   BIT_ITEMS.forEach(e=>{
-    let h = mapa[e.actividadId];
-    if(!h) h = mapa[e.actividadId] = { id:e.actividadId, folio:e.folio, proyecto:e.proyecto||'Sin proyecto', responsable:e.responsable, actividad:'(actividad eliminada)', estatus:'Eliminada', n:0, ultimo:'', viva:false, tipo:'' };
+    const h = get(bitClaveEntrada(e, paMapa), e);
+    if(!h.ids.includes(e.actividadId)){ h.ids.push(e.actividadId); h.acts.push({ id:e.actividadId, nombre:'(actividad eliminada)', estatus:'Eliminada', responsable:e.responsable||'', viva:false }); addResp(h, e.responsable); }
     h.n++; if(String(e.ts)>String(h.ultimo)) h.ultimo = e.ts;
   });
-  return Object.values(mapa);
+  const orden = ['En progreso','En revisión','En pausa','Sin iniciar'];
+  return Object.values(mapa).map(h=>{
+    const vivas = h.acts.filter(x=>x.viva);
+    const abiertas = vivas.filter(x=>orden.includes(x.estatus));
+    h.abierta = abiertas.length>0;
+    h.estatus = vivas.length ? (orden.map(o=>abiertas.find(x=>x.estatus===o)).find(Boolean) || vivas[vivas.length-1]).estatus : 'Eliminada';
+    h.nActs = vivas.length;
+    h.actividad = (vivas.length?vivas:h.acts).map(x=>x.nombre).filter(Boolean).join(' · ');
+    h.responsable = h.responsables.join(', ');
+    h.repId = (abiertas[0] || vivas[vivas.length-1] || h.acts[0] || {}).id || '';
+    return h;
+  });
 }
-function bitAbierta(h){ return ['Sin iniciar','En progreso','En pausa','En revisión'].includes(h.estatus); }
+function bitAbierta(h){ return h.abierta!==undefined ? h.abierta : ['Sin iniciar','En progreso','En pausa','En revisión'].includes(h.estatus); }
+function bitEntradasHilo(th){
+  let l = [];
+  th.ids.forEach(id=>{ l = l.concat(bitEntradasDe(id)); });
+  return l.map((e,i)=>({e,i})).sort((x,y)=>String(x.e.ts).localeCompare(String(y.e.ts)) || x.i-y.i).map(x=>x.e);
+}
 function bitRel(ts){
   if(!ts) return '';
   const d = new Date(ts); if(isNaN(d)) return '';
@@ -15850,13 +15891,15 @@ function bitAvisoHtml(){
 }
 
 // ── Hilo de una actividad (se usa en la vista y en el cuadro 📜) ──
-function bitPintaHilo(host, actId){
+function bitPintaHilo(host, ref){
   if(!host) return;
-  const a = (PA_ITEMS||[]).find(x=>x.id===actId);
-  const info = a || bitInfoActividad(actId);
-  if(!info){ host.innerHTML = `<div class="bit-vacio">Elige una actividad de la lista para ver su hilo.</div>`; return; }
-  const l = bitEntradasDe(actId);
-  const of = (a && a.fechaTermino && typeof cronoFechaOficial==='function') ? cronoFechaOficial(a.fechaTermino) : null;
+  const k = bitResolver(ref);
+  const th = k ? bitHilos().find(h=>h.id===k) : null;
+  if(!th){ host.innerHTML = `<div class="bit-vacio">Elige un folio de la lista para ver su hilo.</div>`; return; }
+  const actId = th.repId;                      // las notas generales se guardan ligadas a la actividad más reciente del folio
+  const multi = th.nActs>1;
+  const nombreDe = {}; th.acts.filter(x=>x.viva).forEach(x=>{ nombreDe[x.id] = x.nombre; });
+  const l = bitEntradasHilo(th);
   let msgs = '', diaPrev = '';
   l.forEach(e=>{
     const d = new Date(e.ts); const dk = isNaN(d)?'':d.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
@@ -15864,22 +15907,35 @@ function bitPintaHilo(host, actId){
     const hora = (!e.virtual && !isNaN(d)) ? d.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}) : '';
     const esNota = e.tipo==='nota';
     const puedeBorrar = esNota && (_userRole==='admin' || e.autor===_miNombre);
+    const chipAct = (multi && !esNota && nombreDe[e.actividadId]) ? `<span class="bit-chip" style="margin-left:6px">${bitEsc(nombreDe[e.actividadId])}</span>` : '';
     msgs += `<div class="bit-msg"><div class="bit-ic">${BIT_ICONOS[e.tipo]||'•'}</div>
       <div class="bit-body ${esNota?'nota':''} ${e.virtual?'virt':''}">
-        <div class="bit-ti"><b>${bitEsc(e.titulo)}</b>${e.etiqueta&&esNota?`<span class="bit-etq ${bitEsc(e.etiqueta)}">${bitEsc(e.etiqueta)}</span>`:''}<span class="who">${bitEsc(e.autor||'')}${hora?' · '+hora:''}${puedeBorrar?`<span class="bit-del" onclick="bitBorrarNota('${bitEsc(e.id)}')" title="Eliminar nota">🗑</span>`:''}</span></div>
+        <div class="bit-ti"><b>${bitEsc(e.titulo)}</b>${chipAct}${e.etiqueta&&esNota?`<span class="bit-etq ${bitEsc(e.etiqueta)}">${bitEsc(e.etiqueta)}</span>`:''}<span class="who">${bitEsc(e.autor||'')}${hora?' · '+hora:''}${puedeBorrar?`<span class="bit-del" onclick="bitBorrarNota('${bitEsc(e.id)}')" title="Eliminar nota">🗑</span>`:''}</span></div>
         ${e.detalle?`<div class="bit-det">${bitEsc(e.detalle)}</div>`:''}
         ${(e.adjuntos&&e.adjuntos.length)?`<div class="bit-adj">${e.adjuntos.map(x=>/^image\//.test(x.tipo||'')?`<img class="bit-img" src="${bitEsc(x.url)}" alt="${bitEsc(x.nombre)}" title="${bitEsc(x.nombre)}" onclick="bitVerImagen(this.src)">`:`<a class="bit-file" href="${bitEsc(x.url)}" target="_blank" rel="noopener">📎 ${bitEsc(x.nombre)} <span>${bitTam(x.tam||0)}</span></a>`).join('')}</div>`:''}
       </div></div>`;
   });
   if(!msgs) msgs = `<div class="bit-vacio">Todavía no hay movimientos en este hilo.</div>`;
-  const est = info.estatus || '';
+  const fechasDe = a=>{
+    const of = (a && a.fechaTermino && typeof cronoFechaOficial==='function') ? cronoFechaOficial(a.fechaTermino) : null;
+    return `Inicio ${bitFd(a.fechaAsig)} · Entrega interna ${bitFd(a.fechaTermino)}${of?' · Subida oficial '+bitFd(of):''}`;
+  };
+  const vivas = th.acts.filter(x=>x.viva).map(x=>(PA_ITEMS||[]).find(p=>p.id===x.id)).filter(Boolean);
+  let meta;
+  if(!multi){
+    const a = vivas[0];
+    meta = `<span class="bit-chip n">👤 ${bitEsc(th.responsable||'Sin asignar')}</span>${th.estatus?`<span class="bit-chip">${bitEsc(th.estatus)}</span>`:''}${a?`<span>${fechasDe(a)}</span>`:''}`;
+  } else {
+    meta = `<span class="bit-chip n">👤 ${bitEsc(th.responsable||'Sin asignar')}</span><span class="bit-chip">${th.nActs} actividades</span>`+
+      `<div style="width:100%;font-size:11.5px;color:var(--dim);margin-top:4px;line-height:1.55">${th.acts.filter(x=>x.viva).map(x=>{ const a = vivas.find(p=>p.id===x.id);
+        return `<div>• <b style="color:var(--text)">${bitEsc(x.nombre||'—')}</b> — ${bitEsc(x.estatus||'')}${a?' · '+fechasDe(a):''}${(a&&th.responsables.length>1)?' · 👤 '+bitEsc(x.responsable):''}</div>`; }).join('')}</div>`;
+  }
   host.innerHTML = `<div class="bit-hd">
-      <h3>${bitEsc(info.proyecto||'Sin proyecto')} · <span style="font-family:monospace;color:var(--accent)">${bitEsc(info.folio||'sin folio')}</span>${info.actividad?' — '+bitEsc(info.actividad):''}</h3>
-      <div class="meta"><span class="bit-chip n">👤 ${bitEsc(info.responsable||'Sin asignar')}</span>${est?`<span class="bit-chip">${bitEsc(est)}</span>`:''}
-        ${a?`<span>Inicio ${bitFd(a.fechaAsig)} · Entrega interna ${bitFd(a.fechaTermino)}${of?' · Subida oficial '+bitFd(of):''}</span>`:''}</div></div>
+      <h3>${bitEsc(th.proyecto||'Sin proyecto')} · <span style="font-family:monospace;color:var(--accent)">${bitEsc(th.folio||'sin folio')}</span>${!multi&&th.actividad?' — '+bitEsc(th.actividad):''}</h3>
+      <div class="meta" style="flex-wrap:wrap">${meta}</div></div>
     <div class="bit-msgs">${msgs}</div>
     <div class="bit-comp">
-      <textarea class="bit-txt" placeholder="Escribe una indicación o nota para este hilo… (Ctrl+Enter para enviar). También puedes pegar o arrastrar imágenes."></textarea>
+      <textarea class="bit-txt" placeholder="Escribe una indicación o nota para este folio… (Ctrl+Enter para enviar). También puedes pegar o arrastrar imágenes."></textarea>
       <div class="bit-prev"></div><div class="bit-adjerr" style="font-size:11px;color:var(--red)"></div>
       <div class="fila"><button class="pa-btn pa-btn-ghost bit-clip" style="font-size:12px;margin-right:auto" title="Adjuntar imágenes o evidencia">📎 Adjuntar</button><input type="file" class="bit-file-in" multiple style="display:none" accept="image/*,.pdf,.kmz,.kml,.dwg,.dxf,.xls,.xlsx,.csv,.doc,.docx,.zip,.txt"><span style="font-size:11px;color:var(--dim)">Etiqueta</span>
         <select class="bit-etqsel"><option value="">Sin etiqueta</option>${BIT_ETIQUETAS.map(x=>`<option>${x}</option>`).join('')}</select>
@@ -15913,19 +15969,19 @@ function bitRenderVista(){
   bitCss();
   const top = document.getElementById('bitTopbar'), mount = document.getElementById('bitMount');
   if(!top || !mount) return;
-  top.innerHTML = `<div><h1>Bitácora</h1><div style="font-size:11.5px;color:var(--dim);margin-top:2px">Un hilo por actividad: cada movimiento queda registrado y puedes dejar indicaciones.</div></div>
+  top.innerHTML = `<div><h1>Bitácora</h1><div style="font-size:11.5px;color:var(--dim);margin-top:2px">Un hilo por folio (asignación): cada movimiento de sus actividades queda registrado en orden y puedes dejar indicaciones.</div></div>
     <button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="bitRecargar()">↻ Actualizar</button>`;
   // Conservar el foco del buscador mientras se repinta
   const qPrev = document.getElementById('bitQ'); const enfoque = qPrev && document.activeElement===qPrev;
   const hilos = bitHilos();
   const norm = s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   const q = norm(BIT_F.q);
-  const textoPorAct = {}; if(q){ BIT_ITEMS.forEach(e=>{ textoPorAct[e.actividadId] = (textoPorAct[e.actividadId]||'')+' '+norm(e.titulo+' '+e.detalle); }); }
-  const resps = [...new Set(hilos.map(h=>h.responsable).filter(Boolean))].sort();
+  const textoPorAct = {}; if(q){ const pm = {}; (PA_ITEMS||[]).forEach(a=>{ pm[a.id]=a; }); BIT_ITEMS.forEach(e=>{ const kk = bitClaveEntrada(e, pm); textoPorAct[kk] = (textoPorAct[kk]||'')+' '+norm(e.titulo+' '+e.detalle); }); }
+  const resps = [...new Set([].concat(...hilos.map(h=>h.responsables)).filter(Boolean))].sort();
   let vis = hilos.filter(h=>{
     if(!q && BIT_F.est==='activas' && !bitAbierta(h)) return false;      // al buscar se incluyen también las terminadas
     if(!q && BIT_F.est==='cerradas' && bitAbierta(h)) return false;
-    if(BIT_F.resp && h.responsable!==BIT_F.resp) return false;
+    if(BIT_F.resp && !h.responsables.includes(BIT_F.resp)) return false;
     if(q && !norm([h.proyecto,h.folio,h.actividad,h.responsable].join(' ')).includes(q) && !(textoPorAct[h.id]||'').includes(q)) return false;
     return true;
   });
@@ -15935,15 +15991,16 @@ function bitRenderVista(){
     const ux = porProy[x].reduce((m,h)=>String(h.ultimo)>m?String(h.ultimo):m,''), uy = porProy[y].reduce((m,h)=>String(h.ultimo)>m?String(h.ultimo):m,'');
     return uy.localeCompare(ux);
   });
+  const selKey = bitResolver(BIT_SEL);
   let lista = '';
   proys.forEach(p=>{
     lista += `<div class="bit-proy">${bitEsc(p)} <span style="color:var(--dim);font-weight:400">· ${porProy[p].length}</span></div>`;
     porProy[p].sort((x,y)=>String(y.ultimo).localeCompare(String(x.ultimo))).forEach(h=>{
-      lista += `<div class="bit-row ${BIT_SEL===h.id?'on':''}" data-id="${bitEsc(h.id)}"><div class="t1"><b>${bitEsc(h.folio||'s/f')}</b><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bitEsc(h.actividad)}</span></div>
-        <div class="t2"><span>👤 ${bitEsc((h.responsable||'—').split(' ').slice(0,2).join(' '))}</span><span class="bit-chip">${bitEsc(h.estatus||'—')}</span>${h.n?`<span class="bit-chip n">${h.n} mov.</span>`:''}<span style="margin-left:auto">${bitEsc(bitRel(h.ultimo))}</span></div></div>`;
+      lista += `<div class="bit-row ${selKey===h.id?'on':''}" data-id="${bitEsc(h.id)}"><div class="t1"><b>${bitEsc(h.folio||'s/f')}</b><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bitEsc(h.actividad)}</span></div>
+        <div class="t2"><span>👤 ${bitEsc(h.responsables.length>1 ? h.responsables.length+' proyectistas' : (h.responsable||'—').split(' ').slice(0,2).join(' '))}</span>${h.nActs>1?`<span class="bit-chip">${h.nActs} actividades</span>`:''}<span class="bit-chip">${bitEsc(h.estatus||'—')}</span>${h.n?`<span class="bit-chip n">${h.n} mov.</span>`:''}<span style="margin-left:auto">${bitEsc(bitRel(h.ultimo))}</span></div></div>`;
     });
   });
-  if(!lista) lista = `<div class="bit-vacio">No hay actividades con esos filtros.</div>`;
+  if(!lista) lista = `<div class="bit-vacio">No hay folios con esos filtros.</div>`;
   mount.innerHTML = bitAvisoHtml()+`<div class="bit-wrap">
     <div class="bit-lista"><div class="bit-fil"><input id="bitQ" placeholder="Buscar proyecto, folio, proyectista o texto…" value="${bitEsc(BIT_F.q)}">
       <select id="bitEst"><option value="activas" ${BIT_F.est==='activas'?'selected':''}>Activas</option><option value="cerradas" ${BIT_F.est==='cerradas'?'selected':''}>Terminadas</option><option value="todas" ${BIT_F.est==='todas'?'selected':''}>Todas</option></select>
@@ -15969,7 +16026,7 @@ function bitAbrirHilo(actId){
   document.getElementById('bitModalBg')?.remove();
   const bg = document.createElement('div'); bg.id = 'bitModalBg'; bg.className = 'pa-modal-bg open'; bg.style.zIndex = '4300';
   bg.innerHTML = `<div class="pa-modal" style="max-width:760px;width:94vw;padding:0;display:flex;flex-direction:column;max-height:90vh" onclick="event.stopPropagation()">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)"><div class="pa-modal-title" style="margin:0">📜 Bitácora de la actividad</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)"><div class="pa-modal-title" style="margin:0">📜 Bitácora del folio</div>
       <div><button class="pa-btn pa-btn-ghost" style="font-size:11px" onclick="bitCerrarModal();bitAbrirVista('${bitEsc(actId)}')">Ver todos los hilos</button> <button onclick="bitCerrarModal()" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer">&times;</button></div></div>
     <div id="bitModalAviso" style="padding:0 16px"></div>
     <div class="bit-hilo" id="bitModalHilo" style="border:0;border-radius:0;max-height:none;min-height:0;flex:1;overflow:hidden"></div></div>`;
