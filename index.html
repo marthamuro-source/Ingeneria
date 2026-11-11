@@ -8521,6 +8521,8 @@ const ARM_CAJ_KEY = 'c3ntro_crono_cajones_v1';
 const ARM_CAJONES_BASE = [['Cortes y detalles','✂️'],['Levantamiento y planimetría','🛰'],['Factibilidad y altimetría','🗺'],['SICT','🛣'],['Conectividad y cruces','🔌'],['Actualización de entregables','📄']];
 const ARM_SIN = 'Sin clasificar', ARM_PROY = 'De un solo proyecto', ARM_PAQ = 'Paquetes';
 let ARM = { cj:'Todo', q:'', pares:true, tipo:'', sinuso:false };
+// Un cambio en el catálogo (rendimiento, unidad, tipo…) aplica solo a asignaciones NUEVAS: las ya asignadas conservan su valor para no mover el plan.
+const CRONO_CAT_PROPAGAR = false;
 
 function armNorm(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
 function armOverlay(){ try{ return JSON.parse(localStorage.getItem(ARM_CAJ_KEY)||'{}')||{}; }catch(e){ return {}; } }
@@ -8529,24 +8531,54 @@ function armSetCajon(c, cajon){
   const o = armOverlay(); o[c.id] = cajon;
   try{ localStorage.setItem(ARM_CAJ_KEY, JSON.stringify(o)); }catch(e){}
 }
+// Registro de cajones (orden + cajones vacíos). Local + tabla opcional "crono_cajones" en Supabase.
+const ARM_LISTA_KEY = 'c3ntro_crono_cajones_lista_v1', ARM_ICO_KEY = 'c3ntro_crono_cajones_ico_v1';
+function armLista(){
+  try{ const l = JSON.parse(localStorage.getItem(ARM_LISTA_KEY)||'null'); if(Array.isArray(l) && l.length) return l.filter(n=>n && n!==ARM_SIN); }catch(e){}
+  return ARM_CAJONES_BASE.map(x=>x[0]);
+}
+async function armGuardarLista(lista, eliminados){
+  lista = [...new Set(lista)];
+  try{ localStorage.setItem(ARM_LISTA_KEY, JSON.stringify(lista)); }catch(e){}
+  if(typeof _supa==='undefined' || !_supa || window._cajTablaFalta) return;
+  try{
+    const r1 = await _supa.from('crono_cajones').upsert(lista.map((n,i)=>({nombre:n, orden:i})), {onConflict:'nombre'});
+    if(r1.error){ armCajErr(r1.error); return; }
+    if(eliminados && eliminados.length){ const r2 = await _supa.from('crono_cajones').delete().in('nombre', eliminados); if(r2.error) armCajErr(r2.error); }
+  }catch(e){ console.warn('crono_cajones', e); }
+}
+function armCajErr(error){
+  console.warn('⚠️ crono_cajones:', error);
+  if(/relation|does not exist|schema cache|crono_cajones/i.test(error.message||'')){ window._cajTablaFalta = true; try{ armRefrescar(); }catch(e){} }
+}
+async function armCargarCajones(){
+  if(typeof _supa==='undefined' || !_supa || window._cajTablaFalta) return;
+  try{
+    const { data, error } = await _supa.from('crono_cajones').select('*').order('orden');
+    if(error){ armCajErr(error); return; }
+    if(data && data.length){ try{ localStorage.setItem(ARM_LISTA_KEY, JSON.stringify(data.map(r=>r.nombre))); }catch(e){} armRefrescar(); }
+    else if(localStorage.getItem(ARM_LISTA_KEY)) armGuardarLista(armLista(), []);   // primera vez: sube lo que ya tenías en este navegador
+  }catch(e){ console.warn('crono_cajones carga', e); }
+}
+function armIconos(){ try{ return JSON.parse(localStorage.getItem(ARM_ICO_KEY)||'{}')||{}; }catch(e){ return {}; } }
 function armSugerido(c){
   const n = armNorm(c.nombre);
-  if(/sict/.test(n)) return 'SICT';
-  if(/conectividad|^ap\b|cruce/.test(n)) return 'Conectividad y cruces';
-  if(/entregable/.test(n)) return 'Actualización de entregables';
-  if(/corte|detalle/.test(n)) return 'Cortes y detalles';
-  if(/levantamiento|planimetr/.test(n)) return 'Levantamiento y planimetría';
-  if(/factibilidad|altimetr/.test(n)) return 'Factibilidad y altimetría';
-  return ARM_SIN;
+  let r = ARM_SIN;
+  if(/sict/.test(n)) r = 'SICT';
+  else if(/conectividad|^ap\b|cruce/.test(n)) r = 'Conectividad y cruces';
+  else if(/entregable/.test(n)) r = 'Actualización de entregables';
+  else if(/corte|detalle/.test(n)) r = 'Cortes y detalles';
+  else if(/levantamiento|planimetr/.test(n)) r = 'Levantamiento y planimetría';
+  else if(/factibilidad|altimetr/.test(n)) r = 'Factibilidad y altimetría';
+  return armLista().includes(r) ? r : ARM_SIN;       // si el cajón sugerido ya no existe (renombrado/eliminado), queda sin clasificar
 }
 function armCajonDe(c){ return c.categoria || armOverlay()[c.id] || armSugerido(c); }
-function armIcono(n){ const b = ARM_CAJONES_BASE.find(x=>x[0]===n); return b ? b[1] : (n===ARM_SIN?'🗃':n===ARM_PROY?'📁':n===ARM_PAQ?'📦':'🗂'); }
+function armIcono(n){ const m = armIconos()[n]; if(m) return m; const b = ARM_CAJONES_BASE.find(x=>x[0]===n); return b ? b[1] : (n===ARM_SIN?'🗃':n===ARM_PROY?'📁':n===ARM_PAQ?'📦':'🗂'); }
 function armListaCajones(){
-  const usados = new Set((CRONO_CATALOGO||[]).filter(c=>!c.proyecto).map(armCajonDe));
-  const lista = ARM_CAJONES_BASE.map(x=>x[0]);
-  [...usados].forEach(n=>{ if(n!==ARM_SIN && !lista.includes(n)) lista.push(n); });
-  if(usados.has(ARM_SIN)) lista.push(ARM_SIN);
-  return lista;
+  const l = armLista().slice();
+  (CRONO_CATALOGO||[]).filter(c=>!c.proyecto).forEach(c=>{ const n = armCajonDe(c); if(n!==ARM_SIN && !l.includes(n)) l.push(n); });
+  if((CRONO_CATALOGO||[]).some(c=>!c.proyecto && armCajonDe(c)===ARM_SIN)) l.push(ARM_SIN);
+  return l;
 }
 function armUso(){
   const m = {};
@@ -8572,7 +8604,7 @@ function armParInfo(c){
   const n = c.nombre||''; let v = null;
   if(/actualizaci[oó]n/i.test(n)) v = 'actualización'; else if(/\bnuev/i.test(n)) v = 'nuevos';
   if(!v) return null;
-  const b = n.replace(/\bnuevo proyecto\b/ig,' ').replace(/\bactualizaci[oó]n(es)?\b/ig,' ').replace(/\bnuev[oa]s?\b/ig,' ').replace(/\s+/g,' ').trim();
+  const b = n.replace(/\bnuevo proyecto\b/ig,' ').replace(/\bactualizaci[oó]n(es)?\b/ig,' ').replace(/\bnuev[oa]s?\b/ig,' ').replace(/\(\s*\)/g,' ').replace(/\s+/g,' ').replace(/\s+([,.;:)])/g,'$1').trim();
   return { v, b, key: armNorm(b)+'|'+c.unidad+'|'+armCajonDe(c) };
 }
 function armAfectadas(id){
@@ -8586,12 +8618,19 @@ function armCss(){
   #armBg{position:fixed;inset:0;z-index:1900;background:var(--bg,#0e141c);display:flex;flex-direction:column;overflow:hidden}
   .arm-top{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--border);flex-wrap:wrap}
   .arm-top h2{font-size:16px;margin:0;font-weight:700;color:var(--text)}
-  .arm-wrap{flex:1;display:grid;grid-template-columns:230px 1fr;min-height:0}
+  .arm-wrap{flex:1;display:grid;grid-template-columns:260px 1fr;min-height:0}
   .arm-side{border-right:1px solid var(--border);padding:12px 10px;background:var(--surface);overflow-y:auto}
   .arm-side h4{margin:4px 8px 8px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:600}
   .arm-cj{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;color:var(--text);border:1px solid transparent;font-size:12.5px}
   .arm-cj:hover{background:var(--surface2)}
   .arm-cj.on{background:rgba(74,143,212,.14);border-color:rgba(74,143,212,.5)}
+  .arm-cj.arrastre{opacity:.45}.arm-cj.sobre{border-color:var(--accent);background:rgba(74,143,212,.2)}
+  .arm-cj[draggable=true]{cursor:grab}
+  .arm-cjact{display:none;gap:2px;margin-left:auto;flex-shrink:0}
+  .arm-cj:hover .arm-cjact{display:flex}.arm-cj:hover .n{display:none}
+  .arm-cjact span{font-size:11px;padding:1px 5px;border:1px solid var(--border);border-radius:5px;color:var(--dim);background:var(--surface)}
+  .arm-cjact span:hover{color:var(--text);border-color:var(--accent)}
+  .arm-cj.arm-nuevo{color:var(--accent);font-size:12px;margin-top:4px;border:1px dashed var(--border)}
   .arm-cj .n{margin-left:auto;font-size:10.5px;color:var(--dim);background:var(--surface2);border-radius:10px;padding:1px 8px}
   .arm-main{padding:14px 18px;overflow-y:auto;min-width:0}
   .arm-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
@@ -8670,6 +8709,7 @@ function cronoArmarioAbrir(){
   document.getElementById('armFSin').onclick = ()=>{ ARM.sinuso=!ARM.sinuso; armRender(); };
   document.addEventListener('keydown', armEsc);
   armRender();
+  armCargarCajones();
 }
 function armEsc(e){
   if(e.key!=='Escape') return;
@@ -8703,12 +8743,28 @@ function armRender(){
   const cnt = n => lista.filter(c=> n===ARM_PROY ? !!c.proyecto : (!c.proyecto && armCajonDe(c)===n)).length;
   const cajones = armListaCajones();
   let h = `<div class="arm-cj ${ARM.cj==='Todo'?'on':''}" data-c="Todo"><span>🗄</span>Todo<span class="n">${lista.length}</span></div>`;
-  cajones.forEach(n=>{ h += `<div class="arm-cj ${ARM.cj===n?'on':''}" data-c="${escapeHtml(n)}"><span>${armIcono(n)}</span>${escapeHtml(n)}<span class="n">${cnt(n)}</span></div>`; });
+  window.ARM_NOMS = cajones.filter(n=>n!==ARM_SIN);
+  cajones.forEach(n=>{
+    const i = ARM_NOMS.indexOf(n), gestionable = esAdmin && i>=0;
+    h += `<div class="arm-cj ${ARM.cj===n?'on':''}" data-c="${escapeHtml(n)}" ${gestionable?`data-i="${i}" draggable="true"`:''}><span>${armIcono(n)}</span><span style="min-width:0">${escapeHtml(n)}</span>
+      ${gestionable?`<span class="arm-cjact"><span title="Subir" onclick="event.stopPropagation();armMoverCajon(${i},-1)">▲</span><span title="Bajar" onclick="event.stopPropagation();armMoverCajon(${i},1)">▼</span><span title="Renombrar" onclick="event.stopPropagation();armRenombrarCajon(${i})">✎</span><span title="Eliminar" onclick="event.stopPropagation();armEliminarCajon(${i})">✕</span></span>`:''}
+      <span class="n">${cnt(n)}</span></div>`;
+  });
+  if(esAdmin) h += `<div class="arm-cj arm-nuevo" onclick="armNuevoCajon()">＋ Nuevo cajón</div>`;
   h += `<h4 style="margin-top:14px">Aparte</h4>
     <div class="arm-cj ${ARM.cj===ARM_PAQ?'on':''}" data-c="${ARM_PAQ}"><span>📦</span>Paquetes<span class="n">${(CRONO_PAQUETES||[]).length}</span></div>
     <div class="arm-cj ${ARM.cj===ARM_PROY?'on':''}" data-c="${ARM_PROY}"><span>📁</span>De un solo proyecto<span class="n">${cnt(ARM_PROY)}</span></div>`;
   const cont = document.getElementById('armCajones'); cont.innerHTML = h;
-  cont.querySelectorAll('.arm-cj').forEach(x=>x.onclick=()=>{ ARM.cj = x.dataset.c; armRender(); });
+  cont.querySelectorAll('.arm-cj[data-c]').forEach(x=>x.onclick=()=>{ ARM.cj = x.dataset.c; armRender(); });
+  // Reordenar cajones arrastrándolos
+  let _arr = null;
+  cont.querySelectorAll('.arm-cj[draggable=true]').forEach(x=>{
+    x.ondragstart = e=>{ _arr = parseInt(x.dataset.i,10); x.classList.add('arrastre'); try{ e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', String(_arr)); }catch(_){} };
+    x.ondragend = ()=>{ _arr = null; cont.querySelectorAll('.arm-cj').forEach(y=>y.classList.remove('arrastre','sobre')); };
+    x.ondragover = e=>{ if(_arr===null) return; e.preventDefault(); x.classList.add('sobre'); };
+    x.ondragleave = ()=>x.classList.remove('sobre');
+    x.ondrop = e=>{ e.preventDefault(); const dest = parseInt(x.dataset.i,10); const orig = _arr; _arr = null; if(orig===null || isNaN(dest) || orig===dest) { armRender(); return; } armReordenarCajon(orig, dest); };
+  });
   // Estado de filtros
   document.getElementById('armFUd').classList.toggle('on', ARM.tipo==='unidades_por_dia');
   document.getElementById('armFDu').classList.toggle('on', ARM.tipo==='dias_por_unidad');
@@ -8716,8 +8772,11 @@ function armRender(){
   const esPaq = ARM.cj===ARM_PAQ;
   document.getElementById('armBar').style.display = esPaq ? 'none' : 'flex';
   document.getElementById('armResumen').textContent = esPaq ? '' : `${lista.length} de ${todos.length} subtareas`;
-  if(window._catSinColCategoria && !document.getElementById('armAviso').innerHTML){
-    document.getElementById('armAviso').innerHTML = `<div class="arm-aviso">Los cajones se están guardando solo en este navegador porque falta la columna "categoria" en Supabase. Corre en el SQL Editor: <b>alter table crono_catalogo add column if not exists categoria text;</b></div>`;
+  if((window._catSinColCategoria || window._cajTablaFalta) && !document.getElementById('armAviso').innerHTML){
+    let av = '';
+    if(window._catSinColCategoria) av += `<div class="arm-aviso" style="margin-bottom:6px">Los cajones de cada subtarea se están guardando solo en este navegador porque falta la columna "categoria" en Supabase. Corre en el SQL Editor: <b>alter table crono_catalogo add column if not exists categoria text;</b></div>`;
+    if(window._cajTablaFalta) av += `<div class="arm-aviso">El orden y los nombres de los cajones se están guardando solo en este navegador porque falta la tabla "crono_cajones" en Supabase. Corre en el SQL Editor: <b>create table if not exists crono_cajones (nombre text primary key, orden int not null default 0); alter table crono_cajones enable row level security; create policy "crono_cajones_all" on crono_cajones for all using (true) with check (true);</b></div>`;
+    document.getElementById('armAviso').innerHTML = av;
   }
   const out = document.getElementById('armContenido'), hint = document.getElementById('armHint');
   if(esPaq){ hint.textContent = 'Los paquetes agrupan varios entregables con un rendimiento compartido.'; out.innerHTML = armPaquetesHtml(esAdmin); return; }
@@ -8793,10 +8852,10 @@ function armEdInline(ev, id){
     const v = parseFloat(inp.value);
     if(!ok || !(v>0) || v===c.rendimiento){ armRender(); return; }
     const n = armAfectadas(id);
-    const msg = `Cambiar el rendimiento de "${c.nombre}" de ${c.rendimiento} a ${v}.\n\n`+(n? `Se actualizará también en ${n} subtarea${n===1?'':'s'} ya asignada${n===1?'':'s'} (sin tocar cantidad ni avance reportado), y eso puede mover fechas del plan.\n\n`:'')+'¿Aplicar el cambio?';
+    const msg = `Cambiar el rendimiento de "${c.nombre}" de ${c.rendimiento} a ${v}.\n\nAplica solo a asignaciones nuevas.`+(n? ` Las ${n} subtarea${n===1?'':'s'} ya asignada${n===1?'':'s'} conservan su rendimiento actual y el plan no se mueve.`:'')+'\n\n¿Aplicar el cambio?';
     if(!confirm(msg)){ armRender(); return; }
     const r = await armAplicarEdicion(id, { rendimiento: v });
-    armRender(); armToast(`✓ Rendimiento actualizado.${r?` Se aplicó a ${r} subtarea${r===1?'':'s'} ya asignada${r===1?'':'s'}.`:''}`, true);
+    armRender(); armToast('✓ Rendimiento actualizado. Aplica a las asignaciones nuevas; las ya asignadas no cambiaron.', true);
   };
   inp.onblur = ()=>fin(true);
   inp.onkeydown = e=>{ if(e.key==='Enter'){ e.preventDefault(); inp.onblur=null; fin(true); } if(e.key==='Escape'){ inp.onblur=null; fin(false); } };
@@ -8805,7 +8864,7 @@ function armEdInline(ev, id){
 async function armAplicarEdicion(id, cambios){
   const c = CRONO_CATALOGO.find(x=>x.id===id); if(!c) return 0;
   const camposProp = ['nombre','unidad','rendimiento','tipo'];
-  const propaga = camposProp.some(k=>k in cambios && cambios[k]!==c[k]);
+  const propaga = CRONO_CAT_PROPAGAR && camposProp.some(k=>k in cambios && cambios[k]!==c[k]);
   Object.assign(c, cambios);
   cronoSaveCatalogo();
   if(!propaga) return 0;
@@ -8842,7 +8901,7 @@ function armModal(modo, id){
   const bg = document.createElement('div'); bg.id='armModalBg'; bg.className='pa-modal-bg open';
   bg.innerHTML = `<div class="pa-modal" style="max-width:440px" onclick="event.stopPropagation()">
     <div class="pa-modal-title" style="margin-bottom:6px">${titulo}</div>
-    ${modo==='editar'?`<div style="font-size:11px;color:var(--dim);margin-bottom:12px">Si cambias nombre, unidad, rendimiento o tipo, se actualiza también en ${n} subtarea${n===1?'':'s'} ya asignada${n===1?'':'s'} que usa${n===1?'':'n'} esta del catálogo (sin tocar cantidad ni avance).</div>`:'<div style="height:8px"></div>'}
+    ${modo==='editar'?`<div style="font-size:11px;color:var(--dim);margin-bottom:12px">Los cambios aplican solo a asignaciones nuevas.${n?` Las ${n} subtarea${n===1?'':'s'} ya asignada${n===1?'':'s'} que usa${n===1?'':'n'} esta del catálogo conservan sus valores actuales y el plan no se mueve.`:''}</div>`:'<div style="height:8px"></div>'}
     <div style="margin-bottom:10px"><label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Nombre</label><input id="armMNom" type="text" value="${escapeHtml(ini.nombre)}" style="${inpSt}"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div><label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Unidad</label><input id="armMUni" type="text" value="${escapeHtml(ini.unidad)}" placeholder="km, cortes…" style="${inpSt}"></div>
@@ -8871,18 +8930,15 @@ async function armGuardarModal(modo, id){
   if(!cajon){ alert('Escribe el nombre del nuevo cajón o elige uno existente'); return; }
   if(modo==='editar'){
     const c = CRONO_CATALOGO.find(x=>x.id===id); if(!c) return;
-    const cambiaProp = (nombre!==c.nombre||unidad!==c.unidad||rendimiento!==c.rendimiento||tipo!==(c.tipo||'unidades_por_dia'));
-    const n = cambiaProp ? armAfectadas(id) : 0;
-    if(n && !confirm(`Se actualizará también en ${n} subtarea${n===1?'':'s'} ya asignada${n===1?'':'s'} (puede mover fechas del plan). ¿Aplicar?`)) return;
-    const r = await armAplicarEdicion(id, { nombre, unidad, rendimiento, tipo });
-    armSetCajon(c, cajon); cronoSaveCatalogo();
+    await armAplicarEdicion(id, { nombre, unidad, rendimiento, tipo });
+    armSetCajon(c, cajon); cronoSaveCatalogo(); armRegistrar(cajon);
     document.getElementById('armModalBg')?.remove(); armRender();
-    armToast(`✓ Subtarea actualizada.${r?` Se aplicó a ${r} subtarea${r===1?'':'s'} ya asignada${r===1?'':'s'}.`:''}`, true);
+    armToast('✓ Subtarea actualizada. Aplica a las asignaciones nuevas; las ya asignadas no cambiaron.', true);
   } else {
     const maxOrden = CRONO_CATALOGO.reduce((m,c)=>Number.isInteger(c.orden)?Math.max(m,c.orden):m, -1);
     const nuevo = { id:'cat_'+Date.now(), nombre, unidad, rendimiento, tipo, orden: maxOrden+1 };
     CRONO_CATALOGO.push(nuevo);
-    armSetCajon(nuevo, cajon); cronoSaveCatalogo();
+    armSetCajon(nuevo, cajon); cronoSaveCatalogo(); armRegistrar(cajon);
     document.getElementById('armModalBg')?.remove(); ARM.cj = cajon; armRender();
     armToast('✓ Subtarea agregada al cajón "'+escapeHtml(cajon)+'".', true);
   }
@@ -8919,10 +8975,84 @@ function armMoverModal(ids){
 function armMoverGuardar(ids){
   const cajon = armCajonElegido(); if(!cajon){ alert('Escribe el nombre del nuevo cajón o elige uno existente'); return; }
   ids.forEach(id=>{ const c = CRONO_CATALOGO.find(x=>x.id===id); if(c) armSetCajon(c, cajon); });
-  cronoSaveCatalogo();
+  cronoSaveCatalogo(); armRegistrar(cajon);
   document.getElementById('armModalBg')?.remove(); armRender();
   armToast('✓ Movida al cajón "'+escapeHtml(cajon)+'".', true);
 }
+
+// ── Gestión de cajones: crear, renombrar, eliminar y reordenar ──
+function armNombresOrdenados(){ return armListaCajones().filter(n=>n!==ARM_SIN); }
+function armRegistrar(nombre){
+  if(!nombre || nombre===ARM_SIN) return;
+  const l = armNombresOrdenados(); if(!armLista().includes(nombre)) armGuardarLista(l, []);
+}
+function armCajonError(nombre, excepto){
+  const n = String(nombre||'').trim();
+  if(!n) return 'Escribe un nombre para el cajón.';
+  const reservados = ['todo', armNorm(ARM_SIN), armNorm(ARM_PROY), armNorm(ARM_PAQ)];
+  if(reservados.includes(armNorm(n))) return 'Ese nombre está reservado; elige otro.';
+  if(armListaCajones().some(x=>x!==excepto && armNorm(x)===armNorm(n))) return 'Ya existe un cajón con ese nombre.';
+  return '';
+}
+function armNombreModal(titulo, ini, textoBoton, onOk){
+  document.getElementById('armModalBg')?.remove();
+  const bg = document.createElement('div'); bg.id='armModalBg'; bg.className='pa-modal-bg open';
+  bg.innerHTML = `<div class="pa-modal" style="max-width:380px" onclick="event.stopPropagation()">
+    <div class="pa-modal-title" style="margin-bottom:10px">${titulo}</div>
+    <input id="armNomIn" type="text" value="${escapeHtml(ini||'')}" placeholder="Nombre del cajón" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-family:var(--font);font-size:13px">
+    <div id="armNomErr" style="font-size:11px;color:var(--red);min-height:16px;margin:6px 0 10px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button class="pa-btn pa-btn-ghost" id="armNomNo">Cancelar</button><button class="pa-btn pa-btn-primary" id="armNomSi">${textoBoton}</button></div></div>`;
+  bg.onclick = e=>{ if(e.target===bg) bg.remove(); };
+  document.body.appendChild(bg);
+  const inp = document.getElementById('armNomIn'); inp.focus(); inp.select();
+  const ok = ()=>{ const err = onOk(inp.value.trim()); if(err){ document.getElementById('armNomErr').textContent = err; } else bg.remove(); };
+  document.getElementById('armNomSi').onclick = ok; document.getElementById('armNomNo').onclick = ()=>bg.remove();
+  inp.onkeydown = e=>{ if(e.key==='Enter'){ e.preventDefault(); ok(); } };
+}
+function armNuevoCajon(){
+  armNombreModal('Nuevo cajón', '', 'Crear', nombre=>{
+    const err = armCajonError(nombre, null); if(err) return err;
+    armGuardarLista([...armNombresOrdenados(), nombre], []);
+    ARM.cj = nombre; armRender(); armToast('✓ Cajón "'+escapeHtml(nombre)+'" creado. Está vacío: mueve subtareas con el botón 📂 o agrégalas con "+ Nueva subtarea".', true);
+    return '';
+  });
+}
+function armRenombrarCajon(i){
+  const viejo = (window.ARM_NOMS||[])[i]; if(!viejo) return;
+  armNombreModal('Renombrar cajón', viejo, 'Guardar', nuevo=>{
+    if(nuevo===viejo) return '';
+    const err = armCajonError(nuevo, viejo); if(err) return err;
+    const items = (CRONO_CATALOGO||[]).filter(c=>!c.proyecto && armCajonDe(c)===viejo);
+    const lista = armNombresOrdenados().map(n=>n===viejo?nuevo:n);      // se calcula antes de tocar las subtareas
+    items.forEach(c=>armSetCajon(c, nuevo));
+    if(items.length) cronoSaveCatalogo();
+    const ico = armIconos(); if(ico[viejo]){ ico[nuevo]=ico[viejo]; delete ico[viejo]; } else { const b = ARM_CAJONES_BASE.find(x=>x[0]===viejo); if(b) ico[nuevo]=b[1]; }
+    try{ localStorage.setItem(ARM_ICO_KEY, JSON.stringify(ico)); }catch(e){}
+    armGuardarLista(lista, [viejo]);
+    if(ARM.cj===viejo) ARM.cj = nuevo;
+    armRender(); armToast('✓ Cajón renombrado a "'+escapeHtml(nuevo)+'"'+(items.length?` (${items.length} subtarea${items.length===1?'':'s'} actualizada${items.length===1?'':'s'})`:'')+'.', true);
+    return '';
+  });
+}
+function armEliminarCajon(i){
+  const nombre = (window.ARM_NOMS||[])[i]; if(!nombre) return;
+  const items = (CRONO_CATALOGO||[]).filter(c=>!c.proyecto && armCajonDe(c)===nombre);
+  const msg = items.length
+    ? `El cajón "${nombre}" tiene ${items.length} subtarea${items.length===1?'':'s'}.\n\nSi lo eliminas, esas subtareas NO se borran: pasan al cajón "${ARM_SIN}".\n\n¿Eliminar el cajón de todos modos?`
+    : `¿Eliminar el cajón vacío "${nombre}"?`;
+  if(!confirm(msg)) return;
+  items.forEach(c=>armSetCajon(c, ARM_SIN));
+  if(items.length) cronoSaveCatalogo();
+  armGuardarLista(armNombresOrdenados().filter(n=>n!==nombre), [nombre]);
+  if(ARM.cj===nombre) ARM.cj = 'Todo';
+  armRender(); armToast('✓ Cajón "'+escapeHtml(nombre)+'" eliminado'+(items.length?`; sus ${items.length} subtarea${items.length===1?'':'s'} pasaron a "${ARM_SIN}"`:'')+'.', true);
+}
+function armReordenarCajon(orig, dest){
+  const l = armNombresOrdenados(); if(orig<0 || orig>=l.length || dest<0 || dest>=l.length) { armRender(); return; }
+  const [x] = l.splice(orig,1); l.splice(dest,0,x);
+  armGuardarLista(l, []); armRender();
+}
+function armMoverCajon(i, d){ armReordenarCajon(i, i+d); }
 
 // ── Paquetes como tarjetas ──
 function armPaquetesHtml(esAdmin){
@@ -9315,7 +9445,7 @@ function cronoEditCatItem(id){
   bg.className = 'pa-modal-bg open';
   bg.innerHTML = `<div class="pa-modal" style="max-width:420px" onclick="event.stopPropagation()">
     <div class="pa-modal-title">Editar subtarea del catálogo</div>
-    <div style="font-size:11px;color:var(--dim);margin-bottom:14px">Si cambias algo aquí, se actualiza en automático en todas las asignaciones activas (de cualquier proyectista) que ya estén usando esta subtarea del catálogo — sin tocar su cantidad ni su avance ya reportado.</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:14px">Los cambios aplican solo a asignaciones nuevas. Las que ya están asignadas conservan su valor actual, para no mover el plan.</div>
     <div style="margin-bottom:12px">
       <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Nombre</label>
       <input id="cronoEditNombre" type="text" value="${c.nombre.replace(/"/g,'&quot;')}"
@@ -9374,6 +9504,13 @@ async function cronoGuardarEditCatItem(id){
 
   c.nombre = nombre; c.unidad = unidad; c.rendimiento = rendimiento; c.tipo = tipo;
   cronoSaveCatalogo();
+  if(!CRONO_CAT_PROPAGAR){
+    // Los cambios aplican solo a asignaciones nuevas; las ya asignadas conservan su valor para no mover el plan.
+    document.getElementById('cronoEditModalBg')?.remove();
+    cronoRenderLooseTable();
+    alert('✓ Catálogo actualizado. Aplica solo a asignaciones nuevas; las ya asignadas conservan su valor.');
+    return;
+  }
 
   // Propagar a todas las asignaciones activas que usan esta subtarea del catálogo
   await cronoRecargarDeSupabase();
