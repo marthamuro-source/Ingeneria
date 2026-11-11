@@ -8549,7 +8549,10 @@ async function armGuardarLista(lista, eliminados){
 }
 function armCajErr(error){
   console.warn('⚠️ crono_cajones:', error);
-  if(/relation|does not exist|schema cache|crono_cajones/i.test(error.message||'')){ window._cajTablaFalta = true; try{ armRefrescar(); }catch(e){} }
+  const msg = (error.message||'')+' '+(error.code||'');
+  if(/does not exist|schema cache|could not find the table|42P01|PGRST205/i.test(msg)){ window._cajTablaFalta = true; window._cajError = null; }
+  else { window._cajError = error.message || error.code || 'error desconocido'; }   // la tabla existe pero Supabase rechazó la operación (permisos/RLS, red…)
+  try{ const _a = document.getElementById('armAviso'); if(_a) _a.innerHTML=''; armRefrescar(); }catch(e){}
 }
 async function armCargarCajones(){
   if(typeof _supa==='undefined' || !_supa || window._cajTablaFalta) return;
@@ -8772,10 +8775,11 @@ function armRender(){
   const esPaq = ARM.cj===ARM_PAQ;
   document.getElementById('armBar').style.display = esPaq ? 'none' : 'flex';
   document.getElementById('armResumen').textContent = esPaq ? '' : `${lista.length} de ${todos.length} subtareas`;
-  if((window._catSinColCategoria || window._cajTablaFalta) && !document.getElementById('armAviso').innerHTML){
+  if((window._catSinColCategoria || window._cajTablaFalta || window._cajError) && !document.getElementById('armAviso').innerHTML){
     let av = '';
     if(window._catSinColCategoria) av += `<div class="arm-aviso" style="margin-bottom:6px">Los cajones de cada subtarea se están guardando solo en este navegador porque falta la columna "categoria" en Supabase. Corre en el SQL Editor: <b>alter table crono_catalogo add column if not exists categoria text;</b></div>`;
-    if(window._cajTablaFalta) av += `<div class="arm-aviso">El orden y los nombres de los cajones se están guardando solo en este navegador porque falta la tabla "crono_cajones" en Supabase. Corre en el SQL Editor: <b>create table if not exists crono_cajones (nombre text primary key, orden int not null default 0); alter table crono_cajones enable row level security; create policy "crono_cajones_all" on crono_cajones for all using (true) with check (true);</b></div>`;
+    if(window._cajTablaFalta) av += `<div class="arm-aviso">El orden y los nombres de los cajones se están guardando solo en este navegador porque Supabase no encuentra la tabla "crono_cajones". Si ya la creaste, corre en el SQL Editor <b>notify pgrst, 'reload schema';</b> y recarga la página. Si no existe, créala con: <b>create table if not exists crono_cajones (nombre text primary key, orden int not null default 0); alter table crono_cajones enable row level security; drop policy if exists "crono_cajones_all" on crono_cajones; create policy "crono_cajones_all" on crono_cajones for all using (true) with check (true);</b></div>`;
+    if(window._cajError) av += `<div class="arm-aviso">No se pudo guardar el orden/nombres de los cajones en Supabase (se guardó en este navegador). Motivo: <b>${escapeHtml(String(window._cajError))}</b></div>`;
     document.getElementById('armAviso').innerHTML = av;
   }
   const out = document.getElementById('armContenido'), hint = document.getElementById('armHint');
