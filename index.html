@@ -5780,8 +5780,23 @@ function cronoSaveCatalogo(){
   localStorage.setItem(CRONO_CAT_KEY, JSON.stringify(CRONO_CATALOGO));
   if(!_supa) return;
   const hayDeProyecto = CRONO_CATALOGO.some(c=>c.proyecto);
-  _supa.from('crono_catalogo').upsert(CRONO_CATALOGO, {onConflict:'id'})
+  const sinCat = c=>{ const o={...c}; delete o.categoria; return o; };   // el cajón ("categoria") es opcional en Supabase
+  _supa.from('crono_catalogo').upsert(window._catSinColCategoria ? CRONO_CATALOGO.map(sinCat) : CRONO_CATALOGO, {onConflict:'id'})
     .then(async ({error})=>{
+      if(error && /categoria/i.test(error.message||'') && !window._catSinColCategoria){
+        // Falta la columna "categoria": se guarda todo lo demás igual y los cajones quedan solo en este navegador.
+        window._catSinColCategoria = true;
+        console.warn('⚠️ crono_catalogo no tiene la columna "categoria"; los cajones se guardan solo en este navegador.', error);
+        const base = CRONO_CATALOGO.map(sinCat);
+        let { error: e3 } = await _supa.from('crono_catalogo').upsert(base, {onConflict:'id'});
+        if(e3 && hayDeProyecto && /proyecto/i.test(e3.message||'')){
+          const r = await _supa.from('crono_catalogo').upsert(base.filter(c=>!c.proyecto).map(c=>{ const o={...c}; delete o.proyecto; return o; }), {onConflict:'id'});
+          e3 = r.error;
+        }
+        if(e3){ console.error('❌ cronoSaveCatalogo reintento (sin categoria):', e3); alert('Se guardó localmente, pero no se pudo guardar en Supabase.\n\nMotivo: '+(e3.message||e3.code||'desconocido')); }
+        try{ if(typeof armRefrescar==='function') armRefrescar(); }catch(e){}
+        return;
+      }
       if(error && hayDeProyecto && /proyecto/i.test(error.message||'')){
         // Falta la columna "proyecto" en Supabase: se guardan las generales como siempre y las de proyecto quedan solo en este navegador.
         console.error('❌ cronoSaveCatalogo (falta columna proyecto):', error);
@@ -6318,7 +6333,7 @@ function renderReporteoView(){
     }
     html += `<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px">
       ${_userRole==='admin' ? `<button class="pa-btn pa-btn-ghost" onclick="cronoRecalcularTodoElHistorial()" style="font-size:12px" title="Vuelve a evaluar 'bajo rendimiento' en todos los reportes guardados, contra el rendimiento/cantidad/unidad que tiene ahora cada subtarea">🔄 Recalcular rendimiento</button>` : ''}
-      <button class="pa-btn pa-btn-ghost" onclick="cronoCatalogoModal()" style="font-size:12px">⚙️ Gestionar catálogo</button>
+      <button class="pa-btn pa-btn-ghost" onclick="cronoArmarioAbrir()" style="font-size:12px">🗄 Gestionar catálogo</button>
     </div>`;
   }
 
@@ -8498,6 +8513,441 @@ function cronoGuardarReporte(){
 }
 
 // ── Modal gestión de catálogo ──
+// ═══════════════════════════════════════════════════════════════════════════
+// Catálogo · vista "armario" (cajones, buscador, pares nuevo/actualización, edición directa).
+// Es una vista ADICIONAL: el cuadro anterior (cronoCatalogoModal) sigue intacto y los datos no cambian de forma.
+// ═══════════════════════════════════════════════════════════════════════════
+const ARM_CAJ_KEY = 'c3ntro_crono_cajones_v1';
+const ARM_CAJONES_BASE = [['Cortes y detalles','✂️'],['Levantamiento y planimetría','🛰'],['Factibilidad y altimetría','🗺'],['SICT','🛣'],['Conectividad y cruces','🔌'],['Actualización de entregables','📄']];
+const ARM_SIN = 'Sin clasificar', ARM_PROY = 'De un solo proyecto', ARM_PAQ = 'Paquetes';
+let ARM = { cj:'Todo', q:'', pares:true, tipo:'', sinuso:false };
+
+function armNorm(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+function armOverlay(){ try{ return JSON.parse(localStorage.getItem(ARM_CAJ_KEY)||'{}')||{}; }catch(e){ return {}; } }
+function armSetCajon(c, cajon){
+  c.categoria = cajon;
+  const o = armOverlay(); o[c.id] = cajon;
+  try{ localStorage.setItem(ARM_CAJ_KEY, JSON.stringify(o)); }catch(e){}
+}
+function armSugerido(c){
+  const n = armNorm(c.nombre);
+  if(/sict/.test(n)) return 'SICT';
+  if(/conectividad|^ap\b|cruce/.test(n)) return 'Conectividad y cruces';
+  if(/entregable/.test(n)) return 'Actualización de entregables';
+  if(/corte|detalle/.test(n)) return 'Cortes y detalles';
+  if(/levantamiento|planimetr/.test(n)) return 'Levantamiento y planimetría';
+  if(/factibilidad|altimetr/.test(n)) return 'Factibilidad y altimetría';
+  return ARM_SIN;
+}
+function armCajonDe(c){ return c.categoria || armOverlay()[c.id] || armSugerido(c); }
+function armIcono(n){ const b = ARM_CAJONES_BASE.find(x=>x[0]===n); return b ? b[1] : (n===ARM_SIN?'🗃':n===ARM_PROY?'📁':n===ARM_PAQ?'📦':'🗂'); }
+function armListaCajones(){
+  const usados = new Set((CRONO_CATALOGO||[]).filter(c=>!c.proyecto).map(armCajonDe));
+  const lista = ARM_CAJONES_BASE.map(x=>x[0]);
+  [...usados].forEach(n=>{ if(n!==ARM_SIN && !lista.includes(n)) lista.push(n); });
+  if(usados.has(ARM_SIN)) lista.push(ARM_SIN);
+  return lista;
+}
+function armUso(){
+  const m = {};
+  try{ if(typeof CRONO_ITEMS==='undefined' || !CRONO_ITEMS.length) cronoLoad(); }catch(e){}
+  (CRONO_ITEMS||[]).forEach(it=>{
+    (it.subtareas||[]).forEach(st=>{
+      if(!st.catId) return;
+      const u = m[st.catId] || (m[st.catId] = { n:0, acts:new Set(), ult:0 });
+      u.n++; u.acts.add(it.actividadId);
+      const t = parseInt(String(st.id||'').replace(/^st_/,''),10);
+      if(t>1e12 && t>u.ult) u.ult = t;
+    });
+  });
+  return m;
+}
+function armUsoTitulo(u){
+  if(!u || !u.n) return 'Nunca se ha usado en una actividad';
+  const folios = [...u.acts].map(id=>{ const a=(typeof PA_ITEMS!=='undefined')?PA_ITEMS.find(x=>x.id===id):null; return a ? (a.folio||a.actividad||id) : null; }).filter(Boolean);
+  return 'Se usa en '+u.acts.size+' actividad'+(u.acts.size===1?'':'es')+(folios.length?': '+folios.slice(0,6).join(', ')+(folios.length>6?'…':''):'')+(u.ult?' · última vez '+new Date(u.ult).toLocaleDateString('es-MX',{day:'numeric',month:'short'}):'');
+}
+function armRendTxt(c){ return c.tipo==='dias_por_unidad' ? (c.rendimiento+' d/'+String(c.unidad||'').replace(/s$/,'')) : (c.rendimiento+' '+c.unidad+'/día'); }
+function armParInfo(c){
+  const n = c.nombre||''; let v = null;
+  if(/actualizaci[oó]n/i.test(n)) v = 'actualización'; else if(/\bnuev/i.test(n)) v = 'nuevos';
+  if(!v) return null;
+  const b = n.replace(/\bnuevo proyecto\b/ig,' ').replace(/\bactualizaci[oó]n(es)?\b/ig,' ').replace(/\bnuev[oa]s?\b/ig,' ').replace(/\s+/g,' ').trim();
+  return { v, b, key: armNorm(b)+'|'+c.unidad+'|'+armCajonDe(c) };
+}
+function armAfectadas(id){
+  let n = 0; (CRONO_ITEMS||[]).forEach(it=>(it.subtareas||[]).forEach(st=>{ if(st.catId===id) n++; })); return n;
+}
+
+function armCss(){
+  if(document.getElementById('armStyle')) return;
+  const s = document.createElement('style'); s.id = 'armStyle';
+  s.textContent = `
+  #armBg{position:fixed;inset:0;z-index:1900;background:var(--bg,#0e141c);display:flex;flex-direction:column;overflow:hidden}
+  .arm-top{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+  .arm-top h2{font-size:16px;margin:0;font-weight:700;color:var(--text)}
+  .arm-wrap{flex:1;display:grid;grid-template-columns:230px 1fr;min-height:0}
+  .arm-side{border-right:1px solid var(--border);padding:12px 10px;background:var(--surface);overflow-y:auto}
+  .arm-side h4{margin:4px 8px 8px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:600}
+  .arm-cj{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;color:var(--text);border:1px solid transparent;font-size:12.5px}
+  .arm-cj:hover{background:var(--surface2)}
+  .arm-cj.on{background:rgba(74,143,212,.14);border-color:rgba(74,143,212,.5)}
+  .arm-cj .n{margin-left:auto;font-size:10.5px;color:var(--dim);background:var(--surface2);border-radius:10px;padding:1px 8px}
+  .arm-main{padding:14px 18px;overflow-y:auto;min-width:0}
+  .arm-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+  .arm-search{flex:1;min-width:200px;position:relative}
+  .arm-search input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 10px 8px 30px;color:var(--text);font-size:13px;font-family:var(--font)}
+  .arm-search:before{content:"🔍";position:absolute;left:9px;top:8px;font-size:12px}
+  .arm-chip{border:1px solid var(--border);background:var(--surface);color:var(--dim);border-radius:16px;padding:4px 11px;font-size:11.5px;cursor:pointer;user-select:none}
+  .arm-chip.on{background:rgba(74,143,212,.16);border-color:var(--accent);color:var(--text)}
+  .arm-hint{font-size:11px;color:var(--dim);margin:0 0 8px}
+  .arm-aviso{font-size:11.5px;border-radius:8px;padding:8px 12px;margin-bottom:10px;background:rgba(245,166,35,.10);border:1px solid rgba(245,166,35,.4);color:var(--amber)}
+  .arm-ok{background:rgba(61,214,140,.10);border-color:rgba(61,214,140,.45);color:var(--green)}
+  .arm-main table{width:100%;border-collapse:collapse}
+  .arm-main th{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);font-weight:600;text-align:left;padding:6px 8px;border-bottom:1px solid var(--border)}
+  .arm-main td{padding:9px 8px;border-bottom:1px solid var(--border);vertical-align:middle}
+  .arm-grp td{padding:14px 8px 4px;font-size:11px;font-weight:700;color:var(--accent)}
+  .arm-nm{font-weight:600;color:var(--text)}.arm-sub{font-size:11px;color:var(--dim)}
+  .arm-var{display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 9px;margin:2px 6px 2px 0;font-size:12px}
+  .arm-var b{color:var(--accent)}.arm-var i{font-style:normal;color:var(--dim);font-size:10.5px}
+  .arm-ed{border-bottom:1px dashed var(--dim);cursor:text;padding:0 2px}.arm-ed:hover{background:rgba(74,143,212,.18);border-radius:3px}
+  .arm-lnk{cursor:pointer;color:var(--dim);font-size:11px}.arm-lnk:hover{color:var(--accent)}
+  .arm-tag{font-size:10px;border-radius:10px;padding:2px 8px;border:1px solid var(--border);color:var(--dim);white-space:nowrap}
+  .arm-tag.a{color:var(--amber);border-color:rgba(245,166,35,.5)}.arm-tag.p{color:#b389f0;border-color:rgba(179,137,240,.5)}
+  .arm-act{display:flex;gap:4px;justify-content:flex-end;opacity:.35}
+  .arm-main tr:hover .arm-act{opacity:1}
+  .arm-ib{background:none;border:1px solid var(--border);color:var(--dim);border-radius:6px;padding:2px 7px;font-size:11px;cursor:pointer}
+  .arm-ib:hover{color:var(--text);border-color:var(--accent)}
+  .arm-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+  .arm-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px}
+  .arm-card h5{margin:0 0 6px;font-size:13px;color:var(--text)}
+  .arm-pl{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0}
+  .arm-pill{font-size:10.5px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:3px 8px;color:var(--dim)}
+  .arm-empty{padding:30px;text-align:center;color:var(--dim)}
+  @media(max-width:860px){.arm-wrap{grid-template-columns:1fr}.arm-side{border-right:0;border-bottom:1px solid var(--border);display:flex;gap:6px;overflow-x:auto}.arm-side h4{display:none}.arm-cj{white-space:nowrap}}
+  `;
+  document.head.appendChild(s);
+}
+
+function cronoArmarioAbrir(){
+  cronoLoadCatalogo();
+  armCss();
+  document.getElementById('armBg')?.remove();
+  const esAdmin = _userRole!=='proyectista';
+  const bg = document.createElement('div'); bg.id = 'armBg';
+  const _ut = document.getElementById('userTopbar');
+  bg.style.top = (_ut && getComputedStyle(_ut).display!=='none') ? _ut.offsetHeight+'px' : '0';   // no tapar la barra de usuario fija
+  bg.innerHTML = `
+    <div class="arm-top"><h2>🗄 Catálogo de subtareas</h2><span class="arm-sub" id="armResumen"></span><span style="flex:1"></span>
+      ${esAdmin?`<button class="pa-btn pa-btn-primary" style="font-size:12px" onclick="armModal('nuevo')">+ Nueva subtarea</button>`:''}
+      <button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="cronoCatExportCSV()">⬇ CSV</button>
+      <button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="cronoCatExportPDF()">⬇ PDF</button>
+      <button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="armCerrar();cronoCatalogoModal()" title="Abrir el cuadro anterior del catálogo">Vista anterior</button>
+      <button class="pa-btn pa-btn-ghost" style="font-size:14px;padding:3px 11px" onclick="armCerrar()" title="Cerrar (Esc)">✕</button>
+    </div>
+    <div class="arm-wrap">
+      <aside class="arm-side"><h4>Cajones</h4><div id="armCajones"></div></aside>
+      <main class="arm-main">
+        <div id="armAviso"></div>
+        <div class="arm-bar" id="armBar">
+          <div class="arm-search"><input id="armQ" placeholder="Buscar en todo el catálogo… (ej. SICT, cortes, km)" autocomplete="off"></div>
+          <span class="arm-chip on" id="armFPares">Agrupar nuevo / actualización</span>
+          <span class="arm-chip" id="armFUd">Unidades/día</span>
+          <span class="arm-chip" id="armFDu">Días/unidad</span>
+          <span class="arm-chip" id="armFSin">Sin uso</span>
+        </div>
+        <p class="arm-hint" id="armHint"></p>
+        <div id="armContenido"></div>
+      </main>
+    </div>`;
+  document.body.appendChild(bg);
+  ARM.q = ''; ARM.tipo = ''; ARM.sinuso = false; ARM.pares = true; if(!ARM.cj) ARM.cj = 'Todo';
+  const q = document.getElementById('armQ'); q.value = '';
+  q.oninput = ()=>{ ARM.q = armNorm(q.value.trim()); armRender(); };
+  document.getElementById('armFPares').onclick = e=>{ ARM.pares=!ARM.pares; e.currentTarget.classList.toggle('on',ARM.pares); armRender(); };
+  document.getElementById('armFUd').onclick = ()=>{ ARM.tipo = ARM.tipo==='unidades_por_dia'?'':'unidades_por_dia'; armRender(); };
+  document.getElementById('armFDu').onclick = ()=>{ ARM.tipo = ARM.tipo==='dias_por_unidad'?'':'dias_por_unidad'; armRender(); };
+  document.getElementById('armFSin').onclick = ()=>{ ARM.sinuso=!ARM.sinuso; armRender(); };
+  document.addEventListener('keydown', armEsc);
+  armRender();
+}
+function armEsc(e){
+  if(e.key!=='Escape') return;
+  if(document.getElementById('armModalBg')) return;           // primero se cierra el cuadro de edición
+  if(document.querySelector('.pa-modal-bg.open')) return;
+  armCerrar();
+}
+function armCerrar(){ document.getElementById('armBg')?.remove(); document.removeEventListener('keydown', armEsc); }
+function armRefrescar(){ if(document.getElementById('armBg')) armRender(); }
+function armToast(msg, ok){
+  const el = document.getElementById('armAviso'); if(!el) return;
+  el.innerHTML = `<div class="arm-aviso ${ok?'arm-ok':''}">${msg}</div>`;
+  clearTimeout(armToast._t); armToast._t = setTimeout(()=>{ const e=document.getElementById('armAviso'); if(e) e.innerHTML=''; }, 6000);
+}
+
+function armFiltrar(){
+  const uso = armUso();
+  return (CRONO_CATALOGO||[]).filter(c=>{
+    if(ARM.tipo && (c.tipo||'unidades_por_dia')!==ARM.tipo) return false;
+    if(ARM.sinuso && uso[c.id] && uso[c.id].n) return false;
+    if(ARM.q && !armNorm([c.nombre,c.unidad,c.proyecto||'',c.proyecto?ARM_PROY:armCajonDe(c)].join(' ')).includes(ARM.q)) return false;
+    return true;
+  });
+}
+
+function armRender(){
+  const esAdmin = _userRole!=='proyectista';
+  const lista = armFiltrar(), uso = armUso();
+  // ── Cajones (menú izquierdo): el conteo respeta la búsqueda y los filtros
+  const todos = CRONO_CATALOGO||[];
+  const cnt = n => lista.filter(c=> n===ARM_PROY ? !!c.proyecto : (!c.proyecto && armCajonDe(c)===n)).length;
+  const cajones = armListaCajones();
+  let h = `<div class="arm-cj ${ARM.cj==='Todo'?'on':''}" data-c="Todo"><span>🗄</span>Todo<span class="n">${lista.length}</span></div>`;
+  cajones.forEach(n=>{ h += `<div class="arm-cj ${ARM.cj===n?'on':''}" data-c="${escapeHtml(n)}"><span>${armIcono(n)}</span>${escapeHtml(n)}<span class="n">${cnt(n)}</span></div>`; });
+  h += `<h4 style="margin-top:14px">Aparte</h4>
+    <div class="arm-cj ${ARM.cj===ARM_PAQ?'on':''}" data-c="${ARM_PAQ}"><span>📦</span>Paquetes<span class="n">${(CRONO_PAQUETES||[]).length}</span></div>
+    <div class="arm-cj ${ARM.cj===ARM_PROY?'on':''}" data-c="${ARM_PROY}"><span>📁</span>De un solo proyecto<span class="n">${cnt(ARM_PROY)}</span></div>`;
+  const cont = document.getElementById('armCajones'); cont.innerHTML = h;
+  cont.querySelectorAll('.arm-cj').forEach(x=>x.onclick=()=>{ ARM.cj = x.dataset.c; armRender(); });
+  // Estado de filtros
+  document.getElementById('armFUd').classList.toggle('on', ARM.tipo==='unidades_por_dia');
+  document.getElementById('armFDu').classList.toggle('on', ARM.tipo==='dias_por_unidad');
+  document.getElementById('armFSin').classList.toggle('on', ARM.sinuso);
+  const esPaq = ARM.cj===ARM_PAQ;
+  document.getElementById('armBar').style.display = esPaq ? 'none' : 'flex';
+  document.getElementById('armResumen').textContent = esPaq ? '' : `${lista.length} de ${todos.length} subtareas`;
+  if(window._catSinColCategoria && !document.getElementById('armAviso').innerHTML){
+    document.getElementById('armAviso').innerHTML = `<div class="arm-aviso">Los cajones se están guardando solo en este navegador porque falta la columna "categoria" en Supabase. Corre en el SQL Editor: <b>alter table crono_catalogo add column if not exists categoria text;</b></div>`;
+  }
+  const out = document.getElementById('armContenido'), hint = document.getElementById('armHint');
+  if(esPaq){ hint.textContent = 'Los paquetes agrupan varios entregables con un rendimiento compartido.'; out.innerHTML = armPaquetesHtml(esAdmin); return; }
+  const vis = ARM.cj==='Todo' ? lista : ARM.cj===ARM_PROY ? lista.filter(c=>c.proyecto) : lista.filter(c=>!c.proyecto && armCajonDe(c)===ARM.cj);
+  hint.textContent = ARM.cj==='Todo' ? 'Vista completa agrupada por cajón.' : (ARM.cj===ARM_PROY ? 'Subtareas creadas para un solo proyecto.' : 'Cajón: '+ARM.cj);
+  if(!vis.length){ out.innerHTML = `<div class="arm-empty">${(ARM.q||ARM.tipo||ARM.sinuso)?'Nada coincide con tu búsqueda o filtros.':'Este cajón está vacío.'}</div>`; return; }
+  // Agrupar por cajón (en "Todo") y por pares nuevo/actualización
+  const grupos = [];
+  const secciones = ARM.cj==='Todo' ? [...cajones, ARM_PROY] : [ARM.cj];
+  secciones.forEach(sec=>{
+    const items = vis.filter(c=> sec===ARM_PROY ? !!c.proyecto : (!c.proyecto && armCajonDe(c)===sec))
+      .sort((a,b)=>(a.orden??1e9)-(b.orden??1e9));
+    if(!items.length) return;
+    grupos.push({ sec, filas: armFilas(items) });
+  });
+  let t = `<table><thead><tr><th>Subtarea</th><th>Rendimiento</th><th>Tipo</th><th>Uso</th><th></th></tr></thead><tbody>`;
+  grupos.forEach(g=>{
+    if(ARM.cj==='Todo') t += `<tr class="arm-grp"><td colspan="5">${armIcono(g.sec)} ${escapeHtml(g.sec)}</td></tr>`;
+    g.filas.forEach(f=>{ t += armFilaHtml(f, uso, esAdmin); });
+  });
+  out.innerHTML = t + '</tbody></table>';
+}
+function armFilas(items){
+  if(!ARM.pares) return items.map(c=>({par:false,items:[c]}));
+  const mapa = {}; items.forEach(c=>{ if(c.proyecto) return; const p = armParInfo(c); if(p){ (mapa[p.key] = mapa[p.key] || []).push({c,p}); } });
+  const filas = [], hecho = new Set();
+  items.forEach(c=>{
+    if(hecho.has(c.id)) return;
+    const p = !c.proyecto ? armParInfo(c) : null;
+    const g = p ? mapa[p.key] : null;
+    if(g && g.length===2 && g.filter(x=>x.p.v==='nuevos').length===1 && g.filter(x=>x.p.v==='actualización').length===1){
+      const nuevo = g.find(x=>x.p.v==='nuevos').c, act = g.find(x=>x.p.v==='actualización').c;
+      hecho.add(nuevo.id); hecho.add(act.id);
+      filas.push({ par:true, items:[nuevo,act], base:p.b });
+    } else { hecho.add(c.id); filas.push({par:false, items:[c]}); }
+  });
+  return filas;
+}
+function armFilaHtml(f, uso, esAdmin){
+  const ed = esAdmin;
+  const usoTxt = c=>{ const u=uso[c.id]; return u&&u.n ? u.n : 0; };
+  if(f.par){
+    const [nu, ac] = f.items; const tot = usoTxt(nu)+usoTxt(ac);
+    const tip = escapeHtml('Nuevos: '+armUsoTitulo(uso[nu.id])+' · Actualización: '+armUsoTitulo(uso[ac.id]));
+    const pill = (c,lbl)=>`<span class="arm-var"><i>${lbl}</i> <b class="${ed?'arm-ed':''}" ${ed?`onclick="armEdInline(event,'${c.id}')" title="Clic para cambiar el rendimiento"`:''}>${c.rendimiento}</b> <i>${c.tipo==='dias_por_unidad'?'d/'+escapeHtml(String(c.unidad).replace(/s$/,'')):escapeHtml(c.unidad)+'/día'}</i> ${ed?`<span class="arm-lnk" onclick="armModal('editar','${c.id}')" title="Editar">✎</span>`:''}</span>`;
+    return `<tr><td><div class="arm-nm">${escapeHtml(f.base)}</div><div class="arm-sub">par nuevo / actualización · ${escapeHtml(nu.unidad)}</div></td>
+      <td>${pill(nu,'nuevos')}${pill(ac,'actualización')}</td>
+      <td><span class="arm-tag ${nu.tipo==='dias_por_unidad'?'p':''}">${nu.tipo==='dias_por_unidad'?'📅 días/unidad':'📊 unidades/día'}</span></td>
+      <td title="${tip}">${tot?tot+' usos':'<span class="arm-tag a">sin uso</span>'}</td>
+      <td>${ed?`<div class="arm-act"><button class="arm-ib" onclick="armMoverModal(['${nu.id}','${ac.id}'])" title="Mover ambas a otro cajón">📂</button></div>`:''}</td></tr>`;
+  }
+  const c = f.items[0];
+  const rend = `<span class="arm-var"><b class="${ed?'arm-ed':''}" ${ed?`onclick="armEdInline(event,'${c.id}')" title="Clic para cambiar el rendimiento"`:''}>${c.rendimiento}</b> <i>${c.tipo==='dias_por_unidad'?'d/'+escapeHtml(String(c.unidad).replace(/s$/,'')):escapeHtml(c.unidad)+'/día'}</i></span>`;
+  const u = uso[c.id];
+  return `<tr><td><div class="arm-nm">${escapeHtml(c.nombre)}${c.proyecto?` <span class="arm-tag p">📁 solo ${escapeHtml(c.proyecto)}</span>`:''}</div><div class="arm-sub">${escapeHtml(c.unidad)}</div></td>
+    <td>${rend}</td>
+    <td><span class="arm-tag ${c.tipo==='dias_por_unidad'?'p':''}">${c.tipo==='dias_por_unidad'?'📅 días/unidad':'📊 unidades/día'}</span></td>
+    <td title="${escapeHtml(armUsoTitulo(u))}">${u&&u.n?u.n+' usos':'<span class="arm-tag a">sin uso</span>'}</td>
+    <td>${ed?`<div class="arm-act"><button class="arm-ib" onclick="armModal('editar','${c.id}')" title="Editar">✎</button><button class="arm-ib" onclick="armModal('duplicar','${c.id}')" title="Duplicar">⧉</button><button class="arm-ib" onclick="armMoverModal(['${c.id}'])" title="Mover a otro cajón">📂</button></div>`:''}</td></tr>`;
+}
+
+// ── Edición directa del rendimiento (con confirmación porque se propaga a lo ya asignado) ──
+function armEdInline(ev, id){
+  ev.stopPropagation();
+  const c = CRONO_CATALOGO.find(x=>x.id===id); if(!c) return;
+  const b = ev.currentTarget;
+  const inp = document.createElement('input'); inp.type='number'; inp.min='0.1'; inp.step='0.1'; inp.value=c.rendimiento;
+  inp.style.cssText='width:72px;background:var(--surface);border:1px solid var(--accent);border-radius:5px;color:var(--text);padding:2px 5px;font-size:12px';
+  b.replaceWith(inp); inp.focus(); inp.select();
+  let hecho = false;
+  const fin = async ok=>{
+    if(hecho) return; hecho = true;
+    const v = parseFloat(inp.value);
+    if(!ok || !(v>0) || v===c.rendimiento){ armRender(); return; }
+    const n = armAfectadas(id);
+    const msg = `Cambiar el rendimiento de "${c.nombre}" de ${c.rendimiento} a ${v}.\n\n`+(n? `Se actualizará también en ${n} subtarea${n===1?'':'s'} ya asignada${n===1?'':'s'} (sin tocar cantidad ni avance reportado), y eso puede mover fechas del plan.\n\n`:'')+'¿Aplicar el cambio?';
+    if(!confirm(msg)){ armRender(); return; }
+    const r = await armAplicarEdicion(id, { rendimiento: v });
+    armRender(); armToast(`✓ Rendimiento actualizado.${r?` Se aplicó a ${r} subtarea${r===1?'':'s'} ya asignada${r===1?'':'s'}.`:''}`, true);
+  };
+  inp.onblur = ()=>fin(true);
+  inp.onkeydown = e=>{ if(e.key==='Enter'){ e.preventDefault(); inp.onblur=null; fin(true); } if(e.key==='Escape'){ inp.onblur=null; fin(false); } };
+}
+// Misma regla que el cuadro anterior: al cambiar nombre/unidad/rendimiento/tipo se propaga a las asignaciones que usan esta subtarea.
+async function armAplicarEdicion(id, cambios){
+  const c = CRONO_CATALOGO.find(x=>x.id===id); if(!c) return 0;
+  const camposProp = ['nombre','unidad','rendimiento','tipo'];
+  const propaga = camposProp.some(k=>k in cambios && cambios[k]!==c[k]);
+  Object.assign(c, cambios);
+  cronoSaveCatalogo();
+  if(!propaga) return 0;
+  await cronoRecargarDeSupabase();
+  let n = 0; const tocados = new Set();
+  CRONO_ITEMS.forEach(item=>(item.subtareas||[]).forEach(st=>{
+    if(st.catId===id){ camposProp.forEach(k=>{ if(k in cambios) st[k] = cambios[k]; }); n++; tocados.add(item.actividadId); }
+  }));
+  tocados.forEach(aid=>cronoSaveItem(aid));
+  return n;
+}
+
+// ── Cuadro de edición / alta / duplicado ──
+function armCajonSelectHtml(sel){
+  const l = armListaCajones(); if(!l.includes(ARM_SIN)) l.push(ARM_SIN);
+  return `<select id="armMCaj" onchange="document.getElementById('armMNuevoCaj').style.display=this.value==='__nuevo'?'block':'none'" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px">
+    ${l.map(n=>`<option value="${escapeHtml(n)}" ${n===sel?'selected':''}>${escapeHtml(n)}</option>`).join('')}<option value="__nuevo">➕ Nuevo cajón…</option></select>
+    <input id="armMNuevoCaj" placeholder="Nombre del nuevo cajón" style="display:none;width:100%;margin-top:6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px">`;
+}
+function armCajonElegido(){
+  const v = document.getElementById('armMCaj')?.value;
+  if(v==='__nuevo'){ return (document.getElementById('armMNuevoCaj')?.value||'').trim(); }
+  return v;
+}
+function armModal(modo, id){
+  document.getElementById('armModalBg')?.remove();
+  const base = id ? CRONO_CATALOGO.find(x=>x.id===id) : null;
+  if(id && !base) return;
+  const ini = base ? { nombre: base.nombre + (modo==='duplicar'?' (copia)':''), unidad: base.unidad, rendimiento: base.rendimiento, tipo: base.tipo||'unidades_por_dia', cajon: armCajonDe(base) }
+                   : { nombre:'', unidad:'', rendimiento:'', tipo:'unidades_por_dia', cajon: (ARM.cj!=='Todo' && ARM.cj!==ARM_PAQ && ARM.cj!==ARM_PROY) ? ARM.cj : ARM_SIN };
+  const n = (modo==='editar') ? armAfectadas(id) : 0;
+  const titulo = modo==='editar' ? 'Editar subtarea del catálogo' : modo==='duplicar' ? 'Duplicar subtarea' : 'Nueva subtarea del catálogo';
+  const inpSt = 'width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px';
+  const bg = document.createElement('div'); bg.id='armModalBg'; bg.className='pa-modal-bg open';
+  bg.innerHTML = `<div class="pa-modal" style="max-width:440px" onclick="event.stopPropagation()">
+    <div class="pa-modal-title" style="margin-bottom:6px">${titulo}</div>
+    ${modo==='editar'?`<div style="font-size:11px;color:var(--dim);margin-bottom:12px">Si cambias nombre, unidad, rendimiento o tipo, se actualiza también en ${n} subtarea${n===1?'':'s'} ya asignada${n===1?'':'s'} que usa${n===1?'':'n'} esta del catálogo (sin tocar cantidad ni avance).</div>`:'<div style="height:8px"></div>'}
+    <div style="margin-bottom:10px"><label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Nombre</label><input id="armMNom" type="text" value="${escapeHtml(ini.nombre)}" style="${inpSt}"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div><label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Unidad</label><input id="armMUni" type="text" value="${escapeHtml(ini.unidad)}" placeholder="km, cortes…" style="${inpSt}"></div>
+      <div><label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Rendimiento</label><input id="armMRen" type="number" min="0.1" step="0.1" value="${ini.rendimiento}" style="${inpSt}"></div>
+    </div>
+    <div style="margin-bottom:10px"><label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Tipo de rendimiento</label>
+      <select id="armMTipo" style="${inpSt}"><option value="unidades_por_dia" ${ini.tipo!=='dias_por_unidad'?'selected':''}>📊 Unidades por día</option><option value="dias_por_unidad" ${ini.tipo==='dias_por_unidad'?'selected':''}>📅 Días por unidad</option></select></div>
+    <div style="margin-bottom:14px"><label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">Cajón</label>${armCajonSelectHtml(ini.cajon)}</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      ${modo==='editar'?`<button class="pa-btn pa-btn-ghost" style="color:var(--red)" onclick="armEliminar('${id}')">Eliminar</button>`:''}
+      <span style="flex:1"></span>
+      <button class="pa-btn pa-btn-ghost" onclick="document.getElementById('armModalBg').remove()">Cancelar</button>
+      <button class="pa-btn pa-btn-primary" onclick="armGuardarModal('${modo}','${id||''}')">${modo==='editar'?'Guardar cambios':'Agregar'}</button>
+    </div></div>`;
+  bg.onclick = e=>{ if(e.target===bg) bg.remove(); };
+  document.body.appendChild(bg);
+  setTimeout(()=>document.getElementById('armMNom')?.focus(), 30);
+}
+async function armGuardarModal(modo, id){
+  const nombre = document.getElementById('armMNom').value.trim();
+  const unidad = document.getElementById('armMUni').value.trim();
+  const rendimiento = parseFloat(document.getElementById('armMRen').value)||0;
+  const tipo = document.getElementById('armMTipo').value;
+  const cajon = armCajonElegido();
+  if(!nombre||!unidad||!rendimiento){ alert('Completa nombre, unidad y rendimiento'); return; }
+  if(!cajon){ alert('Escribe el nombre del nuevo cajón o elige uno existente'); return; }
+  if(modo==='editar'){
+    const c = CRONO_CATALOGO.find(x=>x.id===id); if(!c) return;
+    const cambiaProp = (nombre!==c.nombre||unidad!==c.unidad||rendimiento!==c.rendimiento||tipo!==(c.tipo||'unidades_por_dia'));
+    const n = cambiaProp ? armAfectadas(id) : 0;
+    if(n && !confirm(`Se actualizará también en ${n} subtarea${n===1?'':'s'} ya asignada${n===1?'':'s'} (puede mover fechas del plan). ¿Aplicar?`)) return;
+    const r = await armAplicarEdicion(id, { nombre, unidad, rendimiento, tipo });
+    armSetCajon(c, cajon); cronoSaveCatalogo();
+    document.getElementById('armModalBg')?.remove(); armRender();
+    armToast(`✓ Subtarea actualizada.${r?` Se aplicó a ${r} subtarea${r===1?'':'s'} ya asignada${r===1?'':'s'}.`:''}`, true);
+  } else {
+    const maxOrden = CRONO_CATALOGO.reduce((m,c)=>Number.isInteger(c.orden)?Math.max(m,c.orden):m, -1);
+    const nuevo = { id:'cat_'+Date.now(), nombre, unidad, rendimiento, tipo, orden: maxOrden+1 };
+    CRONO_CATALOGO.push(nuevo);
+    armSetCajon(nuevo, cajon); cronoSaveCatalogo();
+    document.getElementById('armModalBg')?.remove(); ARM.cj = cajon; armRender();
+    armToast('✓ Subtarea agregada al cajón "'+escapeHtml(cajon)+'".', true);
+  }
+}
+async function armEliminar(id){
+  const c = CRONO_CATALOGO.find(x=>x.id===id); if(!c) return;
+  const n = armAfectadas(id);
+  if(!confirm(`¿Eliminar "${c.nombre}" del catálogo?`+(n?`\n\nYa está usada en ${n} subtarea${n===1?'':'s'} asignada${n===1?'':'s'}; esas se quedan como están.`:''))) return;
+  CRONO_CATALOGO = CRONO_CATALOGO.filter(x=>x.id!==id);
+  cronoSaveCatalogo();
+  if(_supa){
+    try{
+      const {error} = await _supa.from('crono_catalogo').delete().eq('id', id);
+      if(error){ console.error('❌ armEliminar Supabase:', error); alert('Se eliminó localmente, pero no se pudo borrar en Supabase, así que podría reaparecer al recargar.\n\nMotivo: '+(error.message||error.code||'desconocido')); }
+    }catch(e){ console.error('❌ armEliminar excepción:', e); }
+  }
+  document.getElementById('armModalBg')?.remove(); armRender();
+}
+function armMoverModal(ids){
+  document.getElementById('armModalBg')?.remove();
+  const primero = CRONO_CATALOGO.find(x=>x.id===ids[0]); if(!primero) return;
+  const bg = document.createElement('div'); bg.id='armModalBg'; bg.className='pa-modal-bg open';
+  bg.innerHTML = `<div class="pa-modal" style="max-width:380px" onclick="event.stopPropagation()">
+    <div class="pa-modal-title" style="margin-bottom:6px">Mover a otro cajón</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:12px">${ids.length>1?'Se moverán las dos variantes (nuevos y actualización).':escapeHtml(primero.nombre)}</div>
+    <div style="margin-bottom:14px">${armCajonSelectHtml(armCajonDe(primero))}</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="pa-btn pa-btn-ghost" onclick="document.getElementById('armModalBg').remove()">Cancelar</button>
+      <button class="pa-btn pa-btn-primary" onclick="armMoverGuardar(${escapeHtml(JSON.stringify(ids)).replace(/"/g,'&quot;')})">Mover</button>
+    </div></div>`;
+  bg.onclick = e=>{ if(e.target===bg) bg.remove(); };
+  document.body.appendChild(bg);
+}
+function armMoverGuardar(ids){
+  const cajon = armCajonElegido(); if(!cajon){ alert('Escribe el nombre del nuevo cajón o elige uno existente'); return; }
+  ids.forEach(id=>{ const c = CRONO_CATALOGO.find(x=>x.id===id); if(c) armSetCajon(c, cajon); });
+  cronoSaveCatalogo();
+  document.getElementById('armModalBg')?.remove(); armRender();
+  armToast('✓ Movida al cajón "'+escapeHtml(cajon)+'".', true);
+}
+
+// ── Paquetes como tarjetas ──
+function armPaquetesHtml(esAdmin){
+  const L = CRONO_PAQUETES||[];
+  const nuevo = esAdmin ? `<div style="margin-bottom:10px"><button class="pa-btn pa-btn-primary" style="font-size:12px" onclick="cronoCatalogoModal();cronoPkgToggleForm()">+ Nuevo paquete</button></div>` : '';
+  if(!L.length) return nuevo + `<div class="arm-empty">Sin paquetes en el catálogo todavía.</div>`;
+  return nuevo + `<div class="arm-cards">${L.map(p=>`<div class="arm-card">
+    <h5>${escapeHtml(p.nombre)}</h5>
+    ${p.dinamico?'<span class="arm-tag a">🔧 dinámico de corrección</span>':`<span class="arm-tag">${escapeHtml(String(p.rendimiento))} ${escapeHtml(p.unidad||'')}/día</span>`}
+    <div class="arm-pl">${p.dinamico?'<span class="arm-pill">Checklist de lo ya entregado de la actividad</span>':(p.entregables||[]).map(e=>`<span class="arm-pill">${escapeHtml(e)}</span>`).join('')}</div>
+    ${esAdmin?`<div style="display:flex;gap:6px"><button class="arm-ib" onclick="cronoEditPaquete('${p.id}')">✎ Editar</button><button class="arm-ib" onclick="armEliminarPaquete('${p.id}')">✕ Eliminar</button></div>`:''}
+  </div>`).join('')}</div>`;
+}
+async function armEliminarPaquete(id){
+  if(!confirm('¿Eliminar este paquete de tareas?')) return;
+  CRONO_PAQUETES = CRONO_PAQUETES.filter(p=>p.id!==id);
+  cronoSavePaquetes();
+  if(_supa){
+    try{ const {error} = await _supa.from('crono_paquetes').delete().eq('id', id);
+      if(error){ console.error('❌ armEliminarPaquete Supabase:', error); alert('Se eliminó localmente, pero no se pudo borrar en Supabase, así que podría reaparecer al recargar.\n\nMotivo: '+(error.message||error.code||'desconocido')); }
+    }catch(e){ console.error('❌ armEliminarPaquete excepción:', e); }
+  }
+  armRender();
+}
+
 function cronoCatalogoModal(){
   cronoLoadCatalogo();
   const old = document.getElementById('cronoCatModalBg');
@@ -8618,6 +9068,7 @@ function cronoCatalogoModal(){
 let cronoPkgDraftItems = ['',''];
 
 function cronoRenderPkgList(){
+  try{ if(typeof armRefrescar==='function') armRefrescar(); }catch(e){}
   const el = document.getElementById('cronoPkgList');
   if(!el) return;
   el.innerHTML = CRONO_PAQUETES.length ? CRONO_PAQUETES.map(p=>`
@@ -8835,6 +9286,7 @@ function cronoCatNewSetTipo(tipo){
 }
 
 function cronoRenderLooseTable(){
+  try{ if(typeof armRefrescar==='function') armRefrescar(); }catch(e){}
   const tbody = document.getElementById('cronoLooseTbody');
   if(!tbody) return;
   const esAdmin = _userRole!=='proyectista';
