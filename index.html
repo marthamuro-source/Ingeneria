@@ -169,6 +169,22 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .ni{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;cursor:pointer;color:var(--muted);font-size:13px;border:none;background:none;width:100%;text-align:left;transition:all .15s;}
 .ni:hover{background:var(--surface2);color:var(--text);}
 .ni.on{background:rgba(74,143,212,.14);color:var(--accent);}
+/* ── SIDEBAR · paleta azul marino (solo colores; funciona igual en tema claro y oscuro) ── */
+.sidebar, [data-theme="light"] .sidebar{
+  background:linear-gradient(180deg,#122849 0%,#0f2039 55%,#0c1a2e 100%);
+  border-right:1px solid #1b3152;
+  --text:#e8eefb; --muted:#a3b6d4; --dim:#7a8fb0; --accent:#8ec0ff;
+  --border:#223552; --border2:#2a4166; --surface:#152f52; --surface2:#152f52;
+  color:#e8eefb;
+}
+.sidebar .logo{border-bottom-color:#223552;}
+.sidebar .logo div[style*="#2a78d6"]{background:linear-gradient(135deg,#3b82d8,#2a62b8)!important;box-shadow:0 2px 10px rgba(51,116,198,.45);}
+.sidebar .ni:hover{background:#13294a;color:#fff;}
+.sidebar .ni.on{background:#152f52;color:#fff;box-shadow:inset 0 0 0 1px #1d4270;}
+.sidebar .ni.on svg{color:#8ec0ff;}
+.sidebar .nl{color:#7a8fb0;}
+.sidebar > div[style*="border-top"]{border-top-color:#223552!important;background:linear-gradient(180deg,transparent,rgba(5,12,24,.55))!important;}
+
 .ni svg{width:15px;height:15px;flex-shrink:0;}
 
 /* CSV ZONE */
@@ -11134,7 +11150,8 @@ function renderCronoCalProyectista(){
         <div style="font-size:14px;font-weight:600;color:var(--text)">📅 Mi reporte diario</div>
         <div style="font-size:11px;color:var(--dim);margin-top:2px">${meses[calProyMes]} ${calProyAnio} · Solo puedes reportar el día de hoy</div>
       </div>
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+        <button class="pa-btn pa-btn-ghost" onclick="repPdfAbrir()" style="font-size:12px;padding:4px 10px" title="Descargar mi reporte del día o de un periodo en PDF">⬇ Descargar PDF</button>
         <button class="pa-btn pa-btn-ghost" onclick="calProyPrev()" style="font-size:12px;padding:4px 10px">← </button>
         <button class="pa-btn pa-btn-ghost" onclick="calProyHoy()" style="font-size:12px;padding:4px 10px">Hoy</button>
         <button class="pa-btn pa-btn-ghost" onclick="calProyNext()" style="font-size:12px;padding:4px 10px"> →</button>
@@ -11207,6 +11224,105 @@ function calProySelDia(fecha){
     });
   });
   renderCalProyPanelHoy(fecha, misReportesPorDia[fecha]||[]);
+}
+
+// ── Descargar mi reporte (día o periodo) en PDF · vista del proyectista ─────────────────────────────
+function repPdfReportesDe(nombre, desde, hasta){
+  cronoLoad();
+  const porDia = {};
+  CRONO_ITEMS.filter(item=>toCanonical(item.responsable||'')===toCanonical(nombre||'')).forEach(item=>{
+    const pa = PA_ITEMS.find(a=>a.id===item.actividadId) || {};
+    (item.reportes||[]).forEach(r=>{
+      if(!r.fecha || r.fecha<desde || r.fecha>hasta) return;
+      (porDia[r.fecha] = porDia[r.fecha] || []).push({ r, proyecto:item.proyecto||pa.proyecto||'', folio:pa.folio||'', actividad:pa.actividad||item.actividad||'' });
+    });
+  });
+  return porDia;
+}
+function repPdfAbrir(){
+  document.getElementById('repPdfBg')?.remove();
+  const hoy = repDateKey(new Date());
+  const bg = document.createElement('div'); bg.id = 'repPdfBg'; bg.className = 'pa-modal-bg open'; bg.style.zIndex = '4500';
+  const inp = 'width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px 9px;color:var(--text);font-family:var(--font);font-size:12.5px';
+  bg.innerHTML = `<div class="pa-modal" style="max-width:430px;width:94vw;padding:20px 22px" onclick="event.stopPropagation()">
+    <div class="pa-modal-title" style="margin-bottom:2px">⬇ Descargar mi reporte en PDF</div>
+    <div style="font-size:11px;color:var(--dim)">Elige el día o el periodo. Se abre la vista de impresión: ahí elige “Guardar como PDF”.</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">
+      <button class="pa-btn pa-btn-ghost" style="font-size:11.5px;padding:4px 10px" onclick="repPdfRapido('hoy')">Hoy</button>
+      <button class="pa-btn pa-btn-ghost" style="font-size:11.5px;padding:4px 10px" onclick="repPdfRapido('semana')">Esta semana</button>
+      <button class="pa-btn pa-btn-ghost" style="font-size:11.5px;padding:4px 10px" onclick="repPdfRapido('mes')">Este mes</button>
+      <button class="pa-btn pa-btn-ghost" style="font-size:11.5px;padding:4px 10px" onclick="repPdfRapido('mesant')">Mes anterior</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:4px">Desde</label><input type="date" id="repPdfDesde" value="${hoy}" max="${hoy}" style="${inp}"></div>
+      <div><label style="display:block;font-size:11px;color:var(--dim);margin-bottom:4px">Hasta</label><input type="date" id="repPdfHasta" value="${hoy}" max="${hoy}" style="${inp}"></div>
+    </div>
+    <div id="repPdfMsg" style="font-size:11.5px;color:var(--red);margin-top:10px;min-height:14px"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
+      <button class="pa-btn pa-btn-ghost" onclick="document.getElementById('repPdfBg').remove()">Cancelar</button>
+      <button class="pa-btn pa-btn-primary" onclick="repPdfGenerar()">Generar PDF</button>
+    </div></div>`;
+  bg.onclick = e=>{ if(e.target===bg) bg.remove(); };
+  document.body.appendChild(bg);
+}
+function repPdfRapido(k){
+  const h = new Date(), iso = d=>repDateKey(d); let a = new Date(h), b = new Date(h);
+  if(k==='semana'){ const dow = (h.getDay()+6)%7; a.setDate(h.getDate()-dow); }
+  else if(k==='mes'){ a = new Date(h.getFullYear(), h.getMonth(), 1); }
+  else if(k==='mesant'){ a = new Date(h.getFullYear(), h.getMonth()-1, 1); b = new Date(h.getFullYear(), h.getMonth(), 0); }
+  document.getElementById('repPdfDesde').value = iso(a); document.getElementById('repPdfHasta').value = iso(b);
+  document.getElementById('repPdfMsg').textContent = '';
+}
+function repPdfGenerar(){
+  const desde = document.getElementById('repPdfDesde').value, hasta = document.getElementById('repPdfHasta').value, msg = document.getElementById('repPdfMsg');
+  if(!desde || !hasta){ msg.textContent = 'Elige las dos fechas.'; return; }
+  if(desde>hasta){ msg.textContent = 'La fecha “Desde” no puede ser posterior a “Hasta”.'; return; }
+  if((new Date(hasta)-new Date(desde))/86400000>366){ msg.textContent = 'El periodo máximo es de un año.'; return; }
+  const nombre = _miNombre||'';
+  const porDia = repPdfReportesDe(nombre, desde, hasta);
+  const dias = Object.keys(porDia).sort();
+  if(!dias.length){ msg.textContent = 'No hay reportes tuyos en ese periodo.'; return; }
+  const esc = bitEsc, cap = t=>t.charAt(0).toUpperCase()+t.slice(1), fl = k=>cap(new Date(k+'T00:00:00').toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'}));
+  const fc = k=>new Date(k+'T00:00:00').toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'});
+  const EST = { completada:'Completada', en_progreso:'En progreso', pendiente:'Pendiente', bloqueada:'Bloqueada' };
+  let total = 0;
+  const bloques = dias.map(k=>{
+    const reps = porDia[k]; total += reps.length;
+    const filas = reps.map(x=>{
+      const r = x.r, ref = esc(x.folio||x.proyecto||'—');
+      if(r.modo==='general') return `<tr><td class="ref">${ref}<div class="sub">${esc(x.actividad)}</div></td><td>${r.descripcion?esc(r.descripcion):'<span class="mut">Sin descripción</span>'}</td><td class="num">${r.avance!=null?esc(r.avance)+'% de avance':'—'}</td></tr>`;
+      return `<tr><td class="ref">${ref}<div class="sub">${esc(x.actividad)}</div></td><td><b>${esc(r.subtareaNombre||'—')}</b>${r.nota?'<div>'+esc(r.nota)+'</div>':''}</td><td class="num">${r.cantidad?'+'+esc(r.cantidad)+' '+esc(r.unidad||''):''}${r.estatus&&EST[r.estatus]?'<div class="sub">'+EST[r.estatus]+'</div>':''}</td></tr>`;
+    }).join('');
+    return `<div class="dia"><h3>${esc(fl(k))} <span>${reps.length} reporte${reps.length>1?'s':''}</span></h3><table><thead><tr><th style="width:28%">Folio / actividad</th><th>Detalle</th><th style="width:18%">Avance</th></tr></thead><tbody>${filas}</tbody></table></div>`;
+  }).join('');
+  const periodo = desde===hasta ? fl(desde) : 'Del '+fc(desde)+' al '+fc(hasta);
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Reporte diario · ${esc(nombre)} · ${esc(desde===hasta?desde:desde+' a '+hasta)}</title>
+<style>
+@page{size:A4;margin:14mm 12mm}
+*{box-sizing:border-box}body{font-family:'Inter','Segoe UI',Arial,sans-serif;color:#1c2733;margin:0;font-size:11.5px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.top{background:#12305a;color:#fff;padding:10px 16px;border-radius:8px;display:flex;justify-content:space-between;font-size:10.5px}
+h1{font-size:19px;margin:16px 0 2px}.per{color:#2a62b8;font-weight:600;font-size:12.5px}
+.res{display:flex;gap:26px;margin:12px 0 4px;color:#5b6b7d;font-size:10.5px}.res b{display:block;font-size:17px;color:#1c2733}
+.dia{margin-top:16px;break-inside:avoid-page}.dia h3{font-size:12.5px;margin:0 0 6px;padding-bottom:4px;border-bottom:2px solid #2a78d6;display:flex;justify-content:space-between}.dia h3 span{font-weight:400;color:#5b6b7d;font-size:10.5px;text-transform:none}
+table{width:100%;border-collapse:collapse}th{font-size:9.5px;text-align:left;color:#5b6b7d;text-transform:uppercase;letter-spacing:.05em;padding:5px 6px;border-bottom:1px solid #d5dde6}
+td{padding:6px;border-bottom:1px solid #e8edf2;vertical-align:top;line-height:1.4}tr{break-inside:avoid}
+.ref{font-family:monospace;font-weight:600;color:#2a62b8;font-size:10.5px;word-break:break-word}.sub{font-family:'Inter',Arial,sans-serif;font-weight:400;color:#5b6b7d;font-size:10px;margin-top:1px}.num{color:#1c2733;font-weight:600;white-space:nowrap}.mut{color:#8896a5}
+.foot{margin-top:22px;padding-top:8px;border-top:1px solid #d5dde6;display:flex;justify-content:space-between;color:#8896a5;font-size:9.5px}
+.pbt{margin:16px 0;text-align:center}.pbt button{padding:8px 18px;border:0;border-radius:7px;background:#2a78d6;color:#fff;font-size:13px;cursor:pointer}
+@media print{.pbt{display:none}}
+</style></head><body onload="setTimeout(function(){window.print();},500)">
+<div class="top"><span>C3NTRO Telecom · Coordinación de Ingeniería</span><span>Reporte diario</span></div>
+<h1>${esc(nombre)}</h1><div class="per">${esc(periodo)}</div>
+<div class="res"><span><b>${dias.length}</b>día${dias.length>1?'s':''} con reporte</span><span><b>${total}</b>reporte${total>1?'s':''} en total</span></div>
+${bloques}
+<div class="foot"><span>Generado el ${esc(new Date().toLocaleString('es-MX',{dateStyle:'long',timeStyle:'short'}))}</span><span>C3NTRO · Panel de Seguimiento</span></div>
+<div class="pbt"><button onclick="window.print()">Exportar PDF / Imprimir</button></div>
+</body></html>`;
+  const url = URL.createObjectURL(new Blob([html], { type:'text/html;charset=utf-8' }));
+  const win = window.open(url, '_blank');
+  if(!win){ msg.textContent = 'Tu navegador bloqueó la ventana. Permite las ventanas emergentes para este sitio e inténtalo de nuevo.'; return; }
+  document.getElementById('repPdfBg')?.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 60000);
 }
 
 function calProyVerDia(fecha){
@@ -16062,26 +16178,49 @@ function bitRefrescarModal(){
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PORTAFOLIO DE PROYECTOS (piloto) · proyecto → folios → actividades, con las fases del proceso.
-// Vive en una tabla nueva ("portafolio_items") + copia local. NO modifica actividades, plan ni catálogo:
-// el enlace actividad ↔ proyecto/folio/fase se guarda aparte, así se puede ir acomodando de poco en poco.
+// PORTAFOLIO DE PROYECTOS v2 · cada proyecto con las 12 etapas del proceso (hitos, insumos, fases con validación,
+// folios por dependencia y bobinas). Vive en la tabla "portafolio_items" + copia local. NO modifica actividades, plan
+// ni catálogo: el enlace actividad ↔ proyecto/etapa se guarda aparte. Lo que había en la versión 1 se migra sin borrar nada.
 // ═══════════════════════════════════════════════════════════════════════════
-const PF_KEY = 'c3ntro_portafolio_v1', PF_DEL_KEY = 'c3ntro_portafolio_del_v1';
-const PF_ETAPAS = [ {k:'kickoff',t:'Kick-off y asignación'}, {k:'lev',t:'Levantamiento digital'}, {k:'ap',t:'Anteproyecto'}, {k:'censo',t:'Estudios y censo'}, {k:'folio',t:'Foliado'} ];
-const PF_FASES  = [ {k:'censo',t:'Censo y foliado'}, {k:'diseno',t:'Diseño de planos'}, {k:'ejec',t:'Proyecto ejecutivo y permisos'}, {k:'bob',t:'Conectividad y bobinas'}, {k:'asb',t:'As-built y cierre'} ];
-const PF_EST_ETAPA = { pend:'Pendiente', curso:'En curso', espera:'Esperando validación', ok:'Validada', na:'No aplica' };
+const PF_KEY = 'c3ntro_portafolio_v1', PF_DEL_KEY = 'c3ntro_portafolio_del_v1', PF_BK_KEY = 'c3ntro_portafolio_respaldo_pre_v2';
+const PF_VALIDADOR = { sergio:'Sergio (Gerencia de Ingeniería)', direccion:'Alta dirección', permisos:'Permisos' };
+const PF_MEDIOS = ['Correo','WhatsApp','De palabra'];
+const PF_DEPS = ['SICT','CFE','CONAGUA','Telmex','Municipio','Gobierno estatal','Otra'];
+const PF_PLANTILLA = [
+  {key:'E1', tipo:'hito',   nombre:'Kick-off', campo:'Alcance de conectividad acordado'},
+  {key:'E2', tipo:'hito',   nombre:'Asignación a coordinación', campo:'Quién asignó y cómo', medio:true},
+  {key:'F1', tipo:'fase',   nombre:'Levantamiento digital', entregables:['KMZ 1.0','Volumétrico estimado'], validadores:['sergio','direccion']},
+  {key:'H1', tipo:'hito',   nombre:'Notificación de aceptación', campo:'Áreas notificadas', aviso:'Infra de terceros (CFE, Telmex, obras comunes), Construcción, PMO, Ingeniería y Permisos'},
+  {key:'X1', tipo:'insumo', nombre:'Censo de afectación', de:'Permisos'},
+  {key:'F2', tipo:'fase',   nombre:'Anteproyecto (AP)', entregables:['KMZ 2.0','Plano de trayectoria','Planimetría','BOM de materiales'], validadores:['sergio']},
+  {key:'F3', tipo:'fase',   nombre:'Impresión de planos AP', entregables:['Planos impresos y doblados'], validadores:[]},
+  {key:'X2', tipo:'insumo', nombre:'Levantamiento físico, topografía y geotecnia', de:'Campo / proveedores'},
+  {key:'F4', tipo:'folios', nombre:'Proyecto ejecutivo y permiso por folio'},
+  {key:'F6', tipo:'bobinas',nombre:'Proyecto de conectividad por bobina', paralela:true, insumo:{nombre:'Avance constructivo (KMZ)', de:'Construcción'}},
+  {key:'F7', tipo:'fase',   nombre:'As-built', entregables:['Proyecto ejecutivo actualizado'], validadores:[], insumo:{nombre:'KMZ y CSV de obra', de:'Construcción'}},
+  {key:'F8', tipo:'fase',   nombre:'Cierre de obra', entregables:['Expediente as-built','Indicaciones de la dependencia atendidas'], validadores:[]}
+];
+const PF_FOLIO_ST = { diseno:['En diseño','accent'], revision:['En revisión de Permisos','rev'], carpeta:['Carpeta física por entregar','accent'], entregada:['Esperando liberación','warn'], liberado:['Permiso liberado','ok'] };
+const PF_BOB_ST = { diseno:['En diseño','accent'], validacion:['En validación (Sergio)','rev'], validada:['Validada','ok'] };
+const PF_TONO = { ok:'g', warn:'a', bad:'r', accent:'b', rev:'v', idle:'' };
+const PF_MES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 let PF_ITEMS = [];            // {id, tipo:'proyecto'|'folio'|'vinculo', proyecto_id, data, updated_at, pend}
 let PF_SEL = null;            // proyecto abierto
-let PF_ABIERTOS = {};         // folios con sus actividades desplegadas
 let PF_GRUPOS = [];           // sugerencias de la pantalla principal
-let PF_ASIG = { q:'', tp:'', pid:'', nuevo:'', folio:'auto', fases:{}, sel:{}, msg:'' };
-let PF_CB = null;             // callback del cuadro de captura
+let PF_ASIG = { q:'', tp:'', pid:'', nuevo:'', auto:true, dest:{}, destPre:'', sel:{}, msg:'' };
+let PF_FORM = null;           // cuadro de captura abierto
 BIT_ICONOS.fase = '🧭';
 
 function pfPuede(){ return (typeof _userRole!=='undefined') && (_userRole==='admin' || _userRole==='jefe'); }
 function pfNorm(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim(); }
 function pfId(p){ return p+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 const pfEsc = t=>bitEsc(t);
+function pfIso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function pfHoy(){ return pfIso(new Date()); }
+function pfParse(s){ const a = String(s).slice(0,10).split('-').map(Number); return new Date(a[0], (a[1]||1)-1, a[2]||1); }
+function pfDiasDesde(s){ if(!s) return 0; const h = new Date(); h.setHours(0,0,0,0); return Math.round((h-pfParse(s))/86400000); }
+function pfFmt(s){ if(!s) return '—'; const d = pfParse(s); return isNaN(d) ? '—' : d.getDate()+' '+PF_MES[d.getMonth()]; }
+function pfYo(){ return (typeof _miNombre!=='undefined' && _miNombre) ? _miNombre : ''; }
 
 // ── Almacenamiento (tabla nueva + copia local) ──
 function pfLoadLocal(){ try{ PF_ITEMS = JSON.parse(localStorage.getItem(PF_KEY)||'[]'); }catch(e){ PF_ITEMS = []; } }
@@ -16145,89 +16284,150 @@ function pfDel(ids){
   pfBorrarRemoto(ids);
 }
 
-// ── Consultas ──
-function pfProyectos(){ return PF_ITEMS.filter(i=>i.tipo==='proyecto').sort((a,b)=>String(a.data.nombre).localeCompare(String(b.data.nombre),'es')); }
+// ── Modelo ──
+function pfMkEtapas(st){
+  st = st || {};
+  return PF_PLANTILLA.map(t=>{
+    const e = Object.assign({ estado:'pendiente', ciclos:0, valIdx:0, validaciones:[], envios:[], ok:[], folios:[], bobinas:[] }, JSON.parse(JSON.stringify(t)), st[t.key]||{});
+    if(t.insumo) e.insumo = Object.assign({}, t.insumo, (st[t.key]||{}).insumo||{});
+    return e;
+  });
+}
+function pfProyectos(){ return PF_ITEMS.filter(i=>i.tipo==='proyecto').sort((a,b)=>(String(a.data.clave||'')+String(a.data.nombre||'')).localeCompare(String(b.data.clave||'')+String(b.data.nombre||''),'es',{numeric:true})); }
 function pfProy(id){ return PF_ITEMS.find(i=>i.tipo==='proyecto' && i.id===id) || null; }
-function pfFolios(pid){ return PF_ITEMS.filter(i=>i.tipo==='folio' && i.proyecto_id===pid); }
-function pfFolio(id){ return PF_ITEMS.find(i=>i.tipo==='folio' && i.id===id) || null; }
+function pfEt(p, key){ return (p.data.etapas||[]).find(e=>e.key===key) || null; }
+function pfSigClave(){ let m = 0; pfProyectos().forEach(p=>{ const x = String(p.data.clave||'').match(/(\d+)$/); if(x) m = Math.max(m, parseInt(x[1],10)); }); return 'PRY-'+String(m+1).padStart(3,'0'); }
 function pfVincMap(){ const m = {}; PF_ITEMS.forEach(i=>{ if(i.tipo==='vinculo') m[i.data.actividad_id] = i; }); return m; }
-function pfActsDeFolio(fid, vm){ vm = vm||pfVincMap(); return (PA_ITEMS||[]).filter(a=>vm[a.id] && vm[a.id].data.folio_id===fid); }
-function pfFaseTxt(k){
-  if(!k) return 'Sin fase';
-  const [t, c] = String(k).split(':'); const l = (t==='e'?PF_ETAPAS:PF_FASES).find(x=>x.k===c);
-  return l ? l.t : 'Sin fase';
+function pfActsDe(pid, key, ref){
+  const vm = pfVincMap();
+  return (PA_ITEMS||[]).filter(a=>{ const v = vm[a.id]; return v && v.proyecto_id===pid && v.data.faseKey===key && (ref===undefined || (v.data.ref||'')===ref); });
 }
-function pfFaseOpts(sel){
-  return `<option value="">Sin fase</option><optgroup label="Etapa del proyecto">${PF_ETAPAS.map(e=>`<option value="e:${e.k}" ${sel==='e:'+e.k?'selected':''}>${pfEsc(e.t)}</option>`).join('')}</optgroup>`+
-         `<optgroup label="Fases del folio">${PF_FASES.map(e=>`<option value="f:${e.k}" ${sel==='f:'+e.k?'selected':''}>${pfEsc(e.t)}</option>`).join('')}</optgroup>`;
-}
-// Sugerencia de fase según el nombre de la actividad (solo una propuesta: tú la ajustas)
-function pfSugFase(a){
-  const t = pfNorm((a.actividad||'')+' '+(a.tipo||''));
-  if(/bobina/.test(t)) return 'f:bob';
-  if(/as.?built|asbuilt/.test(t)) return 'f:asb';
-  if(/permiso|ejecutivo|carpeta/.test(t)) return 'f:ejec';
-  if(/geotec|topograf|censo|estudio|levantamiento fisico/.test(t)) return 'e:censo';
-  if(/levantamiento|kmz 1/.test(t)) return 'e:lev';
-  if(/\bap\b|anteproyecto|impresion|doblad/.test(t)) return 'e:ap';
-  if(/foliad/.test(t)) return 'e:folio';
-  if(/plano|diseno|seccion|corte|trayectoria|planimetria|cruce|marginal|perfil|proyecto/.test(t)) return 'f:diseno';
-  return '';
-}
-function pfFaseIdxDe(k){ return String(k||'').startsWith('f:') ? PF_FASES.findIndex(x=>x.k===k.slice(2)) : -1; }
+function pfActsProy(pid){ const vm = pfVincMap(); return (PA_ITEMS||[]).filter(a=>vm[a.id] && vm[a.id].proyecto_id===pid); }
+function pfActiva(a){ return !/termin|cancel|complet/i.test(a.estatus||''); }
 
-// ── Crear / modificar ──
-function pfCrearProyecto(nombre){
-  nombre = String(nombre||'').trim(); if(!nombre) return null;
+function pfEtapaHecha(e){
+  if(e.tipo==='hito') return !!e.fecha;
+  if(e.tipo==='insumo') return !!e.recibido;
+  if(e.tipo==='folios') return e.folios.length>0 && e.folios.every(f=>f.estado==='liberado');
+  if(e.tipo==='bobinas') return e.bobinas.length>0 && e.bobinas.every(b=>b.estado==='validada');
+  return e.estado==='completada';
+}
+function pfEtapaEstado(e){   // [texto, tono]
+  if(e.tipo==='hito') return e.fecha ? ['Registrado','ok'] : ['Pendiente','idle'];
+  if(e.tipo==='insumo') return e.recibido ? ['Recibido','ok'] : e.solicitado ? ['En espera · '+pfDiasDesde(e.solicitado)+' días','warn'] : ['Sin solicitar','idle'];
+  if(e.tipo==='folios'){ const n = e.folios.length, l = e.folios.filter(f=>f.estado==='liberado').length; return !n ? ['Sin foliar','idle'] : l===n ? ['Permisos liberados','ok'] : [l+'/'+n+' permisos liberados','accent']; }
+  if(e.tipo==='bobinas'){ const n = e.bobinas.length, v = e.bobinas.filter(b=>b.estado==='validada').length; return !n ? ['Sin bobinas','idle'] : v===n ? ['Bobinas validadas','ok'] : [v+'/'+n+' bobinas validadas','accent']; }
+  return ({ pendiente:['Pendiente','idle'], en_curso:['En curso','accent'], en_validacion:['En validación: '+(PF_VALIDADOR[e.validadores[e.valIdx]]||''),'rev'], completada:['Completada','ok'] })[e.estado] || ['Pendiente','idle'];
+}
+function pfEtapaActual(p){ return (p.data.etapas||[]).find(e=>!e.paralela && !pfEtapaHecha(e)) || null; }
+function pfEsperas(p){
+  const w = [];
+  (p.data.etapas||[]).forEach(e=>{
+    if(e.tipo==='fase' && e.estado==='en_validacion') w.push({ quien:PF_VALIDADOR[e.validadores[e.valIdx]], que:'Validación de '+e.nombre, dias:pfDiasDesde(e.envio||pfHoy()) });
+    if(e.tipo==='insumo' && e.solicitado && !e.recibido) w.push({ quien:e.de, que:e.nombre, dias:pfDiasDesde(e.solicitado) });
+    if(e.insumo && e.insumo.solicitado && !e.insumo.recibido) w.push({ quien:e.insumo.de, que:e.insumo.nombre, dias:pfDiasDesde(e.insumo.solicitado) });
+    (e.folios||[]).forEach(f=>{
+      if(f.estado==='revision') w.push({ quien:'Permisos'+(f.dependencia?' ('+f.dependencia+')':''), que:'Revisión del folio '+f.clave, dias:pfDiasDesde(f.desde) });
+      if(f.estado==='entregada') w.push({ quien:f.dependencia||'La dependencia', que:'Liberación del folio '+f.clave, dias:pfDiasDesde(f.desde) });
+    });
+    (e.bobinas||[]).forEach(b=>{ if(b.estado==='validacion') w.push({ quien:PF_VALIDADOR.sergio, que:'Validación de bobina '+b.clave, dias:pfDiasDesde(b.desde) }); });
+  });
+  return w.sort((a,b)=>b.dias-a.dias);
+}
+function pfStats(p){
+  let ciclos = 0, aprob = 0, primera = 0;
+  (p.data.etapas||[]).forEach(e=>{
+    if(e.tipo==='fase' && e.validadores.length){ ciclos += e.ciclos||0; if(e.estado==='completada'){ aprob++; if(!e.ciclos) primera++; } }
+    (e.folios||[]).forEach(f=>{ ciclos += f.ciclos||0; if(['carpeta','entregada','liberado'].includes(f.estado)){ aprob++; if(!f.ciclos) primera++; } });
+    (e.bobinas||[]).forEach(b=>{ ciclos += b.ciclos||0; if(b.estado==='validada'){ aprob++; if(!b.ciclos) primera++; } });
+  });
+  const acts = pfActsProy(p.id).filter(pfActiva);
+  return { ciclos, primera: aprob ? Math.round(primera/aprob*100)+'%' : '—', activas:acts.length };
+}
+
+// ── Crear proyecto ──
+function pfCrearProyecto(o){
+  o = o || {}; const nombre = String(o.nombre||'').trim(); if(!nombre) return null;
   const ex = pfProyectos().find(p=>pfNorm(p.data.nombre)===pfNorm(nombre)); if(ex) return ex;
-  const id = pfId('pfp'); const etapa = {};
-  PF_ETAPAS.forEach((e,i)=>{ etapa[e.k] = { est: i===0?'curso':'pend', fecha:'', nota:'' }; });
-  return pfPut({ id, tipo:'proyecto', proyecto_id:id, data:{ nombre, etapa } });
+  const id = pfId('pfp'); const st = {};
+  if(o.alcance || o.kickoff) st.E1 = { fecha:o.kickoff||'', nota:o.alcance||'' };
+  if(o.asignacion) st.E2 = { fecha:o.asignacion, medio:o.medio||'', nota:o.quien||'' };
+  return pfPut({ id, tipo:'proyecto', proyecto_id:id, data:{ v:2, clave:pfSigClave(), nombre, cliente:o.cliente||'', etapas:pfMkEtapas(st), log:[] } });
 }
-function pfNuevoFolioItem(pid, texto, faseIdx){
-  return { id:pfId('pff'), tipo:'folio', proyecto_id:pid, data:{ folio:String(texto).trim(), fase:Math.max(0,faseIdx||0), est:'curso', ronda:1, retr:false, retrDesde:0, nota:'', hist:[] } };
+function pfFolioNuevo(clave, extra){
+  return Object.assign({ clave:String(clave).trim(), dependencia:'', tramo:'', proyectista:'', estado:'diseno', ciclos:0, desde:pfHoy(), hist:[{ fecha:pfHoy(), txt:'Folio agregado' }], envios:[] }, extra||{});
 }
-function pfCrearFolio(pid, texto){
-  texto = String(texto||'').trim(); if(!texto) return null;
-  const ex = pfFolios(pid).find(f=>pfNorm(f.data.folio)===pfNorm(texto)); if(ex) return ex;
-  return pfPut(pfNuevoFolioItem(pid, texto, 0));
-}
-// filas: [{act, pid, folio:'auto'|'ninguno'|<id de folio>, fase}]
-function pfAsignarLote(filas){
-  const nuevos = [], nf = {};
-  filas.forEach(f=>{
-    const a = f.act; let fid = null;
-    if(f.folio==='auto'){
-      const txt = String(a.folio||'').trim();
-      if(txt){
-        const key = f.pid+'|'+pfNorm(txt);
-        let fo = pfFolios(f.pid).find(x=>pfNorm(x.data.folio)===pfNorm(txt)) || nf[key];
-        if(!fo){ fo = pfNuevoFolioItem(f.pid, txt, 0); nf[key] = fo; nuevos.push(fo); }
-        fid = fo.id;
-      }
-    } else if(f.folio && f.folio!=='ninguno') fid = f.folio;
-    nuevos.push({ id:'v_'+a.id, tipo:'vinculo', proyecto_id:f.pid, data:{ actividad_id:a.id, proyecto_id:f.pid, folio_id:fid, fase:f.fase||'' } });
-  });
-  // un folio recién creado arranca en la fase más avanzada de sus actividades
-  Object.values(nf).forEach(fo=>{
-    const idx = nuevos.filter(v=>v.tipo==='vinculo' && v.data.folio_id===fo.id).map(v=>pfFaseIdxDe(v.data.fase)).reduce((m,x)=>Math.max(m,x),0);
-    fo.data.fase = Math.max(0, idx);
-  });
-  pfPutMany(nuevos);
-  return filas.length;
-}
-function pfDesvincular(actId){ pfDel(['v_'+actId]); pfRepinta(); }
-function pfCambiarFaseAct(actId, fase){ const v = pfVincMap()[actId]; if(!v) return; v.data.fase = fase; pfPut(v); pfRepinta(); }
-function pfCambiarFolioAct(actId, fid){ const v = pfVincMap()[actId]; if(!v) return; v.data.folio_id = fid||null; pfPut(v); pfRepinta(); }
 
-// ── Registro en la Bitácora (cada movimiento de un folio queda en su hilo) ──
-function pfBit(fo, tipo, titulo, detalle){
+// ── Migración de la versión 1 (no borra nada: solo agrega los datos v2 al mismo registro) ──
+function pfRespaldoLocal(){
+  try{ if(!localStorage.getItem(PF_BK_KEY)) localStorage.setItem(PF_BK_KEY, JSON.stringify({ ts:new Date().toISOString(), items:PF_ITEMS })); }catch(e){}
+}
+const PF_V1_A_KEY = { 'e:kickoff':'E1', 'e:lev':'F1', 'e:ap':'F2', 'e:censo':'X2', 'e:folio':'F4', 'f:censo':'F4', 'f:diseno':'F4', 'f:ejec':'F4', 'f:bob':'F6', 'f:asb':'F7' };
+function pfMigrarProyecto(p){
+  const d = p.data, old = d.etapa || {}, base = String(p.updated_at||'').slice(0,10) || pfHoy();
+  const fol = PF_ITEMS.filter(i=>i.tipo==='folio' && i.proyecto_id===p.id);
+  const st = {}, log = [];
+  const o = k=>old[k]||{};
+  const f0 = k=>o(k).fecha || base;
+  if(o('kickoff').est==='ok'){ st.E1 = { fecha:f0('kickoff'), nota:o('kickoff').nota||'', migrado:true }; st.E2 = { fecha:f0('kickoff'), medio:'', nota:'', migrado:true }; }
+  if(o('lev').est==='ok') st.F1 = { estado:'completada', valIdx:2, ok:[true,true], migrado:true };
+  else if(o('lev').est==='espera') st.F1 = { estado:'en_validacion', valIdx:0, ok:[true,true], envio:f0('lev'), migrado:true };
+  else if(o('lev').est==='curso') st.F1 = { estado:'en_curso', migrado:true };
+  if(o('ap').est==='ok') st.F2 = { estado:'completada', valIdx:1, ok:[true,true,true,true], migrado:true };
+  else if(o('ap').est==='espera') st.F2 = { estado:'en_validacion', valIdx:0, ok:[true,true,true,true], envio:f0('ap'), migrado:true };
+  else if(o('ap').est==='curso') st.F2 = { estado:'en_curso', migrado:true };
+  if(o('censo').est==='ok'){ st.X1 = { solicitado:f0('censo'), recibido:f0('censo'), migrado:true }; st.X2 = { solicitado:f0('censo'), recibido:f0('censo'), migrado:true }; }
+  else if(o('censo').est==='espera') st.X2 = { solicitado:f0('censo'), migrado:true };
+  const NOM = { kickoff:'Kick-off y asignación', lev:'Levantamiento digital', ap:'Anteproyecto', censo:'Estudios y censo', folio:'Foliado' };
+  Object.keys(NOM).forEach(k=>{ const e = o(k); if(e.est && e.est!=='pend' || e.nota) log.push({ ts:new Date().toISOString(), fecha:(e.fecha||base), txt:'Migrado de la versión 1 · '+NOM[k]+': '+({pend:'Pendiente',curso:'En curso',espera:'Esperando validación',ok:'Validada',na:'No aplica'}[e.est]||'')+(e.nota?' · '+e.nota:''), por:e.por||'' }); });
+  // folios v1 → F4
+  const vm = pfVincMap(); const folios = [];
+  fol.forEach(f=>{
+    const x = f.data, fase = x.fase||0;
+    const estado = (x.est==='cerrado' || fase>=3) ? 'liberado' : (fase===2 && x.est==='espera') ? 'revision' : 'diseno';
+    const resp = (PA_ITEMS||[]).filter(a=>vm[a.id] && vm[a.id].data.folio_id===f.id).map(a=>a.responsable).find(r=>r && !PA_INACTIVE.includes(r)) || '';
+    const FN = ['Censo y foliado','Diseño de planos','Proyecto ejecutivo y permisos','Conectividad y bobinas','As-built y cierre'];
+    const hist = (x.hist||[]).map(h=>({ fecha:String(h.ts||'').slice(0,10)||base, txt:({avance:'Avanzó',regreso:'Regresó',espera:'Esperando validación',validacion:'Validación recibida',union:'Unión'}[h.tipo]||h.tipo||'Movimiento')+(h.motivo?': '+h.motivo:'') }));
+    hist.unshift({ fecha:base, txt:'Migrado de la versión 1 (estaba en: '+(x.est==='cerrado'?'Cerrado':FN[fase]||'—')+')' });
+    const ult = (x.hist||[]).slice(-1)[0];
+    folios.push(pfFolioNuevo(x.folio, { proyectista:resp, estado, ciclos:Math.max(0,(x.ronda||1)-1), desde:(ult&&String(ult.ts||'').slice(0,10))||base, hist, v1id:f.id }));
+  });
+  const et = pfMkEtapas(st);
+  et.find(e=>e.key==='F4').folios = folios;
+  d.v1 = d.v1 || { etapa:old };
+  d.v = 2; d.clave = d.clave || pfSigClave(); d.cliente = d.cliente || ''; d.etapas = et; d.log = (d.log||[]).concat(log);
+  // vínculos: se les agrega etapa (faseKey) y folio (ref); lo que traían de v1 se conserva
+  const mod = [];
+  PF_ITEMS.filter(i=>i.tipo==='vinculo' && i.proyecto_id===p.id && !i.data.faseKey).forEach(v=>{
+    const k = PF_V1_A_KEY[v.data.fase] || ''; const f = v.data.folio_id ? fol.find(z=>z.id===v.data.folio_id) : null;
+    v.data.faseKey = k; v.data.ref = (k==='F4' && f) ? f.data.folio : ''; mod.push(v);
+  });
+  return mod;
+}
+function pfMigrar(){
+  const pend = PF_ITEMS.filter(i=>i.tipo==='proyecto' && i.data.v!==2);
+  if(!pend.length) return 0;
+  pfRespaldoLocal();
+  const cambios = [];
+  pend.sort((a,b)=>String(a.updated_at||'').localeCompare(String(b.updated_at||''))).forEach(p=>{ const m = pfMigrarProyecto(p); cambios.push(p, ...m); });
+  pfPutMany(cambios);
+  window._pfMigMsg = 'Se migraron '+pend.length+' proyecto(s) de la versión anterior a las 12 etapas. No se borró nada: tus folios, enlaces y notas siguen guardados (y hay un respaldo en este navegador).';
+  return pend.length;
+}
+
+// ── Bitácora: cada movimiento queda en el hilo ──
+function pfBit(p, tipo, titulo, detalle, folioClave){
   try{
-    const p = pfProy(fo.proyecto_id); const vm = pfVincMap();
-    const act = pfActsDeFolio(fo.id, vm)[0] || { id:'pf_'+fo.id, proyecto:(p&&p.data.nombre)||'', folio:fo.data.folio, responsable:'' };
+    const act = (folioClave && pfActsDe(p.id,'F4',folioClave)[0]) || { id:'pf_'+p.id, proyecto:p.data.nombre, folio:p.data.clave, responsable:'' };
     bitLog(act, tipo, titulo, detalle||'');
   }catch(e){ console.warn('pfBit', e); }
 }
+function pfLog(p, txt, tipo, folioClave, detalle){
+  p.data.log = p.data.log || [];
+  p.data.log.push({ ts:new Date().toISOString(), fecha:pfHoy(), txt, por:pfYo() });
+  pfBit(p, tipo||'fase', txt, detalle, folioClave);
+}
+function pfGuarda(p){ pfPut(p); pfRepinta(); }
 
 // ── Estilos ──
 function pfCss(){
@@ -16235,49 +16435,66 @@ function pfCss(){
   const s = document.createElement('style'); s.id = 'pfStyle';
   s.textContent = `
   .pf-sub{font-size:11.5px;color:var(--dim);margin-top:2px}
-  .pf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
   .pf-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+  .pf-list{display:flex;flex-direction:column;gap:12px}
   .pf-pc{cursor:pointer;transition:.15s}.pf-pc:hover{border-color:var(--accent)}
-  .pf-pc h3{margin:0 0 2px;font-size:15px;color:var(--text)}
+  .pf-pc h3{margin:0;font-size:15.5px;color:var(--text)}
+  .pf-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .pf-note{font-size:11px;color:var(--dim)}
+  .pf-mono{font-family:monospace;color:var(--accent);font-weight:600;font-size:12px}
   .pf-chip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;padding:2px 8px;border-radius:12px;border:1px solid var(--border);color:var(--dim);white-space:nowrap;background:var(--surface2)}
   .pf-chip.g{background:rgba(52,199,123,.14);border-color:rgba(52,199,123,.4);color:var(--green)}
   .pf-chip.a{background:rgba(245,166,35,.12);border-color:rgba(245,166,35,.4);color:var(--amber)}
   .pf-chip.r{background:rgba(255,92,92,.12);border-color:rgba(255,92,92,.4);color:var(--red)}
   .pf-chip.b{background:rgba(74,143,212,.14);border-color:rgba(74,143,212,.4);color:var(--accent)}
   .pf-chip.v{background:rgba(179,137,240,.14);border-color:rgba(179,137,240,.4);color:#b389f0}
-  .pf-kpis{display:flex;gap:16px;margin:12px 0 4px}.pf-kpis div{font-size:10.5px;color:var(--dim)}.pf-kpis b{display:block;font-size:18px;color:var(--text)}
-  .pf-bar{display:flex;height:8px;border-radius:5px;overflow:hidden;background:var(--surface2);margin-top:6px}.pf-bar i{display:block}
-  .pf-leg{display:flex;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--dim);margin-top:6px}.pf-leg span:before{content:"";display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;background:var(--c)}
-  .pf-steps{display:flex;gap:4px}
-  .pf-st{flex:1;min-width:0;padding:9px 8px 8px;text-align:center;border-top:4px solid var(--border);background:var(--surface2);border-radius:0 0 7px 7px;cursor:pointer}
-  .pf-st:hover{filter:brightness(1.08)}
-  .pf-st .n{font-size:10px;color:var(--dim)}.pf-st .t{font-size:11.5px;font-weight:600;margin-top:2px;line-height:1.25;color:var(--text)}.pf-st .e{font-size:10px;color:var(--dim);margin-top:3px}
-  .pf-st.ok{border-top-color:var(--green);background:rgba(52,199,123,.10)}.pf-st.curso{border-top-color:var(--accent);background:rgba(74,143,212,.12)}
-  .pf-st.espera{border-top-color:var(--amber);background:rgba(245,166,35,.12)}.pf-st.na{opacity:.5}
+  .pf-stp{display:flex;gap:3px;margin:12px 0 4px;flex-wrap:nowrap}
+  .pf-stp span{flex:1;min-width:0;height:24px;border-radius:5px;font-size:9.5px;font-weight:600;display:flex;align-items:center;justify-content:center;color:var(--dim);background:var(--surface2);border:1px solid var(--border)}
+  .pf-stp span.ok{background:rgba(52,199,123,.16);border-color:rgba(52,199,123,.45);color:var(--green)}
+  .pf-stp span.warn{background:rgba(245,166,35,.14);border-color:rgba(245,166,35,.45);color:var(--amber)}
+  .pf-stp span.accent{background:rgba(74,143,212,.16);border-color:rgba(74,143,212,.5);color:var(--accent)}
+  .pf-stp span.rev{background:rgba(179,137,240,.16);border-color:rgba(179,137,240,.5);color:#b389f0}
+  .pf-stp span.cur{outline:2px solid var(--accent);outline-offset:1px}
+  .pf-waits{margin-top:8px;display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--text)}
+  .pf-waits .d{display:inline-block;min-width:34px;text-align:center;font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:10px;margin-right:8px;background:rgba(245,166,35,.14);color:var(--amber);border:1px solid rgba(245,166,35,.4)}
+  .pf-stats{display:flex;gap:22px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap}.pf-stats span{font-size:10.5px;color:var(--dim)}.pf-stats b{display:block;font-size:17px;color:var(--text)}
+  .pf-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}
+  .pf-kpis div{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:10.5px;color:var(--dim)}.pf-kpis b{display:block;font-size:20px;color:var(--text)}
+  .pf-alert{background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.35);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12px}
   .pf-sec{font-size:11px;letter-spacing:.08em;color:var(--dim);margin:20px 0 8px;text-transform:uppercase}
-  .pf-tbl{width:100%;border-collapse:collapse}
-  .pf-tbl th{font-size:10.5px;text-align:left;color:var(--dim);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--border)}
-  .pf-tbl td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:12px;color:var(--text)}
-  .pf-tbl tr:last-child td{border-bottom:0}
-  .pf-mono{font-family:monospace;color:var(--accent);font-weight:600;font-size:12px}
-  .pf-mini{display:flex;gap:3px;min-width:210px}.pf-mini i{flex:1;height:8px;border-radius:3px;background:var(--border)}
-  .pf-mini i.d{background:var(--green)}.pf-mini i.c{background:var(--accent)}.pf-mini i.w{background:var(--amber)}.pf-mini i.b{background:var(--red)}
-  .pf-minil{display:flex;gap:3px;font-size:9px;color:var(--dim);margin-top:3px;min-width:210px}.pf-minil span{flex:1;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .pf-sub-row td{background:var(--surface2);padding:6px 10px 6px 28px;font-size:11.5px}
-  .pf-btn{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:7px;padding:3px 9px;font-size:11px;cursor:pointer;font-family:var(--font)}
+  .pf-stage{display:grid;grid-template-columns:44px 1fr;gap:8px}
+  .pf-mk{display:flex;flex-direction:column;align-items:center}
+  .pf-mk b{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;border:2px solid var(--border);background:var(--surface2);color:var(--dim);flex:none}
+  .pf-mk i{flex:1;width:2px;background:var(--border);margin:4px 0}
+  .pf-mk b.ok{border-color:var(--green);color:var(--green)}.pf-mk b.warn{border-color:var(--amber);color:var(--amber)}.pf-mk b.accent{border-color:var(--accent);color:var(--accent)}.pf-mk b.rev{border-color:#b389f0;color:#b389f0}
+  .pf-sbody{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;flex-direction:column;gap:10px}
+  .pf-sbody.cur{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+  .pf-shead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.pf-shead h3{margin:0;font-size:14px;color:var(--text)}
+  .pf-stype{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+  .pf-line{font-size:12.5px;color:var(--text);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .pf-warn{font-size:11.5px;color:var(--amber)}
+  .pf-ent{display:flex;flex-wrap:wrap;gap:6px 14px}.pf-ent label{font-size:12px;color:var(--text);display:flex;gap:6px;align-items:center;cursor:pointer}.pf-ent label.ok{color:var(--green)}
+  .pf-chain{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11px}
+  .pf-hist{margin:0;padding-left:16px;font-size:11.5px;color:var(--dim);display:flex;flex-direction:column;gap:2px}.pf-hist b{font-weight:600}
+  .pf-act{display:flex;gap:6px;flex-wrap:wrap}
+  .pf-btn{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:7px;padding:4px 10px;font-size:11.5px;cursor:pointer;font-family:var(--font)}
   .pf-btn:hover{background:var(--surface2)}.pf-btn[disabled]{opacity:.4;cursor:default}
-  .pf-sel,.pf-inp{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:5px 8px;color:var(--text);font-size:12px;font-family:var(--font)}
+  .pf-btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}.pf-btn.ok{background:var(--green);border-color:var(--green);color:#fff}
+  .pf-ins{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+  .pf-tbl{width:100%;border-collapse:collapse}
+  .pf-tbl th{font-size:10.5px;text-align:left;color:var(--dim);font-weight:600;padding:7px 8px;border-bottom:1px solid var(--border)}
+  .pf-tbl td{padding:8px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:12px;color:var(--text)}
+  .pf-tbl tr:last-child td{border-bottom:0}
+  .pf-ma{display:flex;gap:8px;align-items:center;font-size:11.5px;padding:5px 8px;background:var(--surface2);border-radius:7px;margin-top:4px;color:var(--text)}
   .pf-aviso{font-size:11.5px;border-radius:8px;padding:8px 12px;margin-bottom:10px;background:rgba(245,166,35,.10);border:1px solid rgba(245,166,35,.4);color:var(--amber)}
   .pf-ok{font-size:11.5px;border-radius:8px;padding:8px 12px;margin-bottom:10px;background:rgba(52,199,123,.10);border:1px solid rgba(52,199,123,.4);color:var(--green)}
-  .pf-sug{display:flex;gap:10px;align-items:center;padding:8px 12px;border-top:1px solid var(--border);font-size:12px;color:var(--text);flex-wrap:wrap}
-  .pf-sug:first-child{border-top:0}
+  .pf-sug{display:flex;gap:10px;align-items:center;padding:8px 12px;border-top:1px solid var(--border);font-size:12px;color:var(--text);flex-wrap:wrap}.pf-sug:first-child{border-top:0}
   .pf-modal label{display:block;font-size:11px;color:var(--dim);margin:12px 0 4px}
   .pf-modal select,.pf-modal textarea,.pf-modal input[type=text],.pf-modal input[type=date]{width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px 9px;color:var(--text);font-family:var(--font);font-size:12.5px}
+  .pf-sel{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:4px 6px;color:var(--text);font-size:11px;font-family:var(--font);max-width:230px}
   .pf-asig{max-height:46vh;overflow:auto;border:1px solid var(--border);border-radius:8px;margin-top:10px}
   .pf-asig table{width:100%;border-collapse:collapse}.pf-asig td{padding:6px 8px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text)}.pf-asig tr:first-child td{border-top:0}
-  .pf-asig select{width:auto;max-width:190px;padding:3px 6px;font-size:11px}
-  @media(max-width:900px){.pf-steps{flex-wrap:wrap}.pf-st{min-width:30%}}
+  @media(max-width:900px){.pf-kpis{grid-template-columns:repeat(2,1fr)}.pf-stp span{font-size:8.5px}}
   `;
   document.head.appendChild(s);
 }
@@ -16285,6 +16502,7 @@ function pfAvisoHtml(){
   let h = '';
   if(window._pfTablaFalta) h += `<div class="pf-aviso">El portafolio se está guardando solo en este navegador porque Supabase no encuentra la tabla "portafolio_items". Corre en el SQL Editor el SQL del portafolio (tabla, permisos y <b>notify pgrst, 'reload schema';</b>).</div>`;
   if(window._pfErr) h += `<div class="pf-aviso">No se pudo guardar el portafolio en Supabase (se guardó en este navegador). Motivo: <b>${pfEsc(window._pfErr)}</b></div>`;
+  if(window._pfMigMsg) h += `<div class="pf-ok">${pfEsc(window._pfMigMsg)} <a href="#" onclick="window._pfMigMsg='';pfRepinta();return false" style="color:inherit;text-decoration:underline">Entendido</a></div>`;
   return h;
 }
 
@@ -16296,132 +16514,264 @@ function pfModal(html, ancho){
   bg.onclick = e=>{ if(e.target===bg) pfCerrarModal(); };
   document.body.appendChild(bg);
 }
-function pfCerrarModal(){ document.getElementById('pfModalBg')?.remove(); PF_CB = null; }
-function pfPregunta(titulo, valor, cb, ayuda){
-  PF_CB = cb;
-  pfModal(`<div class="pa-modal-title" style="margin-bottom:6px">${pfEsc(titulo)}</div>${ayuda?`<div class="pf-note">${pfEsc(ayuda)}</div>`:''}
-    <input type="text" id="pfInp" value="${pfEsc(valor||'')}" style="margin-top:10px">
-    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button class="pa-btn pa-btn-ghost" onclick="pfCerrarModal()">Cancelar</button><button class="pa-btn pa-btn-primary" id="pfInpOk">Guardar</button></div>`, 440);
-  const i = document.getElementById('pfInp'); const ok = ()=>{ const v = i.value.trim(); if(!v) return; const f = PF_CB; pfCerrarModal(); if(f) f(v); };
-  document.getElementById('pfInpOk').onclick = ok; i.onkeydown = e=>{ if(e.key==='Enter') ok(); }; setTimeout(()=>{ i.focus(); i.select(); }, 30);
-}
+function pfCerrarModal(){ document.getElementById('pfModalBg')?.remove(); PF_FORM = null; }
 function pfRepinta(){ if(typeof curView!=='undefined' && curView==='portafolio') pfRenderVista(); }
-
-// ── Acciones de proyecto ──
-function pfNuevoProyecto(){
-  pfPregunta('Nuevo proyecto', '', nombre=>{ const p = pfCrearProyecto(nombre); if(p){ PF_SEL = p.id; pfRepinta(); } }, 'Se crea con la plantilla completa del proceso (etapa del proyecto + fases por folio).');
+// Formulario genérico: o = {titulo, sub, campos:[{k,l,t:'text|date|textarea|select',v,o:[[val,txt]],req,ph}], btn, ok(vals)}
+function pfForm(o){
+  PF_FORM = o;
+  const c = (o.campos||[]).map(f=>{
+    const id = 'pfF_'+f.k, lbl = `<label>${pfEsc(f.l)}${f.req?' *':''}</label>`;
+    if(f.t==='select') return lbl+`<select id="${id}">${f.o.map(x=>`<option value="${pfEsc(x[0])}" ${String(f.v)===String(x[0])?'selected':''}>${pfEsc(x[1])}</option>`).join('')}</select>`;
+    if(f.t==='textarea') return lbl+`<textarea id="${id}" rows="3" placeholder="${pfEsc(f.ph||'')}">${pfEsc(f.v||'')}</textarea>`;
+    return lbl+`<input type="${f.t||'text'}" id="${id}" value="${pfEsc(f.v||'')}" placeholder="${pfEsc(f.ph||'')}">`;
+  }).join('');
+  pfModal(`<div class="pa-modal-title" style="margin-bottom:2px">${pfEsc(o.titulo)}</div>${o.sub?`<div class="pf-note">${pfEsc(o.sub)}</div>`:''}${c}<div id="pfFErr" style="color:var(--red);font-size:11.5px;margin-top:8px;min-height:14px"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px"><button class="pa-btn pa-btn-ghost" onclick="pfCerrarModal()">Cancelar</button><button class="pa-btn pa-btn-primary" id="pfFOk" onclick="pfFormOk()">${pfEsc(o.btn||'Guardar')}</button></div>`, o.ancho||480);
+  setTimeout(()=>{ const f = document.querySelector('#pfModalBg input,#pfModalBg select,#pfModalBg textarea'); if(f) f.focus(); }, 30);
 }
-function pfAbrirProy(id){ PF_SEL = id; pfRepinta(); }
+function pfFormVals(){ const v = {}; PF_FORM.campos.forEach(f=>{ const el = document.getElementById('pfF_'+f.k); v[f.k] = el ? el.value.trim() : ''; }); return v; }
+function pfFormOk(){
+  if(!PF_FORM) return; const v = pfFormVals(); let bad = null;
+  PF_FORM.campos.forEach(f=>{
+    const need = typeof f.req==='function' ? f.req(v) : f.req; const el = document.getElementById('pfF_'+f.k);
+    if(el) el.style.borderColor = '';
+    if(need && !v[f.k]){ if(el) el.style.borderColor = 'var(--red)'; if(!bad) bad = el; }
+  });
+  if(bad){ bad.focus(); document.getElementById('pfFErr').textContent = 'Completa los campos marcados con *.'; return; }
+  const fn = PF_FORM.ok; pfCerrarModal(); if(fn) fn(v);
+}
+const pfMedioOpts = ()=>PF_MEDIOS.map(m=>[m,m]);
+
+// ── Proyecto: nuevo / datos / eliminar / respaldo ──
+function pfNuevoProyecto(){
+  pfForm({ titulo:'Nuevo proyecto', sub:'Se crea con la plantilla completa de las 12 etapas. La clave se asigna sola.', ancho:520, btn:'Crear proyecto',
+    campos:[ {k:'nombre',l:'Nombre del proyecto',req:true,ph:'Ej. TIKVA México'}, {k:'cliente',l:'Cliente',ph:'Opcional'},
+      {k:'alcance',l:'Alcance de conectividad acordado (E1 · kick-off)',t:'textarea',req:true,ph:'Ej. Troncal de 42 km sobre derecho de vía federal'},
+      {k:'kickoff',l:'Fecha del kick-off (si ya se hizo)',t:'date'},
+      {k:'asignacion',l:'Fecha en que se asignó a coordinación (E2)',t:'date',v:pfHoy(),req:true},
+      {k:'quien',l:'Quién asignó',ph:'Ej. Sergio'}, {k:'medio',l:'Medio de la asignación',t:'select',o:pfMedioOpts()} ],
+    ok:v=>{
+      if(pfProyectos().some(p=>pfNorm(p.data.nombre)===pfNorm(v.nombre))){ alert('Ya existe un proyecto con ese nombre.'); return; }
+      const p = pfCrearProyecto(v); if(p){ pfLog(p, 'Proyecto creado con la plantilla de 12 etapas'); pfPut(p); PF_SEL = p.id; pfRepinta(); }
+    } });
+}
+function pfAbrirProy(id){ PF_SEL = id; pfRepinta(); try{ window.scrollTo({top:0}); }catch(e){} }
 function pfVolver(){ PF_SEL = null; pfRepinta(); }
-function pfRenombrarProyecto(id){
+function pfEditarProyecto(id){
   const p = pfProy(id); if(!p) return;
-  pfPregunta('Renombrar proyecto', p.data.nombre, v=>{
-    const dup = pfProyectos().find(x=>x.id!==id && pfNorm(x.data.nombre)===pfNorm(v));
-    if(dup){ alert('Ya existe un proyecto con ese nombre. Usa "Unir" desde los folios o elige otro nombre.'); return; }
-    p.data.nombre = v; pfPut(p); pfRepinta(); });
+  pfForm({ titulo:'Datos del proyecto', sub:'Solo cambia el portafolio; el proyecto escrito en tus actividades no se modifica.', btn:'Guardar',
+    campos:[ {k:'nombre',l:'Nombre',v:p.data.nombre,req:true}, {k:'cliente',l:'Cliente',v:p.data.cliente||''}, {k:'clave',l:'Clave',v:p.data.clave||'',req:true} ],
+    ok:v=>{
+      if(pfProyectos().some(x=>x.id!==id && pfNorm(x.data.nombre)===pfNorm(v.nombre))){ alert('Ya existe un proyecto con ese nombre.'); return; }
+      p.data.nombre = v.nombre; p.data.cliente = v.cliente; p.data.clave = v.clave; pfGuarda(p);
+    } });
 }
 function pfEliminarProyecto(id){
   const p = pfProy(id); if(!p) return;
-  const fol = pfFolios(id), vin = PF_ITEMS.filter(i=>i.tipo==='vinculo' && i.proyecto_id===id);
-  if(!confirm(`¿Eliminar el proyecto "${p.data.nombre}" del portafolio?\n\nSe quitan ${fol.length} folio(s) y ${vin.length} enlace(s) de actividades. Tus actividades NO se borran ni se modifican; solo quedan "sin proyecto" otra vez.`)) return;
+  const fol = PF_ITEMS.filter(i=>i.tipo==='folio' && i.proyecto_id===id), vin = PF_ITEMS.filter(i=>i.tipo==='vinculo' && i.proyecto_id===id);
+  if(!confirm(`¿Eliminar el proyecto "${p.data.nombre}" del portafolio?\n\nSe quitan sus etapas, ${fol.length} folio(s) antiguos y ${vin.length} enlace(s) de actividades. Tus actividades NO se borran ni se modifican; solo quedan "sin proyecto" otra vez.`)) return;
   pfDel([id, ...fol.map(f=>f.id), ...vin.map(v=>v.id)]); PF_SEL = null; pfRepinta();
 }
-function pfEtapaModal(pid, k){
-  const p = pfProy(pid); if(!p) return; const e = (p.data.etapa||{})[k] || { est:'pend' }; const def = PF_ETAPAS.find(x=>x.k===k);
-  pfModal(`<div class="pa-modal-title" style="margin-bottom:2px">${pfEsc(def.t)}</div><div class="pf-note">${pfEsc(p.data.nombre)} · etapa del proyecto</div>
-    <label>Estado</label><select id="pfEEst">${Object.keys(PF_EST_ETAPA).map(x=>`<option value="${x}" ${e.est===x?'selected':''}>${PF_EST_ETAPA[x]}</option>`).join('')}</select>
-    <label>Fecha (validación o hito)</label><input type="date" id="pfEFec" value="${pfEsc(e.fecha||'')}">
-    <label>Nota / evidencia (por ejemplo: "correo de Sergio, 12 oct")</label><textarea id="pfENota" rows="3">${pfEsc(e.nota||'')}</textarea>
-    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button class="pa-btn pa-btn-ghost" onclick="pfCerrarModal()">Cancelar</button><button class="pa-btn pa-btn-primary" onclick="pfGuardarEtapa('${pid}','${k}')">Guardar</button></div>`);
-}
-function pfGuardarEtapa(pid, k){
-  const p = pfProy(pid); if(!p) return; p.data.etapa = p.data.etapa || {};
-  p.data.etapa[k] = { est:document.getElementById('pfEEst').value, fecha:document.getElementById('pfEFec').value, nota:document.getElementById('pfENota').value.trim(), por:(typeof _miNombre!=='undefined'?_miNombre:''), ts:new Date().toISOString() };
-  pfPut(p); pfCerrarModal(); pfRepinta();
+function pfRespaldo(){
+  try{
+    const blob = new Blob([JSON.stringify({ ts:new Date().toISOString(), items:PF_ITEMS }, null, 1)], { type:'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'respaldo_portafolio_'+pfHoy()+'.json'; document.body.appendChild(a); a.click(); a.remove();
+  }catch(e){ alert('No se pudo generar el respaldo: '+e.message); }
 }
 
-// ── Acciones de folio ──
-function pfNuevoFolio(pid){
-  pfPregunta('Nuevo folio', '', v=>{ const f = pfCrearFolio(pid, v); if(f){ PF_ABIERTOS[f.id] = true; pfRepinta(); } }, 'Escríbelo una sola vez: después las actividades lo eligen de la lista.');
+// ── Hitos e insumos ──
+function pfRegHito(pid, key, editar){
+  const p = pfProy(pid); if(!p) return; const e = pfEt(p, key); const t = PF_PLANTILLA.find(x=>x.key===key);
+  const campos = [ {k:'fecha',l:'Fecha',t:'date',v:e.fecha||pfHoy(),req:true} ];
+  if(t.medio) campos.push({k:'medio',l:'Medio',t:'select',o:pfMedioOpts(),v:typeof e.medio==='string'?e.medio:'Correo'});
+  campos.push({k:'nota',l:t.campo,t:'textarea',v:e.nota||''});
+  if(editar) campos.push({k:'motivo',l:'Motivo del cambio',req:true,ph:'Por qué se corrige este registro'});
+  pfForm({ titulo:(editar?'Corregir · ':'Registrar · ')+e.nombre, sub:t.aviso?'Áreas a notificar: '+t.aviso+'.':'', campos,
+    ok:v=>{
+      const antes = (e.fecha?pfFmt(e.fecha):'—')+(e.nota?' · '+e.nota:'');
+      e.fecha = v.fecha; if(t.medio) e.medio = v.medio; e.nota = v.nota;
+      if(editar){ (e.ajustes = e.ajustes||[]).push({ fecha:pfHoy(), cambios:'Antes: '+antes, motivo:v.motivo }); pfLog(p, e.key+' · '+e.nombre+' corregido. Motivo: '+v.motivo); }
+      else {
+        pfLog(p, e.key+' · '+e.nombre+' registrado ('+pfFmt(v.fecha)+')');
+        if(key==='H1'){ const x1 = pfEt(p,'X1'); if(x1 && !x1.solicitado){ x1.solicitado = v.fecha; pfLog(p, 'X1 · Solicitud del censo de afectación a Permisos registrada junto con la notificación'); } }
+      }
+      pfGuarda(p);
+    } });
 }
-function pfRenombrarFolio(fid){
-  const f = pfFolio(fid); if(!f) return;
-  pfPregunta('Renombrar folio', f.data.folio, v=>{
-    const dup = pfFolios(f.proyecto_id).find(x=>x.id!==fid && pfNorm(x.data.folio)===pfNorm(v));
-    if(dup){ alert('Ya existe ese folio en el proyecto. Usa "Unir" para juntarlos.'); return; }
-    f.data.folio = v; pfPut(f); pfRepinta(); }, 'Solo cambia el nombre dentro del portafolio; el folio escrito en las actividades no se modifica.');
+function pfInsumoRef(p, key, sub){ const e = pfEt(p, key); return sub ? e.insumo : e; }
+function pfRegInsumo(pid, key, sub, accion){
+  const p = pfProy(pid); if(!p) return; const e = pfEt(p, key), ins = pfInsumoRef(p, key, sub);
+  const editar = accion==='editar'; const sol = accion==='solicitado' || editar, rec = accion==='recibido' || (editar && ins.recibido);
+  const campos = [];
+  if(sol) campos.push({k:'solicitado',l:'Fecha de la solicitud',t:'date',v:ins.solicitado||pfHoy(),req:true}, {k:'solFolio',l:'Folio de la solicitud',v:ins.solFolio||'',ph:'Opcional'}, {k:'solLink',l:'Link del correo de solicitud',v:ins.solLink||'',ph:'Opcional'});
+  if(rec) campos.push({k:'recibido',l:'Fecha en que se recibió',t:'date',v:ins.recibido||pfHoy(),req:true}, {k:'recLink',l:'Link de lo recibido',v:ins.recLink||'',ph:'Opcional'});
+  if(editar) campos.push({k:'motivo',l:'Motivo del cambio',req:true});
+  pfForm({ titulo:(editar?'Corregir · ':accion==='recibido'?'Marcar recibido · ':'Registrar solicitud · ')+ins.nombre, sub:'De '+ins.de, campos,
+    ok:v=>{
+      if(editar){ (ins.ajustes = ins.ajustes||[]).push({ fecha:pfHoy(), cambios:'Solicitud '+pfFmt(ins.solicitado)+(ins.recibido?' · recibido '+pfFmt(ins.recibido):''), motivo:v.motivo }); }
+      ['solicitado','solFolio','solLink','recibido','recLink'].forEach(k=>{ if(v[k]!==undefined) ins[k] = v[k]; });
+      pfLog(p, (editar?'Corregido: ':accion==='recibido'?'Recibido: ':'Solicitado: ')+ins.nombre+' (de '+ins.de+')'+(editar?'. Motivo: '+v.motivo:''));
+      pfGuarda(p);
+    } });
 }
-function pfToggleEspera(fid){
-  const f = pfFolio(fid); if(!f || f.data.est==='cerrado') return;
-  const a = f.data.est!=='espera'; f.data.est = a?'espera':'curso';
-  f.data.hist = (f.data.hist||[]).concat({ ts:new Date().toISOString(), tipo:a?'espera':'validacion', fase:f.data.fase, por:_miNombre||'' });
-  pfPut(f); pfBit(f, 'fase', a?'Folio en espera de validación':'Validación recibida', PF_FASES[f.data.fase].t); pfRepinta();
-}
-function pfMovModal(fid, modo){
-  const f = pfFolio(fid); if(!f) return; const d = f.data; const cerrado = d.est==='cerrado';
-  const ult = d.fase>=PF_FASES.length-1;
-  let cuerpo;
-  if(modo==='av'){
-    cuerpo = `<div class="pa-modal-title" style="margin-bottom:2px">${ult?'Cerrar folio':'Avanzar folio'}</div><div class="pf-note">${pfEsc(d.folio)} · ahora en <b>${pfEsc(PF_FASES[d.fase].t)}</b></div>
-      <div style="margin-top:10px;font-size:12.5px">${ult?'Se marcará el folio como <b>cerrado</b>.':'Pasa a: <b>'+pfEsc(PF_FASES[d.fase+1].t)+'</b>'}</div>
-      <label>Nota / evidencia (opcional)</label><textarea id="pfMNota" rows="3" placeholder='Por ejemplo: "Permiso liberado, correo de Permisos 12 oct"'></textarea>`;
-  } else {
-    const hasta = cerrado ? d.fase : d.fase-1;
-    cuerpo = `<div class="pa-modal-title" style="margin-bottom:2px">↩ Regresar folio a una fase anterior</div><div class="pf-note">${pfEsc(d.folio)} · ahora en <b>${pfEsc(PF_FASES[d.fase].t)}</b></div>
-      <label>Regresar a la fase</label><select id="pfMFase">${PF_FASES.slice(0,hasta+1).map((x,i)=>`<option value="${i}" ${i===hasta?'selected':''}>${pfEsc(x.t)}</option>`).join('')}</select>
-      <label>Motivo (obligatorio)</label><textarea id="pfMNota" rows="3" placeholder='Por ejemplo: "Censo con errores en el tramo 3"'></textarea>
-      <div class="pf-note" style="margin-top:8px">Se guarda en la Bitácora del folio, suma una ronda y lo marca como retrabajo. El historial anterior no se borra.</div>`;
-  }
-  pfModal(cuerpo+`<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button class="pa-btn pa-btn-ghost" onclick="pfCerrarModal()">Cancelar</button><button class="pa-btn pa-btn-primary" onclick="pfAplicarMov('${fid}','${modo}')">${modo==='av'?(ult?'Cerrar folio':'Avanzar'):'Regresar folio'}</button></div>`);
-}
-function pfAplicarMov(fid, modo){
-  const f = pfFolio(fid); if(!f) return; const d = f.data;
-  const nota = (document.getElementById('pfMNota')||{value:''}).value.trim(); const de = d.fase, ts = new Date().toISOString();
-  let titulo, tipoBit = 'fase';
-  if(modo==='av'){
-    if(de>=PF_FASES.length-1){ d.est = 'cerrado'; titulo = 'Folio cerrado'; }
-    else { d.fase = de+1; d.est = 'curso'; titulo = 'Folio avanzó a: '+PF_FASES[d.fase].t; if(d.retr && d.fase>=(d.retrDesde||0)) d.retr = false; }
-  } else {
-    if(!nota){ document.getElementById('pfMNota').style.borderColor = 'var(--red)'; return; }
-    const nuevo = parseInt(document.getElementById('pfMFase').value,10);
-    d.retrDesde = Math.max(d.retr?(d.retrDesde||0):0, de); d.fase = nuevo; d.est = 'curso'; d.retr = true; d.ronda = (d.ronda||1)+1;
-    titulo = 'Folio regresó a: '+PF_FASES[nuevo].t; tipoBit = 'correccion';
-  }
-  d.nota = nota || d.nota || '';
-  d.hist = (d.hist||[]).concat({ ts, tipo:modo==='av'?'avance':'regreso', de, a:d.fase, est:d.est, motivo:nota, por:(typeof _miNombre!=='undefined'?_miNombre:'') });
-  pfPut(f); pfBit(f, tipoBit, titulo, nota); pfCerrarModal(); pfRepinta();
-}
-function pfUnirModal(fid){
-  const f = pfFolio(fid); if(!f) return; const otros = pfFolios(f.proyecto_id).filter(x=>x.id!==fid);
-  if(!otros.length){ alert('No hay otro folio en este proyecto con quién unirlo.'); return; }
-  pfModal(`<div class="pa-modal-title" style="margin-bottom:2px">Unir folios</div><div class="pf-note">Las actividades de <b>${pfEsc(f.data.folio)}</b> pasarán al folio que elijas, junto con su historial.</div>
-    <label>Unir con (este será el nombre que queda)</label><select id="pfUDest">${otros.map(o=>`<option value="${o.id}">${pfEsc(o.data.folio)}</option>`).join('')}</select>
-    <div class="pf-note" style="margin-top:8px">Tus actividades no se modifican: solo cambia a qué folio del portafolio están enlazadas.</div>
-    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button class="pa-btn pa-btn-ghost" onclick="pfCerrarModal()">Cancelar</button><button class="pa-btn pa-btn-primary" onclick="pfUnir('${fid}')">Unir</button></div>`);
-}
-function pfUnir(fid){
-  const f = pfFolio(fid), dest = pfFolio(document.getElementById('pfUDest').value); if(!f || !dest) return;
-  const movidos = PF_ITEMS.filter(i=>i.tipo==='vinculo' && i.data.folio_id===fid); movidos.forEach(v=>{ v.data.folio_id = dest.id; });
-  dest.data.hist = (dest.data.hist||[]).concat(f.data.hist||[], { ts:new Date().toISOString(), tipo:'union', motivo:'Se unió "'+f.data.folio+'"', por:_miNombre||'' });
-  dest.data.ronda = Math.max(dest.data.ronda||1, f.data.ronda||1);
-  pfPutMany([...movidos, dest]); pfDel([fid]); pfCerrarModal(); pfRepinta();
-}
-function pfEliminarFolio(fid){
-  const f = pfFolio(fid); if(!f) return; const vm = pfVincMap(); const n = pfActsDeFolio(fid, vm).length;
-  if(!confirm(`¿Quitar el folio "${f.data.folio}" del portafolio?\n\nSus ${n} actividad(es) siguen enlazadas al proyecto, solo quedan sin folio. No se borra nada de tus actividades.`)) return;
-  const movidos = PF_ITEMS.filter(i=>i.tipo==='vinculo' && i.data.folio_id===fid); movidos.forEach(v=>{ v.data.folio_id = null; });
-  if(movidos.length) pfPutMany(movidos); pfDel([fid]); pfRepinta();
-}
-function pfToggleFolio(fid){ PF_ABIERTOS[fid] = !PF_ABIERTOS[fid]; pfRepinta(); }
 
-// ── Asignar actividades (de poco en poco) ──
+// ── Fases con validación ──
+function pfToggleOk(pid, key, i, on){ const p = pfProy(pid); if(!p) return; const e = pfEt(p, key); e.ok = e.ok||[]; e.ok[i] = !!on; pfGuarda(p); }
+function pfIniciarFase(pid, key){ const p = pfProy(pid); const e = pfEt(p, key); e.estado = 'en_curso'; pfLog(p, e.key+' · '+e.nombre+' iniciada'); pfGuarda(p); }
+function pfCompletarFase(pid, key){ const p = pfProy(pid); const e = pfEt(p, key); e.estado = 'completada'; pfLog(p, e.key+' · '+e.nombre+' completada'); pfGuarda(p); }
+function pfEnviarValidacion(pid, key){
+  const p = pfProy(pid); if(!p) return; const e = pfEt(p, key); const val = e.validadores[e.valIdx];
+  pfForm({ titulo:'Enviar a validación', sub:e.key+' · '+e.nombre+' → '+PF_VALIDADOR[val], btn:'Registrar envío',
+    campos:[ {k:'fecha',l:'Fecha de envío',t:'date',v:pfHoy(),req:true}, {k:'medio',l:'Medio',t:'select',o:pfMedioOpts()} ],
+    ok:v=>{ e.estado = 'en_validacion'; e.envio = v.fecha; (e.envios = e.envios||[]).push({ val, ronda:(e.ciclos||0)+1, fecha:v.fecha, medio:v.medio });
+      pfLog(p, e.nombre+' enviado a validación de '+PF_VALIDADOR[val]+' ('+v.medio+')'); pfGuarda(p); } });
+}
+function pfResultadoValidacion(pid, key){
+  const p = pfProy(pid); if(!p) return; const e = pfEt(p, key); const val = e.validadores[e.valIdx];
+  pfForm({ titulo:'Resultado de '+PF_VALIDADOR[val], sub:e.key+' · '+e.nombre, btn:'Registrar resultado',
+    campos:[ {k:'res',l:'Resultado',t:'select',o:[['aprobado','Aprobado'],['observaciones','Con observaciones']]}, {k:'fecha',l:'Fecha',t:'date',v:pfHoy(),req:true}, {k:'medio',l:'Medio',t:'select',o:pfMedioOpts()},
+      {k:'nota',l:'Nota / observaciones',t:'textarea',req:v=>v.res==='observaciones',ph:'Qué pidió corregir (obligatorio si hay observaciones)'} ],
+    ok:v=>{
+      (e.validaciones = e.validaciones||[]).push({ fecha:v.fecha, val, res:v.res, medio:v.medio, nota:v.nota });
+      if(v.res==='aprobado'){
+        e.valIdx++;
+        if(e.valIdx>=e.validadores.length){ e.estado = 'completada'; pfLog(p, e.nombre+' aprobada por '+PF_VALIDADOR[val]+' · etapa completada'); }
+        else { e.estado = 'en_validacion'; e.envio = v.fecha; pfLog(p, e.nombre+' aprobada por '+PF_VALIDADOR[val]+' · pasa a '+PF_VALIDADOR[e.validadores[e.valIdx]]); }
+      } else {
+        e.ciclos = (e.ciclos||0)+1; e.valIdx = 0; e.estado = 'en_curso';
+        pfLog(p, e.nombre+': observaciones de '+PF_VALIDADOR[val]+' (ciclo '+e.ciclos+'). Regresa a En curso', 'correccion', null, v.nota);
+      }
+      pfGuarda(p);
+    } });
+}
+
+// ── Folios ──
+function pfDepOpts(){ return [['','— sin definir —']].concat(PF_DEPS.map(d=>[d,d])); }
+function pfPersonaOpts(sel){ const l = PA_MEMBERS.slice(); if(sel && !l.includes(sel) && !PA_INACTIVE.includes(sel)) l.push(sel); return [['','— sin asignar —']].concat(l.map(m=>[m,m])); }
+function pfFolioAdd(pid){
+  const p = pfProy(pid); if(!p) return;
+  pfForm({ titulo:'Agregar folio', sub:'Cada folio avanza por separado hasta liberar el permiso.', btn:'Agregar folio',
+    campos:[ {k:'clave',l:'Folio',req:true,ph:'Ej. F-01 o el folio como lo escribes en tus actividades'}, {k:'dependencia',l:'Dependencia',t:'select',o:pfDepOpts()}, {k:'tramo',l:'Tramo',ph:'Ej. km 0+000 – 4+200'}, {k:'proyectista',l:'Proyectista',t:'select',o:pfPersonaOpts()} ],
+    ok:v=>{
+      const f4 = pfEt(p,'F4'); if(f4.folios.some(f=>pfNorm(f.clave)===pfNorm(v.clave))){ alert('Ese folio ya existe en el proyecto.'); return; }
+      f4.folios.push(pfFolioNuevo(v.clave, { dependencia:v.dependencia, tramo:v.tramo, proyectista:v.proyectista }));
+      pfLog(p, 'Folio '+v.clave+' agregado'+(v.dependencia?' ('+v.dependencia+')':''), 'fase', v.clave); pfGuarda(p);
+    } });
+}
+function pfFolioEditar(pid, i){
+  const p = pfProy(pid); const f = pfEt(p,'F4').folios[i]; if(!f) return;
+  pfForm({ titulo:'Datos del folio', sub:'Si cambias el nombre, las actividades enlazadas siguen unidas a este folio.', btn:'Guardar',
+    campos:[ {k:'clave',l:'Folio',v:f.clave,req:true}, {k:'dependencia',l:'Dependencia',t:'select',o:pfDepOpts(),v:f.dependencia}, {k:'tramo',l:'Tramo',v:f.tramo}, {k:'proyectista',l:'Proyectista',t:'select',o:pfPersonaOpts(f.proyectista),v:f.proyectista} ],
+    ok:v=>{
+      const viejo = f.clave; f.dependencia = v.dependencia; f.tramo = v.tramo; f.proyectista = v.proyectista;
+      if(v.clave!==viejo){
+        if(pfEt(p,'F4').folios.some((x,j)=>j!==i && pfNorm(x.clave)===pfNorm(v.clave))){ alert('Ya existe otro folio con ese nombre.'); return; }
+        f.clave = v.clave; const mod = PF_ITEMS.filter(x=>x.tipo==='vinculo' && x.proyecto_id===pid && x.data.faseKey==='F4' && x.data.ref===viejo); mod.forEach(x=>{ x.data.ref = v.clave; });
+        if(mod.length) pfPutMany(mod);
+        f.hist.push({ fecha:pfHoy(), txt:'Renombrado de "'+viejo+'"' });
+      }
+      pfGuarda(p);
+    } });
+}
+function pfFolioQuitar(pid, i){
+  const p = pfProy(pid); const f = pfEt(p,'F4').folios[i]; if(!f) return;
+  const n = pfActsDe(pid,'F4',f.clave).length;
+  if(!confirm(`¿Quitar el folio "${f.clave}" del proyecto?\n\nSus ${n} actividad(es) siguen enlazadas al proyecto (quedan sin folio). No se borra nada de tus actividades.`)) return;
+  const mod = PF_ITEMS.filter(x=>x.tipo==='vinculo' && x.proyecto_id===pid && x.data.faseKey==='F4' && x.data.ref===f.clave); mod.forEach(x=>{ x.data.ref = ''; });
+  if(mod.length) pfPutMany(mod);
+  pfEt(p,'F4').folios.splice(i,1); pfLog(p, 'Folio '+f.clave+' quitado del proyecto'); pfGuarda(p);
+}
+function pfFolioMover(pid, i, estado, txt, fecha){ const p = pfProy(pid); const f = pfEt(p,'F4').folios[i]; f.estado = estado; f.desde = fecha||pfHoy(); f.hist.push({ fecha:f.desde, txt }); pfLog(p, 'Folio '+f.clave+': '+txt, 'fase', f.clave); pfGuarda(p); }
+function pfFolioEnviar(pid, i){
+  const p = pfProy(pid); const f = pfEt(p,'F4').folios[i];
+  pfForm({ titulo:'Enviar folio a Permisos', sub:f.clave+(f.dependencia?' · '+f.dependencia:''), btn:'Registrar envío',
+    campos:[ {k:'fecha',l:'Fecha de envío',t:'date',v:pfHoy(),req:true}, {k:'medio',l:'Medio',t:'select',o:pfMedioOpts()} ],
+    ok:v=>{ (f.envios = f.envios||[]).push({ ronda:(f.ciclos||0)+1, fecha:v.fecha, medio:v.medio }); pfFolioMover(pid, i, 'revision', 'Enviado a Permisos'+((f.ciclos||0)?' (versión '+((f.ciclos||0)+1)+')':'')+' · '+v.medio, v.fecha); } });
+}
+function pfFolioResultado(pid, i, etapa){
+  const p = pfProy(pid); const f = pfEt(p,'F4').folios[i]; const rev = etapa==='revision';
+  pfForm({ titulo:'Resultado · '+f.clave, sub:rev?'Revisión de Permisos':'Liberación de la dependencia'+(f.dependencia?' ('+f.dependencia+')':''), btn:'Registrar resultado',
+    campos:[ {k:'res',l:'Resultado',t:'select',o:rev?[['ok','Aprobado por Permisos'],['obs','Con observaciones']]:[['ok','Permiso liberado'],['obs','Con observaciones de la dependencia']]},
+      {k:'fecha',l:'Fecha',t:'date',v:pfHoy(),req:true}, {k:'nota',l:'Nota / observaciones',t:'textarea',req:v=>v.res==='obs'} ],
+    ok:v=>{
+      if(v.res==='ok') pfFolioMover(pid, i, rev?'carpeta':'liberado', rev?'Aprobado por Permisos':'Permiso liberado', v.fecha);
+      else { f.ciclos = (f.ciclos||0)+1; pfFolioMover(pid, i, 'diseno', 'Observaciones'+(rev?' de Permisos':' de la dependencia')+': '+v.nota+' (ciclo '+f.ciclos+')', v.fecha); }
+    } });
+}
+
+// ── Bobinas ──
+function pfBobAdd(pid){
+  const p = pfProy(pid); if(!p) return;
+  pfForm({ titulo:'Agregar bobina', btn:'Agregar bobina', campos:[ {k:'clave',l:'Bobina',req:true,ph:'Ej. B-01'}, {k:'proyectista',l:'Proyectista',t:'select',o:pfPersonaOpts()} ],
+    ok:v=>{ const e = pfEt(p,'F6'); if(e.bobinas.some(b=>pfNorm(b.clave)===pfNorm(v.clave))){ alert('Esa bobina ya existe.'); return; }
+      e.bobinas.push({ clave:v.clave, proyectista:v.proyectista, estado:'diseno', ciclos:0, hist:[{ fecha:pfHoy(), txt:'Bobina agregada' }] }); pfLog(p, 'Bobina '+v.clave+' agregada'); pfGuarda(p); } });
+}
+function pfBobQuitar(pid, i){
+  const p = pfProy(pid); const e = pfEt(p,'F6'); const b = e.bobinas[i]; if(!b) return;
+  if(!confirm('¿Quitar la bobina "'+b.clave+'" del proyecto?')) return;
+  const mod = PF_ITEMS.filter(x=>x.tipo==='vinculo' && x.proyecto_id===pid && x.data.faseKey==='F6' && x.data.ref===b.clave); mod.forEach(x=>{ x.data.ref = ''; }); if(mod.length) pfPutMany(mod);
+  e.bobinas.splice(i,1); pfLog(p, 'Bobina '+b.clave+' quitada'); pfGuarda(p);
+}
+function pfBobEnviar(pid, i){
+  const p = pfProy(pid); const b = pfEt(p,'F6').bobinas[i];
+  pfForm({ titulo:'Enviar bobina a validación', sub:b.clave+' → '+PF_VALIDADOR.sergio, btn:'Registrar envío', campos:[ {k:'fecha',l:'Fecha de envío',t:'date',v:pfHoy(),req:true}, {k:'medio',l:'Medio',t:'select',o:pfMedioOpts()} ],
+    ok:v=>{ b.estado = 'validacion'; b.desde = v.fecha; b.hist.push({ fecha:v.fecha, txt:'Enviada a validación · '+v.medio }); pfLog(p, 'Bobina '+b.clave+' enviada a validación de Sergio'); pfGuarda(p); } });
+}
+function pfBobResultado(pid, i){
+  const p = pfProy(pid); const b = pfEt(p,'F6').bobinas[i];
+  pfForm({ titulo:'Resultado · bobina '+b.clave, sub:PF_VALIDADOR.sergio, btn:'Registrar resultado',
+    campos:[ {k:'res',l:'Resultado',t:'select',o:[['ok','Validada'],['obs','Con observaciones']]}, {k:'fecha',l:'Fecha',t:'date',v:pfHoy(),req:true}, {k:'nota',l:'Nota / observaciones',t:'textarea',req:v=>v.res==='obs'} ],
+    ok:v=>{
+      if(v.res==='ok'){ b.estado = 'validada'; b.hist.push({ fecha:v.fecha, txt:'Validada por Sergio' }); pfLog(p, 'Bobina '+b.clave+' validada por Sergio'); }
+      else { b.ciclos = (b.ciclos||0)+1; b.estado = 'diseno'; b.hist.push({ fecha:v.fecha, txt:'Observaciones de Sergio: '+v.nota }); pfLog(p, 'Bobina '+b.clave+': observaciones de Sergio (ciclo '+b.ciclos+')', 'correccion', null, v.nota); }
+      pfGuarda(p);
+    } });
+}
+
+// ── Asignar actividades a etapa / folio / bobina ──
+function pfDestinos(p){
+  const L = [];
+  PF_PLANTILLA.forEach(t=>{
+    if(t.tipo==='folios'){
+      L.push({ v:'F4|', t:'F4 · '+t.nombre+' (sin folio aún)' });
+      if(p) pfEt(p,'F4').folios.forEach(f=>L.push({ v:'F4|'+f.clave, t:'F4 · Folio '+f.clave+(f.dependencia?' ('+f.dependencia+')':'') }));
+    } else if(t.tipo==='bobinas'){
+      L.push({ v:'F6|', t:'F6 · '+t.nombre+' (sin bobina aún)' });
+      if(p) pfEt(p,'F6').bobinas.forEach(b=>L.push({ v:'F6|'+b.clave, t:'F6 · Bobina '+b.clave }));
+    } else L.push({ v:t.key+'|', t:t.key+' · '+t.nombre });
+  });
+  return L;
+}
+function pfDestOpts(p, sel){
+  return `<option value="">Sin etapa por ahora</option>`+pfDestinos(p).map(d=>`<option value="${pfEsc(d.v)}" ${sel===d.v?'selected':''}>${pfEsc(d.t)}</option>`).join('');
+}
+function pfDestTxt(v){ if(!v) return 'Sin etapa'; const i = v.indexOf('|'); const k = v.slice(0,i), r = v.slice(i+1); const t = PF_PLANTILLA.find(x=>x.key===k); return (t?k+' · '+t.nombre:k)+(r?' · '+r:''); }
+// Sugerencia de etapa según el nombre de la actividad (solo una propuesta: tú la ajustas)
+function pfSugDestino(a, p){
+  const t = pfNorm((a.actividad||'')+' '+(a.tipo||'')), fol = pfNorm(a.folio||'');
+  if(/bobina/.test(t)){ const b = p ? pfEt(p,'F6').bobinas.find(x=>t.includes(pfNorm(x.clave))) : null; return 'F6|'+(b?b.clave:''); }
+  if(/as.?built|asbuilt/.test(t)) return 'F7|';
+  if(/cierre de obra|expediente/.test(t)) return 'F8|';
+  if(p && fol){ const f = pfEt(p,'F4').folios.find(x=>pfNorm(x.clave)===fol); if(f) return 'F4|'+f.clave; }
+  if(/geotec|topograf|levantamiento fisico/.test(t)) return 'X2|';
+  if(/censo/.test(t)) return 'X1|';
+  if(/levantamiento|kmz 1/.test(t)) return 'F1|';
+  if(/\bap\b|anteproyecto|kmz 2|\bbom\b/.test(t)) return 'F2|';
+  if(/impresion|doblad/.test(t)) return 'F3|';
+  if(/permiso|ejecutivo|carpeta|plano|diseno|memoria|seccion|corte|trayectoria|planimetria|cruce|marginal|perfil|proyecto|foliad/.test(t)) return 'F4|';
+  return '';
+}
 function pfSinAsignar(){ const vm = pfVincMap(); return (PA_ITEMS||[]).filter(a=>!vm[a.id]); }
-function pfAsignarModal(pid, tp){
-  if(pid && typeof pid==='string'){ PF_ASIG.pid = pid; }
-  PF_ASIG.tp = tp || ''; PF_ASIG.q = ''; PF_ASIG.msg = ''; PF_ASIG.sel = {};
-  pfAsignarPinta(true);
+function pfAsignarModal(pid, destPre){
+  PF_ASIG.pid = (pid && typeof pid==='string') ? pid : ''; PF_ASIG.destPre = destPre || ''; PF_ASIG.tp = ''; PF_ASIG.q = ''; PF_ASIG.msg = ''; PF_ASIG.sel = {}; PF_ASIG.dest = {};
+  pfAsignarPinta();
 }
-function pfElegirGrupo(i){ const g = PF_GRUPOS[i]; if(!g) return; const ex = pfProyectos().find(p=>pfNorm(p.data.nombre)===g.key); pfAsignarModal(ex?ex.id:'', g.key); }
+function pfAsigDesdeEtapa(pid, key, i){
+  const p = pfProy(pid); let ref = '';
+  if(i!==undefined && i!==null && i!==''){ const e = pfEt(p, key==='F6'?'F6':'F4'); const x = (key==='F6'?e.bobinas:e.folios)[i]; ref = x ? x.clave : ''; }
+  pfAsignarModal(pid, key+'|'+ref);
+}
+function pfElegirGrupo(i){ const g = PF_GRUPOS[i]; if(!g) return; const ex = pfProyectos().find(p=>pfNorm(p.data.nombre)===g.key); pfAsignarModal(ex?ex.id:''); PF_ASIG.tp = g.key; pfAsignarPinta(); }
 function pfAsigVisibles(){
   const q = pfNorm(PF_ASIG.q);
   return pfSinAsignar().filter(a=>{
@@ -16430,45 +16780,62 @@ function pfAsigVisibles(){
     return true;
   });
 }
-function pfAsignarPinta(abrir){
-  const sin = pfSinAsignar(); const vis = pfAsigVisibles(); const mostrar = vis.slice(0,300);
+function pfAsigDestDe(a, p){ return PF_ASIG.dest[a.id]!==undefined ? PF_ASIG.dest[a.id] : (PF_ASIG.destPre || pfSugDestino(a, p)); }
+function pfAsignarPinta(){
+  const sin = pfSinAsignar(), vis = pfAsigVisibles(), mostrar = vis.slice(0,300);
   const tps = {}; sin.forEach(a=>{ const k = pfNorm(a.proyecto); if(!tps[k]) tps[k] = { n:0, nombre:a.proyecto||'(sin proyecto)' }; tps[k].n++; });
-  const proys = pfProyectos(); const fol = PF_ASIG.pid && PF_ASIG.pid!=='__nuevo__' ? pfFolios(PF_ASIG.pid) : [];
+  const proys = pfProyectos(); const p = PF_ASIG.pid && PF_ASIG.pid!=='__nuevo__' ? pfProy(PF_ASIG.pid) : null;
   const nSel = Object.keys(PF_ASIG.sel).filter(k=>PF_ASIG.sel[k]).length;
   const html = `<div style="display:flex;align-items:center;gap:10px"><div class="pa-modal-title" style="margin:0">Asignar actividades a un proyecto</div><button onclick="pfCerrarModal()" style="margin-left:auto;background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer">&times;</button></div>
-    <div class="pf-note" style="margin-top:2px">Elige actividades, el proyecto y (si quieres) el folio. La fase se propone por el nombre y la ajustas por actividad. No modifica tus actividades.</div>
+    <div class="pf-note" style="margin-top:2px">Elige actividades, el proyecto y la etapa (se propone por el nombre y la puedes ajustar por actividad). No modifica tus actividades.</div>
     ${PF_ASIG.msg?`<div class="pf-ok" style="margin-top:10px">${pfEsc(PF_ASIG.msg)}</div>`:''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
-      <div><label>Proyecto destino</label><select id="pfAPid" onchange="PF_ASIG.pid=this.value;pfAsignarPinta()"><option value="">— elige —</option>${proys.map(p=>`<option value="${p.id}" ${PF_ASIG.pid===p.id?'selected':''}>${pfEsc(p.data.nombre)}</option>`).join('')}<option value="__nuevo__" ${PF_ASIG.pid==='__nuevo__'?'selected':''}>＋ Crear proyecto nuevo…</option></select>
+      <div><label>Proyecto destino</label><select id="pfAPid" onchange="PF_ASIG.pid=this.value;pfAsignarPinta()"><option value="">— elige —</option>${proys.map(x=>`<option value="${x.id}" ${PF_ASIG.pid===x.id?'selected':''}>${pfEsc((x.data.clave||'')+' · '+x.data.nombre)}</option>`).join('')}<option value="__nuevo__" ${PF_ASIG.pid==='__nuevo__'?'selected':''}>＋ Crear proyecto nuevo…</option></select>
         ${PF_ASIG.pid==='__nuevo__'?`<input type="text" id="pfANuevo" placeholder="Nombre del proyecto nuevo" value="${pfEsc(PF_ASIG.nuevo)}" oninput="PF_ASIG.nuevo=this.value" style="margin-top:6px">`:''}</div>
-      <div><label>Folio</label><select id="pfAFolio" onchange="PF_ASIG.folio=this.value"><option value="auto" ${PF_ASIG.folio==='auto'?'selected':''}>Usar el folio de cada actividad (crea los que falten)</option><option value="ninguno" ${PF_ASIG.folio==='ninguno'?'selected':''}>Sin folio por ahora</option>${fol.map(f=>`<option value="${f.id}" ${PF_ASIG.folio===f.id?'selected':''}>${pfEsc(f.data.folio)}</option>`).join('')}</select></div></div>
+      <div><label>Folios</label><label style="display:flex;gap:6px;align-items:center;margin:6px 0 0;font-size:11.5px;color:var(--text)"><input type="checkbox" ${PF_ASIG.auto?'checked':''} onchange="PF_ASIG.auto=this.checked"> Crear los folios que falten con el folio de cada actividad</label></div></div>
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center">
       <input type="text" id="pfAQ" placeholder="Buscar actividad, folio o proyectista…" value="${pfEsc(PF_ASIG.q)}" oninput="PF_ASIG.q=this.value;pfAsignarPinta()" style="flex:1;min-width:180px;width:auto">
       <select id="pfATp" onchange="PF_ASIG.tp=this.value;pfAsignarPinta()" style="width:auto;max-width:260px"><option value="">Todos los proyectos (texto actual)</option>${Object.keys(tps).sort().map(k=>`<option value="${pfEsc(k)}" ${PF_ASIG.tp===k?'selected':''}>${pfEsc(tps[k].nombre)} · ${tps[k].n}</option>`).join('')}</select></div>
-    <div style="display:flex;gap:10px;align-items:center;margin-top:8px"><label style="margin:0;display:flex;gap:6px;align-items:center"><input type="checkbox" id="pfAAll" onchange="pfAsigTodas(this.checked)" ${mostrar.length && mostrar.every(a=>PF_ASIG.sel[a.id])?'checked':''}> Seleccionar las ${mostrar.length} visibles</label><span class="pf-note">${vis.length} sin asignar${vis.length>300?' (se muestran 300)':''}</span></div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:8px"><label style="margin:0;display:flex;gap:6px;align-items:center"><input type="checkbox" onchange="pfAsigTodas(this.checked)" ${mostrar.length && mostrar.every(a=>PF_ASIG.sel[a.id])?'checked':''}> Seleccionar las ${mostrar.length} visibles</label><span class="pf-note">${vis.length} sin asignar${vis.length>300?' (se muestran 300)':''}</span></div>
     <div class="pf-asig"><table>${mostrar.map(a=>`<tr><td style="width:24px"><input type="checkbox" ${PF_ASIG.sel[a.id]?'checked':''} onchange="PF_ASIG.sel['${a.id}']=this.checked;pfAsigConteo()"></td>
       <td><span class="pf-mono">${pfEsc(a.folio||'s/f')}</span> ${pfEsc(a.actividad||'')}<div class="pf-note">${pfEsc(a.proyecto||'—')} · ${pfEsc(bitNombreResp(a.responsable)||'—')} · ${pfEsc(a.estatus||'')}</div></td>
-      <td style="text-align:right"><select class="pf-sel" onchange="PF_ASIG.fases['${a.id}']=this.value">${pfFaseOpts(PF_ASIG.fases[a.id]!==undefined?PF_ASIG.fases[a.id]:pfSugFase(a))}</select></td></tr>`).join('') || `<tr><td class="pf-note" style="padding:24px;text-align:center">No hay actividades sin asignar con esos filtros.</td></tr>`}</table></div>
+      <td style="text-align:right"><select class="pf-sel" onchange="PF_ASIG.dest['${a.id}']=this.value">${pfDestOpts(p, pfAsigDestDe(a,p))}</select></td></tr>`).join('') || `<tr><td class="pf-note" style="padding:24px;text-align:center">No hay actividades sin asignar con esos filtros.</td></tr>`}</table></div>
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;align-items:center"><span class="pf-note" id="pfAConteo">${nSel} seleccionada(s)</span><button class="pa-btn pa-btn-ghost" onclick="pfCerrarModal()">Cerrar</button><button class="pa-btn pa-btn-primary" onclick="pfAsignarAplicar()">Asignar seleccionadas</button></div>`;
   const hadFocus = document.activeElement && document.activeElement.id==='pfAQ';
-  pfModal(html, 760);
+  pfModal(html, 780);
   if(hadFocus){ const q = document.getElementById('pfAQ'); if(q){ q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
 }
 function pfAsigConteo(){ const n = Object.keys(PF_ASIG.sel).filter(k=>PF_ASIG.sel[k]).length; const e = document.getElementById('pfAConteo'); if(e) e.textContent = n+' seleccionada(s)'; }
 function pfAsigTodas(on){ pfAsigVisibles().slice(0,300).forEach(a=>{ PF_ASIG.sel[a.id] = on; }); pfAsignarPinta(); }
+// filas: [{act, dest:'F4|clave'}]. Crea los folios que falten (si se pidió) y guarda proyecto + enlaces juntos.
+function pfAsignarLote(p, filas, auto){
+  const nuevos = [p]; const f4 = pfEt(p,'F4'); let creados = 0;
+  filas.forEach(f=>{
+    const a = f.act; let k = '', r = '';
+    if(f.dest){ const i = f.dest.indexOf('|'); k = f.dest.slice(0,i); r = f.dest.slice(i+1); }
+    if(k==='F4' && !r && auto && String(a.folio||'').trim()){
+      const txt = String(a.folio).trim(); let fo = f4.folios.find(x=>pfNorm(x.clave)===pfNorm(txt));
+      if(!fo){ fo = pfFolioNuevo(txt, { proyectista:(a.responsable && !PA_INACTIVE.includes(a.responsable))?a.responsable:'', hist:[{ fecha:pfHoy(), txt:'Folio creado al enlazar actividades' }] }); f4.folios.push(fo); creados++; }
+      r = fo.clave;
+    }
+    nuevos.push({ id:'v_'+a.id, tipo:'vinculo', proyecto_id:p.id, data:{ actividad_id:a.id, proyecto_id:p.id, faseKey:k, ref:r } });
+  });
+  pfPutMany(nuevos);
+  return creados;
+}
 function pfAsignarAplicar(){
   const ids = Object.keys(PF_ASIG.sel).filter(k=>PF_ASIG.sel[k]); const mapa = {}; (PA_ITEMS||[]).forEach(a=>{ mapa[a.id] = a; });
   const acts = ids.map(i=>mapa[i]).filter(Boolean);
-  if(!acts.length){ PF_ASIG.msg = ''; alert('Selecciona al menos una actividad.'); return; }
-  let pid = PF_ASIG.pid;
-  if(!pid){ alert('Elige el proyecto destino.'); return; }
+  if(!acts.length){ alert('Selecciona al menos una actividad.'); return; }
+  let pid = PF_ASIG.pid; if(!pid){ alert('Elige el proyecto destino.'); return; }
   if(pid==='__nuevo__'){
     const nom = (PF_ASIG.nuevo||'').trim(); if(!nom){ alert('Escribe el nombre del proyecto nuevo.'); return; }
-    pid = pfCrearProyecto(nom).id; PF_ASIG.pid = pid;
+    const np = pfCrearProyecto({ nombre:nom }); pfLog(np, 'Proyecto creado al asignar actividades'); pid = np.id; PF_ASIG.pid = pid;
   }
-  const folio = PF_ASIG.folio && (PF_ASIG.folio==='auto' || PF_ASIG.folio==='ninguno' || (pfFolio(PF_ASIG.folio) && pfFolio(PF_ASIG.folio).proyecto_id===pid)) ? PF_ASIG.folio : 'auto';
-  const n = pfAsignarLote(acts.map(a=>({ act:a, pid, folio, fase: PF_ASIG.fases[a.id]!==undefined ? PF_ASIG.fases[a.id] : pfSugFase(a) })));
-  PF_ASIG.sel = {}; PF_ASIG.msg = '✓ '+n+' actividad(es) enlazadas a "'+pfProy(pid).data.nombre+'". Puedes seguir con otras.';
+  const p = pfProy(pid);
+  const cre = pfAsignarLote(p, acts.map(a=>({ act:a, dest:pfAsigDestDe(a,p) })), PF_ASIG.auto);
+  pfLog(p, acts.length+' actividad(es) enlazadas al proyecto'+(cre?' · '+cre+' folio(s) creados':''));
+  PF_ASIG.sel = {}; PF_ASIG.msg = '✓ '+acts.length+' actividad(es) enlazadas a "'+p.data.nombre+'"'+(cre?' ('+cre+' folios creados)':'')+'. Puedes seguir con otras.';
   pfAsignarPinta(); pfRepinta();
 }
 function pfCrearDesdeGrupo(i){
@@ -16476,76 +16843,161 @@ function pfCrearDesdeGrupo(i){
   const ex = pfProyectos().find(p=>pfNorm(p.data.nombre)===g.key);
   const nFol = new Set(g.acts.map(a=>pfNorm(a.folio)).filter(Boolean)).size;
   if(!confirm(`${ex?'Enlazar a "'+ex.data.nombre+'"':'Crear el proyecto "'+g.nombre+'"'} y enlazar sus ${g.acts.length} actividad(es) (${nFol} folio(s) distintos).\n\nNo cambia tus actividades. Después puedes mover, unir o quitar lo que no esté bien.`)) return;
-  const p = ex || pfCrearProyecto(g.nombre);
-  pfAsignarLote(g.acts.map(a=>({ act:a, pid:p.id, folio:'auto', fase:pfSugFase(a) })));
-  PF_SEL = p.id; PF_ABIERTOS = {}; pfRepinta();
+  let p = ex; if(!p){ p = pfCrearProyecto({ nombre:g.nombre }); pfLog(p, 'Proyecto creado desde actividades existentes'); }
+  const cre = pfAsignarLote(p, g.acts.map(a=>({ act:a, dest:pfSugDestino(a,p) })), true);
+  pfLog(p, g.acts.length+' actividad(es) enlazadas al proyecto'+(cre?' · '+cre+' folio(s) creados':'')); pfPut(p);
+  PF_SEL = p.id; pfRepinta();
+}
+function pfMoverAct(actId){
+  const v = pfVincMap()[actId]; if(!v) return; const p = pfProy(v.proyecto_id); const a = (PA_ITEMS||[]).find(x=>x.id===actId);
+  const actual = v.data.faseKey ? v.data.faseKey+'|'+(v.data.ref||'') : '';
+  pfForm({ titulo:'Mover actividad', sub:a?(a.folio||'s/f')+' · '+(a.actividad||''):'', btn:'Guardar',
+    campos:[ {k:'dest',l:'Etapa / folio / bobina',t:'select',v:actual,o:[['','Sin etapa por ahora']].concat(pfDestinos(p).map(d=>[d.v,d.t])).concat([['__quitar__','✕ Quitar del proyecto']])} ],
+    ok:x=>{
+      if(x.dest==='__quitar__'){ pfDel(['v_'+actId]); pfRepinta(); return; }
+      const i = x.dest.indexOf('|'); v.data.faseKey = i<0?'':x.dest.slice(0,i); v.data.ref = i<0?'':x.dest.slice(i+1); pfPut(v); pfRepinta();
+    } });
 }
 
 // ── Vista principal ──
-async function pfRecargar(){ await pfCargar(); pfRepinta(); }
+async function pfRecargar(){ await pfCargar(); pfMigrar(); pfRepinta(); }
 function pfRenderVista(){
   if(!pfPuede()) return;
-  pfCss(); pfLoadLocalSiVacio();
+  pfCss(); pfLoadLocalSiVacio(); pfMigrar();
   const top = document.getElementById('pfTopbar'), mount = document.getElementById('pfMount'); if(!top||!mount) return;
   if(PF_SEL && !pfProy(PF_SEL)) PF_SEL = null;
   if(PF_SEL) pfRenderDetalle(top, mount); else pfRenderHome(top, mount);
 }
-function pfCardProyecto(p, vm){
-  const fol = pfFolios(p.id), et = p.data.etapa||{};
-  const retr = fol.filter(f=>f.data.retr).length, esp = fol.filter(f=>f.data.est==='espera').length, cer = fol.filter(f=>f.data.est==='cerrado').length;
-  const extra = fol.reduce((s,f)=>s+Math.max(0,(f.data.ronda||1)-1),0);
-  const nAct = PF_ITEMS.filter(i=>i.tipo==='vinculo' && i.proyecto_id===p.id && (PA_ITEMS||[]).some(a=>a.id===i.data.actividad_id)).length;
-  const cnt = PF_FASES.map((_,i)=>fol.filter(f=>f.data.est!=='cerrado' && f.data.fase===i).length);
-  const col = ['#94a3b8','#4a8fd4','#f5a623','#b389f0','#34c77b'];
-  const ok = PF_ETAPAS.filter(e=>(et[e.k]||{}).est==='ok').length, esperaE = PF_ETAPAS.some(e=>(et[e.k]||{}).est==='espera');
-  const lbl = ok===5 ? 'Etapa del proyecto completa' : (esperaE ? 'Etapa: esperando validación' : 'Etapa en curso');
-  const alerta = retr ? `<span class="pf-chip r">↩ ${retr} en retrabajo</span>` : esp ? `<span class="pf-chip a">⏳ ${esp} esperando</span>` : fol.length ? '<span class="pf-chip g">Sin alertas</span>' : '<span class="pf-chip v">Plantilla nueva</span>';
+function pfStepper(p){
+  const cur = pfEtapaActual(p);
+  return `<div class="pf-stp">${(p.data.etapas||[]).map(e=>{ const x = pfEtapaEstado(e); return `<span class="${x[1]} ${cur===e?'cur':''}" title="${pfEsc(e.key+' · '+e.nombre+': '+x[0])}">${e.key}</span>`; }).join('')}</div>`;
+}
+function pfEsperasHtml(w, max){ return `<div class="pf-waits">${w.slice(0,max||99).map(x=>`<div><span class="d">${x.dias} d</span>Esperando a <b>${pfEsc(x.quien)}</b>: ${pfEsc(x.que)}</div>`).join('')}</div>`; }
+function pfCardProyecto(p){
+  const cur = pfEtapaActual(p), w = pfEsperas(p), s = pfStats(p), x = cur ? pfEtapaEstado(cur) : ['Proyecto cerrado','ok'];
   return `<div class="pf-card pf-pc" onclick="pfAbrirProy('${p.id}')">
-    <div style="display:flex;justify-content:space-between;gap:8px;align-items:start"><div><h3>${pfEsc(p.data.nombre)}</h3><div class="pf-note">${lbl} · ${ok}/5</div></div>${alerta}</div>
-    <div class="pf-steps" style="margin-top:12px;gap:4px">${PF_ETAPAS.map(e=>{ const s=(et[e.k]||{}).est||'pend'; return `<div class="pf-st ${s}" style="padding:0;height:6px;border-top-width:6px;border-radius:3px;cursor:pointer" title="${pfEsc(e.t)} · ${PF_EST_ETAPA[s]}"></div>`; }).join('')}</div>
-    <div class="pf-kpis"><div><b>${fol.length}</b>folios</div><div><b>${cer}</b>cerrados</div><div><b>${extra}</b>rondas extra</div><div><b>${nAct}</b>actividades</div></div>
-    ${fol.length ? `<div class="pf-bar">${cnt.map((c,i)=>c?`<i style="flex:${c};background:${col[i]}"></i>`:'').join('')}</div><div class="pf-leg">${PF_FASES.map((t,i)=>cnt[i]?`<span style="--c:${col[i]}">${pfEsc(t.t)} · ${cnt[i]}</span>`:'').join('')}</div>` : `<div class="pf-note" style="margin-top:10px">Aún sin folios. Se enlazan desde "Asignar actividades" o con ＋ Folio.</div>`}
+    <div class="pf-top"><span class="pf-mono">${pfEsc(p.data.clave||'')}</span><h3>${pfEsc(p.data.nombre)}</h3>${p.data.cliente?`<span class="pf-note">${pfEsc(p.data.cliente)}</span>`:''}<span style="flex:1"></span>${cur?`<span class="pf-note">${cur.key} · ${pfEsc(cur.nombre)}</span>`:''}<span class="pf-chip ${PF_TONO[x[1]]}">${pfEsc(x[0])}</span></div>
+    ${pfStepper(p)}
+    ${w.length ? pfEsperasHtml(w,3) : '<div class="pf-note" style="margin-top:8px">Sin esperas: el avance depende del equipo.</div>'}
+    <div class="pf-stats"><span><b>${s.activas}</b>actividades activas</span><span><b>${w.length}</b>esperas</span><span><b>${s.ciclos}</b>ciclos de observaciones</span><span><b>${s.primera}</b>aprobado a la primera</span></div>
   </div>`;
 }
 function pfRenderHome(top, mount){
   const vm = pfVincMap(); const sin = (PA_ITEMS||[]).filter(a=>!vm[a.id]);
-  top.innerHTML = `<div><h1>Portafolio de proyectos</h1><div class="pf-sub">Cada proyecto con su proceso; sus folios avanzan (o regresan) por separado. Piloto: vive en tablas nuevas y no modifica tus actividades.</div></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="pfRecargar()">↻ Actualizar</button><button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="pfAsignarModal()">Asignar actividades${sin.length?' ('+sin.length+')':''}</button><button class="pa-btn pa-btn-primary" style="font-size:12px" onclick="pfNuevoProyecto()">＋ Nuevo proyecto</button></div>`;
+  top.innerHTML = `<div><h1>Portafolio de proyectos</h1><div class="pf-sub">Etapa actual de cada proyecto y a quién se está esperando. Los folios de tu equipo avanzan (o regresan) por separado.</div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="pfRecargar()">↻ Actualizar</button><button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="pfRespaldo()" title="Descarga una copia de todo el portafolio">⬇ Respaldo</button><button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="pfAsignarModal()">Asignar actividades${sin.length?' ('+sin.length+')':''}</button><button class="pa-btn pa-btn-primary" style="font-size:12px" onclick="pfNuevoProyecto()">＋ Nuevo proyecto</button></div>`;
   const g = {}; sin.forEach(a=>{ const k = pfNorm(a.proyecto); (g[k] = g[k] || { key:k, nombre:(a.proyecto||'').trim()||'(sin proyecto)', acts:[] }).acts.push(a); });
   PF_GRUPOS = Object.values(g).sort((x,y)=>y.acts.length-x.acts.length);
-  const sug = PF_GRUPOS.length ? `<div class="pf-sec">Actividades sin proyecto · ${sin.length}</div><div class="pf-card" style="padding:0"><div class="pf-note" style="padding:10px 12px;border-bottom:1px solid var(--border)">Puedes enlazar todo un grupo de una vez (con folios y fases propuestos) o ir actividad por actividad con “Asignar actividades”. Nada de tus actividades se modifica.</div>${PF_GRUPOS.map((x,i)=>{
+  const sug = PF_GRUPOS.length ? `<div class="pf-sec">Actividades sin proyecto · ${sin.length}</div><div class="pf-card" style="padding:0"><div class="pf-note" style="padding:10px 12px;border-bottom:1px solid var(--border)">Puedes enlazar todo un grupo de una vez (con folios y etapa propuestos) o ir actividad por actividad con “Asignar actividades”. Nada de tus actividades se modifica.</div>${PF_GRUPOS.map((x,i)=>{
       const ex = pfProyectos().find(p=>pfNorm(p.data.nombre)===x.key); const nf = new Set(x.acts.map(a=>pfNorm(a.folio)).filter(Boolean)).size;
       return `<div class="pf-sug"><b>${pfEsc(x.nombre)}</b><span class="pf-chip">${x.acts.length} actividades</span><span class="pf-chip">${nf} folios</span>${ex?'<span class="pf-chip g">ya existe en el portafolio</span>':''}<span style="margin-left:auto;display:flex;gap:6px">${x.key?`<button class="pf-btn" onclick="pfCrearDesdeGrupo(${i})">${ex?'Enlazar a ese proyecto':'Crear proyecto y enlazar'}</button>`:''}<button class="pf-btn" onclick="pfElegirGrupo(${i})">Elegir una por una…</button></span></div>`; }).join('')}</div>` : '';
   const ps = pfProyectos();
-  mount.innerHTML = pfAvisoHtml() + (ps.length ? `<div class="pf-grid">${ps.map(p=>pfCardProyecto(p, vm)).join('')}</div>` :
-    `<div class="pf-card" style="text-align:center;padding:34px 20px"><div style="font-size:15px;font-weight:600;color:var(--text)">Tu portafolio está vacío</div><div class="pf-note" style="margin-top:6px;line-height:1.6">Crea un proyecto nuevo con su plantilla del proceso, o enlaza las actividades que ya tienes (abajo) para que se armen solos los proyectos y folios.</div></div>`) + sug;
+  mount.innerHTML = pfAvisoHtml() + (ps.length ? `<div class="pf-list">${ps.map(p=>pfCardProyecto(p)).join('')}</div>` :
+    `<div class="pf-card" style="text-align:center;padding:34px 20px"><div style="font-size:15px;font-weight:600;color:var(--text)">Tu portafolio está vacío</div><div class="pf-note" style="margin-top:6px;line-height:1.6">Crea un proyecto nuevo con la plantilla de las 12 etapas, o enlaza las actividades que ya tienes (abajo) para que se armen solos los proyectos y folios.</div></div>`) + sug;
+}
+function pfMiniActs(list){
+  if(!list.length) return '';
+  return list.map(a=>`<div class="pf-ma"><span class="pf-mono">${pfEsc(a.folio||'s/f')}</span><span style="flex:1;min-width:0">${pfEsc(a.actividad||'')}</span><span class="pf-note">${pfEsc(bitNombreResp(a.responsable)||'—')}</span><span class="pf-chip">${pfEsc(a.estatus||'')}</span><button class="pf-btn" title="Mover a otra etapa, folio o bobina, o quitar" onclick="pfMoverAct('${a.id}')">⇄</button></div>`).join('');
+}
+function pfInsumoHtml(p, e, ins, sub){
+  const s = sub ? 'true' : 'false', pid = p.id;
+  const corr = (ins.ajustes&&ins.ajustes.length) ? `<span class="pf-chip" title="${pfEsc(ins.ajustes.map(x=>pfFmt(x.fecha)+': '+x.cambios+' · '+x.motivo).join('\n'))}">Corregido ${ins.ajustes.length}×</span>` : '';
+  const nombre = sub ? `<b>${pfEsc(ins.nombre)}</b> · ` : '';
+  let estado, acc = '';
+  if(ins.recibido) estado = `${nombre}De ${pfEsc(ins.de)} · solicitado ${ins.solicitado?pfFmt(ins.solicitado):'—'} · recibido ${pfFmt(ins.recibido)} <span class="pf-note">(${Math.max(0, pfDiasDesde(ins.solicitado||ins.recibido)-pfDiasDesde(ins.recibido))} días de espera)</span>`;
+  else if(ins.solicitado){ estado = `${nombre}De ${pfEsc(ins.de)} · solicitado ${pfFmt(ins.solicitado)} <span class="pf-chip a">${pfDiasDesde(ins.solicitado)} d esperando</span>`; acc = `<button class="pf-btn pri" onclick="pfRegInsumo('${pid}','${e.key}',${s},'recibido')">Marcar recibido</button>`; }
+  else { estado = `${nombre}De ${pfEsc(ins.de)} · sin solicitar`; acc = `<button class="pf-btn" onclick="pfRegInsumo('${pid}','${e.key}',${s},'solicitado')">Registrar solicitud</button>`; }
+  const edit = ins.solicitado ? `<button class="pf-btn" onclick="pfRegInsumo('${pid}','${e.key}',${s},'editar')">Editar</button>` : '';
+  const datos = ins.solicitado ? `<div class="pf-line" style="font-size:11.5px;color:var(--dim)">${ins.solFolio?`<span>Folio de solicitud <span class="pf-mono">${pfEsc(ins.solFolio)}</span></span>`:'<span>sin folio de solicitud</span>'}${ins.solLink?`<a href="${pfEsc(ins.solLink)}" target="_blank" rel="noopener" style="color:var(--accent)">✉ Correo de solicitud</a>`:''}${ins.recLink?`<a href="${pfEsc(ins.recLink)}" target="_blank" rel="noopener" style="color:var(--accent)">📎 ${pfEsc(ins.nombre)} recibido</a>`:''}</div>` : '';
+  return `<div class="pf-ins"><div class="pf-line">${estado}${corr}<span style="flex:1"></span>${acc}${edit}</div>${datos}</div>`;
+}
+function pfFaseAcciones(p, e){
+  const b = [], pid = p.id, completos = e.entregables.every((_,i)=>(e.ok||[])[i]);
+  if(e.estado==='pendiente') b.push(`<button class="pf-btn" onclick="pfIniciarFase('${pid}','${e.key}')">Iniciar fase</button>`);
+  if(e.estado!=='en_validacion') b.push(`<button class="pf-btn" onclick="pfAsigDesdeEtapa('${pid}','${e.key}')">Asignar actividad</button>`);
+  if(e.estado==='en_curso'){
+    if(e.validadores.length) b.push(`<button class="pf-btn pri" ${completos?'':'disabled title="Marca todos los entregables mínimos"'} onclick="pfEnviarValidacion('${pid}','${e.key}')">Enviar a validación</button>`);
+    else b.push(`<button class="pf-btn ok" ${completos?'':'disabled title="Marca todos los entregables mínimos"'} onclick="pfCompletarFase('${pid}','${e.key}')">Marcar completada</button>`);
+    if(!completos) b.push(`<span class="pf-note" style="align-self:center">Faltan entregables mínimos</span>`);
+  }
+  if(e.estado==='en_validacion') b.push(`<button class="pf-btn pri" onclick="pfResultadoValidacion('${pid}','${e.key}')">Registrar resultado de ${pfEsc(PF_VALIDADOR[e.validadores[e.valIdx]])}</button>`);
+  return b.join('');
+}
+function pfFolioAcc(p, i){
+  const f = pfEt(p,'F4').folios[i], pid = p.id;
+  let b = `<button class="pf-btn" onclick="pfAsigDesdeEtapa('${pid}','F4',${i})">Asignar actividad</button>`;
+  if(f.estado==='diseno') b += `<button class="pf-btn" onclick="pfFolioEnviar('${pid}',${i})">Enviar a Permisos</button>`;
+  if(f.estado==='revision') b += `<button class="pf-btn pri" onclick="pfFolioResultado('${pid}',${i},'revision')">Registrar resultado</button>`;
+  if(f.estado==='carpeta') b += `<button class="pf-btn" onclick="pfFolioCarpeta('${pid}',${i})">Carpeta entregada</button>`;
+  if(f.estado==='entregada') b += `<button class="pf-btn pri" onclick="pfFolioResultado('${pid}',${i},'entregada')">Registrar resultado</button>`;
+  return b+`<button class="pf-btn" title="Editar datos del folio" onclick="pfFolioEditar('${pid}',${i})">✎</button><button class="pf-btn" title="Quitar folio" onclick="pfFolioQuitar('${pid}',${i})">🗑</button>`;
+}
+function pfFolioCarpeta(pid, i){
+  const p = pfProy(pid); const f = pfEt(p,'F4').folios[i];
+  pfForm({ titulo:'Carpeta física entregada', sub:f.clave, btn:'Registrar', campos:[ {k:'fecha',l:'Fecha de entrega',t:'date',v:pfHoy(),req:true} ], ok:v=>pfFolioMover(pid, i, 'entregada', 'Carpeta física entregada', v.fecha) });
+}
+function pfBobAcc(p, i){
+  const b = pfEt(p,'F6').bobinas[i], pid = p.id;
+  let h = `<button class="pf-btn" onclick="pfAsigDesdeEtapa('${pid}','F6',${i})">Asignar actividad</button>`;
+  if(b.estado==='diseno') h += `<button class="pf-btn" onclick="pfBobEnviar('${pid}',${i})">Enviar a validación</button>`;
+  if(b.estado==='validacion') h += `<button class="pf-btn pri" onclick="pfBobResultado('${pid}',${i})">Registrar resultado</button>`;
+  return h+`<button class="pf-btn" title="Quitar bobina" onclick="pfBobQuitar('${pid}',${i})">🗑</button>`;
+}
+function pfEtapaHtml(p, e, esCur){
+  const x = pfEtapaEstado(e), pid = p.id;
+  const tipoTxt = { hito:'Hito', insumo:'Insumo externo', fase:'Fase del equipo', folios:'Fase del equipo · por folio', bobinas:'Fase del equipo · por bobina · en paralelo' }[e.tipo];
+  const general = ()=>pfMiniActs(pfActsDe(pid, e.key, ''));
+  let body = '';
+  if(e.tipo==='hito'){
+    body = e.fecha
+      ? `<div class="pf-line"><span><b>${pfFmt(e.fecha)}</b>${typeof e.medio==='string'&&e.medio?' · '+pfEsc(e.medio):''}${e.nota?' · '+pfEsc(e.nota):''}</span><span style="flex:1"></span><button class="pf-btn" onclick="pfRegHito('${pid}','${e.key}',true)">Editar</button></div>${e.ajustes&&e.ajustes.length?`<div class="pf-note">Corregido ${e.ajustes.length}× · último motivo: ${pfEsc(e.ajustes[e.ajustes.length-1].motivo)}</div>`:''}`
+      : `<div class="pf-line" style="color:var(--dim)">${e.nota?`${pfEsc(e.campo)}: <span style="color:var(--text)">${pfEsc(e.nota)}</span>`:pfEsc(e.campo)}${e.aviso?`. Áreas a notificar: ${pfEsc(e.aviso)}.`:''}<span style="flex:1"></span><button class="pf-btn pri" onclick="pfRegHito('${pid}','${e.key}')">Registrar</button></div>`;
+    body += general();
+  }
+  else if(e.tipo==='insumo'){ body = pfInsumoHtml(p, e, e, false) + general(); }
+  else if(e.tipo==='fase'){
+    body = `${e.insumo?pfInsumoHtml(p, e, e.insumo, true):''}
+      <div><div class="pf-stype" style="margin-bottom:6px">Entregables mínimos</div><div class="pf-ent">${e.entregables.map((t,i)=>`<label class="${(e.ok||[])[i]?'ok':''}"><input type="checkbox" ${(e.ok||[])[i]?'checked':''} ${e.estado==='completada'?'disabled':''} onchange="pfToggleOk('${pid}','${e.key}',${i},this.checked)">${pfEsc(t)}</label>`).join('')}</div></div>
+      ${e.validadores.length?`<div class="pf-chain"><span class="pf-stype">Validación</span>${e.validadores.map((v,i)=>`<span class="pf-chip ${i<e.valIdx||e.estado==='completada'?'g':(i===e.valIdx&&e.estado==='en_validacion'?'v':'')}">${pfEsc(PF_VALIDADOR[v])}</span>`).join('<span style="color:var(--dim)">→</span>')}${e.ciclos?`<span class="pf-chip a">${e.ciclos} ciclo${e.ciclos>1?'s':''} de observaciones</span>`:''}</div>`:''}
+      ${(e.validaciones||[]).length?`<ul class="pf-hist">${e.validaciones.map(v=>`<li>${pfFmt(v.fecha)} · ${pfEsc(PF_VALIDADOR[v.val]||v.val)}: <b style="color:var(--${v.res==='aprobado'?'green':'amber'})">${v.res==='aprobado'?'Aprobado':'Con observaciones'}</b>${v.medio?' · '+pfEsc(v.medio):''}${v.nota?' · '+pfEsc(v.nota):''}</li>`).join('')}</ul>`:''}
+      ${general()}
+      ${e.estado!=='completada'?`<div class="pf-act">${pfFaseAcciones(p, e)}</div>`:`<div class="pf-act"><button class="pf-btn" onclick="pfAsigDesdeEtapa('${pid}','${e.key}')">Asignar actividad</button></div>`}`;
+  }
+  else if(e.tipo==='folios'){
+    const falta = [pfEt(p,'X1'), pfEt(p,'X2')].filter(z=>z && !z.recibido).map(z=>z.nombre);
+    body = `${falta.length&&!e.folios.length?`<div class="pf-warn">Para foliar se necesita recibir: ${falta.map(pfEsc).join(' y ')}.</div>`:''}
+      ${e.folios.length?`<div style="overflow-x:auto"><table class="pf-tbl"><thead><tr><th>Folio</th><th>Dependencia</th><th>Tramo</th><th>Proyectista</th><th>Estado</th><th>Ciclos</th><th></th></tr></thead><tbody>${e.folios.map((f,i)=>{
+        const st = PF_FOLIO_ST[f.estado]||PF_FOLIO_ST.diseno, ac = pfActsDe(pid,'F4',f.clave);
+        return `<tr><td class="pf-mono">${pfEsc(f.clave)}</td><td>${pfEsc(f.dependencia||'—')}</td><td>${pfEsc(f.tramo||'—')}</td><td>${f.proyectista?pfEsc(bitNombreResp(f.proyectista)):'<span class="pf-note">—</span>'}</td>
+          <td><span class="pf-chip ${PF_TONO[st[1]]}">${st[0]}</span>${['revision','entregada'].includes(f.estado)?` <span class="pf-note">${pfDiasDesde(f.desde)} d</span>`:''}</td><td>${f.ciclos||'—'}</td><td><div class="pf-act" style="justify-content:flex-end">${pfFolioAcc(p,i)}</div></td></tr>
+          ${ac.length?`<tr><td></td><td colspan="6">${pfMiniActs(ac)}</td></tr>`:''}`; }).join('')}</tbody></table></div>`:''}
+      ${general()?`<div><div class="pf-stype">Actividades de esta etapa sin folio</div>${general()}</div>`:''}
+      <div class="pf-act"><button class="pf-btn" onclick="pfFolioAdd('${pid}')">+ Agregar folio</button><button class="pf-btn" onclick="pfAsigDesdeEtapa('${pid}','F4')">Asignar actividad</button></div>`;
+  }
+  else if(e.tipo==='bobinas'){
+    body = `${pfInsumoHtml(p, e, e.insumo, true)}
+      ${e.bobinas.length?`<div style="overflow-x:auto"><table class="pf-tbl"><thead><tr><th>Bobina</th><th>Proyectista</th><th>Estado</th><th>Ciclos</th><th></th></tr></thead><tbody>${e.bobinas.map((b,i)=>{
+        const st = PF_BOB_ST[b.estado]||PF_BOB_ST.diseno, ac = pfActsDe(pid,'F6',b.clave);
+        return `<tr><td class="pf-mono">${pfEsc(b.clave)}</td><td>${b.proyectista?pfEsc(bitNombreResp(b.proyectista)):'<span class="pf-note">—</span>'}</td><td><span class="pf-chip ${PF_TONO[st[1]]}">${st[0]}</span>${b.estado==='validacion'?` <span class="pf-note">${pfDiasDesde(b.desde)} d</span>`:''}</td><td>${b.ciclos||'—'}</td><td><div class="pf-act" style="justify-content:flex-end">${pfBobAcc(p,i)}</div></td></tr>
+          ${ac.length?`<tr><td></td><td colspan="4">${pfMiniActs(ac)}</td></tr>`:''}`; }).join('')}</tbody></table></div>`:''}
+      ${general()?`<div><div class="pf-stype">Actividades de esta etapa sin bobina</div>${general()}</div>`:''}
+      <div class="pf-act"><button class="pf-btn" onclick="pfBobAdd('${pid}')">+ Agregar bobina</button><button class="pf-btn" onclick="pfAsigDesdeEtapa('${pid}','F6')">Asignar actividad</button></div>`;
+  }
+  return `<div class="pf-stage"><div class="pf-mk"><b class="${x[1]}">${e.key}</b><i></i></div>
+    <div class="pf-sbody ${esCur?'cur':''}"><div class="pf-shead"><h3>${pfEsc(e.nombre)}</h3><span class="pf-stype">${tipoTxt}</span><span class="pf-chip ${PF_TONO[x[1]]}">${pfEsc(x[0])}</span></div>${body}</div></div>`;
 }
 function pfRenderDetalle(top, mount){
-  const p = pfProy(PF_SEL), vm = pfVincMap(), fol = pfFolios(p.id).sort((a,b)=>String(a.data.folio).localeCompare(String(b.data.folio),'es',{numeric:true})), et = p.data.etapa||{};
-  top.innerHTML = `<div><div style="font-size:11.5px;color:var(--accent);cursor:pointer;margin-bottom:4px" onclick="pfVolver()">‹ Portafolio</div><h1>${pfEsc(p.data.nombre)}</h1><div class="pf-sub">Etapa del proyecto (una sola vez) y folios de tu equipo (cada uno a su ritmo)</div></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="pfRenombrarProyecto('${p.id}')">✎ Renombrar</button><button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="pfAsignarModal('${p.id}')">Asignar actividades</button><button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="pfNuevoFolio('${p.id}')">＋ Folio</button><button class="pa-btn pa-btn-ghost" style="font-size:12px;color:var(--red)" onclick="pfEliminarProyecto('${p.id}')">🗑 Eliminar</button></div>`;
-  const steps = PF_ETAPAS.map((e,i)=>{ const s = et[e.k]||{est:'pend'}; return `<div class="pf-st ${s.est}" onclick="pfEtapaModal('${p.id}','${e.k}')" title="Clic para cambiar el estado y dejar evidencia"><div class="n">${i+1}</div><div class="t">${pfEsc(e.t)}</div><div class="e">${pfEsc(PF_EST_ETAPA[s.est]||'')}${s.fecha?' · '+pfEsc(bitFd(s.fecha)):''}</div>${s.nota?`<div class="e" style="font-style:italic">${pfEsc(s.nota.slice(0,48))}${s.nota.length>48?'…':''}</div>`:''}</div>`; }).join('');
-  const ult = n=>{ const m = String(n).match(/(\d+)\D*$/); return m ? String(parseInt(m[1],10)) : null; };
-  const filas = fol.map(f=>{
-    const d = f.data, acts = pfActsDeFolio(f.id, vm), abierto = !!PF_ABIERTOS[f.id];
-    const resp = [...new Set(acts.map(a=>bitNombreResp(a.responsable)).filter(Boolean))];
-    const par = fol.filter(o=>o.id!==f.id && ult(o.data.folio) && ult(o.data.folio)===ult(d.folio));
-    const mini = `<div class="pf-mini">${PF_FASES.map((_,i)=> d.est==='cerrado' ? '<i class="d"></i>' : i<d.fase ? '<i class="d"></i>' : i===d.fase ? `<i class="${d.est==='espera'?'w':d.retr?'b':'c'}"></i>` : '<i></i>').join('')}</div><div class="pf-minil">${PF_FASES.map(t=>`<span title="${pfEsc(t.t)}">${pfEsc(t.t.split(' ')[0])}</span>`).join('')}</div>`;
-    const chip = d.est==='cerrado' ? '<span class="pf-chip g">Cerrado</span>' : d.est==='espera' ? '<span class="pf-chip a">Esperando validación</span>' : d.retr ? '<span class="pf-chip r">↩ Retrabajo</span>' : '<span class="pf-chip b">En curso</span>';
-    let r = `<tr><td><span style="cursor:pointer" onclick="pfToggleFolio('${f.id}')">${abierto?'▾':'▸'}</span> <span class="pf-mono">${pfEsc(d.folio)}</span><div class="pf-note">${acts.length} actividad(es)${par.length?` · <span style="color:var(--amber)">≈ parecido a ${pfEsc(par[0].data.folio)}</span>`:''}</div></td>
-      <td>${resp.length?'👤 '+pfEsc(resp.join(', ')):'<span class="pf-note">—</span>'}</td>
-      <td>${mini}<div style="font-size:11px;margin-top:4px;font-weight:600">${pfEsc(d.est==='cerrado'?'Cerrado':PF_FASES[d.fase].t)}</div></td>
-      <td>${chip}${(d.ronda||1)>1?` <span class="pf-chip">ronda ${d.ronda}</span>`:''}</td>
-      <td class="pf-note" style="max-width:200px">${pfEsc(d.nota||'')}</td>
-      <td style="white-space:nowrap;text-align:right"><button class="pf-btn" onclick="pfMovModal('${f.id}','re')" ${(d.fase===0&&d.est!=='cerrado')?'disabled title="Ya está en la primera fase"':''}>↩ Regresar</button> <button class="pf-btn" onclick="pfMovModal('${f.id}','av')" ${d.est==='cerrado'?'disabled':''}>${d.fase>=PF_FASES.length-1?'Cerrar':'Avanzar ›'}</button> <button class="pf-btn" title="Esperando validación / validación recibida" onclick="pfToggleEspera('${f.id}')" ${d.est==='cerrado'?'disabled':''}>⏳</button> <button class="pf-btn" title="Renombrar" onclick="pfRenombrarFolio('${f.id}')">✎</button> <button class="pf-btn" title="Unir con otro folio" onclick="pfUnirModal('${f.id}')">⇄</button> <button class="pf-btn" title="Quitar folio" onclick="pfEliminarFolio('${f.id}')">🗑</button></td></tr>`;
-    if(abierto) r += (acts.length ? acts.map(a=>`<tr class="pf-sub-row"><td colspan="2">${pfEsc(a.actividad||'')} <span class="pf-note">· ${pfEsc(a.estatus||'')}</span></td><td colspan="3"><select class="pf-sel" onchange="pfCambiarFaseAct('${a.id}',this.value)">${pfFaseOpts(vm[a.id].data.fase)}</select></td><td style="text-align:right"><button class="pf-btn" title="Quitar del proyecto" onclick="pfDesvincular('${a.id}')">✕</button></td></tr>`).join('') : `<tr class="pf-sub-row"><td colspan="6" class="pf-note">Sin actividades enlazadas todavía. Usa “Asignar actividades”.</td></tr>`);
-    return r;
-  }).join('');
-  const sinFolio = PF_ITEMS.filter(i=>i.tipo==='vinculo' && i.proyecto_id===p.id && !i.data.folio_id).map(i=>({v:i, a:(PA_ITEMS||[]).find(x=>x.id===i.data.actividad_id)})).filter(x=>x.a);
-  const bloqueSin = sinFolio.length ? `<div class="pf-sec">Actividades del proyecto sin folio · ${sinFolio.length}</div><div class="pf-card" style="padding:0"><table class="pf-tbl">${sinFolio.map(({v,a})=>`<tr><td>${pfEsc(a.actividad||'')}<div class="pf-note"><span class="pf-mono">${pfEsc(a.folio||'s/f')}</span> · ${pfEsc(bitNombreResp(a.responsable)||'—')} · ${pfEsc(a.estatus||'')}</div></td><td><select class="pf-sel" onchange="pfCambiarFaseAct('${a.id}',this.value)">${pfFaseOpts(v.data.fase)}</select></td><td><select class="pf-sel" onchange="pfCambiarFolioAct('${a.id}',this.value)"><option value="">Sin folio</option>${fol.map(f=>`<option value="${f.id}">${pfEsc(f.data.folio)}</option>`).join('')}</select></td><td style="text-align:right"><button class="pf-btn" onclick="pfDesvincular('${a.id}')" title="Quitar del proyecto">✕</button></td></tr>`).join('')}</table></div>` : '';
-  mount.innerHTML = pfAvisoHtml()+`<div class="pf-sec" style="margin-top:4px">Etapa del proyecto · una sola vez para todo el proyecto</div><div class="pf-card"><div class="pf-steps">${steps}</div><div class="pf-note" style="margin-top:10px">Clic en un paso para cambiar su estado y dejar la fecha y la evidencia (por ejemplo “correo de Sergio”).</div></div>
-    <div class="pf-sec">Folios de mi equipo · cada folio avanza (o regresa) a su ritmo</div>
-    <div class="pf-card" style="padding:0;overflow-x:auto">${fol.length?`<table class="pf-tbl"><tr><th>FOLIO</th><th>PROYECTISTA</th><th>FASE DEL FOLIO</th><th>ESTADO</th><th>ÚLTIMO MOVIMIENTO</th><th></th></tr>${filas}</table>`:`<div class="pf-note" style="padding:24px;text-align:center">Este proyecto todavía no tiene folios. Enlaza actividades con “Asignar actividades” o crea uno con ＋ Folio.</div>`}</div>${bloqueSin}`;
+  const p = pfProy(PF_SEL), cur = pfEtapaActual(p), s = pfStats(p), w = pfEsperas(p), vm = pfVincMap();
+  top.innerHTML = `<div><div style="font-size:11.5px;color:var(--accent);cursor:pointer;margin-bottom:4px" onclick="pfVolver()">‹ Todos los proyectos</div><div class="pf-note"><span class="pf-mono">${pfEsc(p.data.clave||'')}</span>${p.data.cliente?' · '+pfEsc(p.data.cliente):''}</div><h1>${pfEsc(p.data.nombre)}</h1><div class="pf-sub">${cur?'Etapa actual: '+cur.key+' · '+pfEsc(cur.nombre):'Todas las etapas completadas'}</div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="pfEditarProyecto('${p.id}')">✎ Datos</button><button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="pfAsignarModal('${p.id}')">Asignar actividades</button><button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="pfRespaldo()">⬇ Respaldo</button><button class="pa-btn pa-btn-ghost" style="font-size:12px;color:var(--red)" onclick="pfEliminarProyecto('${p.id}')">🗑 Eliminar</button></div>`;
+  const sinEtapa = pfActsProy(p.id).filter(a=>!vm[a.id].data.faseKey);
+  const log = (p.data.log||[]).slice().reverse().slice(0,40);
+  mount.innerHTML = pfAvisoHtml()+`
+    <div class="pf-kpis"><div><b>${s.activas}</b>Actividades activas</div><div><b>${w.length}</b>Esperando a otros</div><div><b>${s.ciclos}</b>Ciclos de observaciones</div><div><b>${s.primera}</b>Aprobado a la primera</div></div>
+    ${w.length?`<div class="pf-alert"><b>Esperando a otros</b>${pfEsperasHtml(w)}</div>`:''}
+    <div>${(p.data.etapas||[]).map(e=>pfEtapaHtml(p, e, cur===e)).join('')}</div>
+    ${sinEtapa.length?`<div class="pf-sec">Actividades del proyecto sin etapa · ${sinEtapa.length}</div><div class="pf-card">${pfMiniActs(sinEtapa)}<div class="pf-note" style="margin-top:8px">Usa ⇄ para ubicarlas en su etapa, folio o bobina.</div></div>`:''}
+    <div class="pf-sec">Historial del proyecto</div><div class="pf-card">${log.length?`<ul class="pf-hist">${log.map(l=>`<li><b>${pfFmt(l.fecha)}</b> · ${pfEsc(l.txt)}${l.por?` <span class="pf-note">— ${pfEsc(l.por)}</span>`:''}</li>`).join('')}</ul>`:'<div class="pf-note">Aún sin movimientos.</div>'}</div>`;
 }
 
 
