@@ -16178,34 +16178,58 @@ function bitRefrescarModal(){
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PORTAFOLIO DE PROYECTOS v2 · cada proyecto con las 12 etapas del proceso (hitos, insumos, fases con validación,
-// folios por dependencia y bobinas). Vive en la tabla "portafolio_items" + copia local. NO modifica actividades, plan
+// PORTAFOLIO DE PROYECTOS · cada proyecto con el Proceso Ingeniería Tikva en 6 fases (hitos, insumos, actividades con
+// validación, brazos GIS, folios por entidad, trámite de permisos y bobinas). Vive en la tabla "portafolio_items" + copia local. NO modifica actividades, plan
 // ni catálogo: el enlace actividad ↔ proyecto/etapa se guarda aparte. Lo que había en la versión 1 se migra sin borrar nada.
 // ═══════════════════════════════════════════════════════════════════════════
 const PF_KEY = 'c3ntro_portafolio_v1', PF_DEL_KEY = 'c3ntro_portafolio_del_v1', PF_BK_KEY = 'c3ntro_portafolio_respaldo_pre_v2';
-const PF_VALIDADOR = { sergio:'Sergio (Gerencia de Ingeniería)', direccion:'Alta dirección', permisos:'Permisos' };
+const PF_VALIDADOR = { sergio:'Gerente de Ingeniería (Sergio)', direccion:'Sesión de presentación (Dirección)', permisos:'Permisos', cierre:'Dependencias y clientes' };
 const PF_MEDIOS = ['Correo','WhatsApp','De palabra'];
 const PF_DEPS = ['SICT','CFE','CONAGUA','Telmex','Municipio','Gobierno estatal','Otra'];
-const PF_PLANTILLA = [
-  {key:'E1', tipo:'hito',   nombre:'Kick-off', campo:'Alcance de conectividad acordado'},
-  {key:'E2', tipo:'hito',   nombre:'Asignación a coordinación', campo:'Quién asignó y cómo', medio:true},
-  {key:'F1', tipo:'fase',   nombre:'Levantamiento digital', entregables:['KMZ 1.0','Volumétrico estimado'], validadores:['sergio','direccion']},
-  {key:'H1', tipo:'hito',   nombre:'Notificación de aceptación', campo:'Áreas notificadas', aviso:'Infra de terceros (CFE, Telmex, obras comunes), Construcción, PMO, Ingeniería y Permisos'},
-  {key:'X1', tipo:'insumo', nombre:'Censo de afectación', de:'Permisos'},
-  {key:'F2', tipo:'fase',   nombre:'Anteproyecto (AP)', entregables:['KMZ 2.0','Plano de trayectoria','Planimetría','BOM de materiales'], validadores:['sergio']},
-  {key:'F3', tipo:'fase',   nombre:'Impresión de planos AP', entregables:['Planos impresos y doblados'], validadores:[]},
-  {key:'X2', tipo:'insumo', nombre:'Levantamiento físico, topografía y geotecnia', de:'Campo / proveedores'},
-  {key:'F4', tipo:'folios', nombre:'Proyecto ejecutivo y permiso por folio'},
-  {key:'F6', tipo:'bobinas',nombre:'Proyecto de conectividad por bobina', paralela:true, insumo:{nombre:'Avance constructivo (KMZ)', de:'Construcción'}},
-  {key:'F7', tipo:'fase',   nombre:'As-built', entregables:['Proyecto ejecutivo actualizado'], validadores:[], insumo:{nombre:'KMZ y CSV de obra', de:'Construcción'}},
-  {key:'F8', tipo:'fase',   nombre:'Cierre de obra', entregables:['Expediente as-built','Indicaciones de la dependencia atendidas'], validadores:[]}
+const PF_FASES = [
+  {n:1, nombre:'Planeación y levantamiento digital', corto:'Planeación', sale:'A · Levantamiento aceptado y notificado'},
+  {n:2, nombre:'Anteproyecto y levantamiento físico', corto:'Anteproyecto', sale:'B · Levantamientos aceptados y avance confirmado'},
+  {n:3, nombre:'Proyecto ejecutivo', corto:'Ejecutivo', sale:'C · Carpeta física generada por folio'},
+  {n:4, nombre:'Permisos y liberación a construcción', corto:'Permisos', sale:'D · Liberación de pago de permiso → construcción'},
+  {n:5, nombre:'Proyecto de conectividad', corto:'Conectividad', sale:'E · Conectividad aceptada y notificada', paralela:true},
+  {n:6, nombre:'As-built y cierre', corto:'As-built', sale:'Fin · Cierre aceptado por dependencias y clientes'}
 ];
-const PF_FOLIO_ST = { diseno:['En diseño','accent'], revision:['En revisión de Permisos','rev'], carpeta:['Carpeta física por entregar','accent'], entregada:['Esperando liberación','warn'], liberado:['Permiso liberado','ok'] };
+const PF_PLANTILLA = [
+  {f:1, key:'E1',  num:'01', tipo:'hito',   nombre:'Meet con Dirección de Fibra (estrategia)', campo:'Acuerdos de estrategia'},
+  {f:1, key:'E2',  num:'02', tipo:'hito',   nombre:'Alcance y asignación de carga de trabajo', campo:'Alcance de conectividad (insumo del equipo de Conectividad) y quién asignó', medio:true},
+  {f:1, key:'F1',  num:'03–05', tipo:'fase', nombre:'Levantamiento digital', ola:'OLA 2–3 semanas', entregables:['KMZ 1.0','Entregables e ID de planos'], validadores:['sergio','direccion'], valPasos:['04 Revisión','05 Sesión de presentación']},
+  {f:1, key:'H1',  num:'06', tipo:'hito',   nombre:'Notifica la aceptación del levantamiento digital', campo:'Áreas notificadas', aviso:'Ingeniería, PMO, Permisos y Construcción'},
+  {f:2, key:'G1',  num:'G1', tipo:'gis',    nombre:'Compartir con GIS · Planeación en VETRO', gis:'Carga de ruta, asignación de materiales y mano de obra, reporte de presupuesto (BOM y PET).', comparte:'Levantamiento digital aceptado (KMZ 1.0)'},
+  {f:2, key:'F2',  num:'07–08', tipo:'fase', nombre:'Anteproyecto', ola:'OLA 2–3 semanas', entregables:['KMZ 2.0','DWG','Planimetría'], validadores:['sergio'], valPasos:['08 Revisión']},
+  {f:2, key:'F3',  num:'09', tipo:'fase',   nombre:'Imprime y comparte planos', entregables:['Planos impresos'], validadores:[]},
+  {f:2, key:'L10', num:'10–12', tipo:'fase', nombre:'Levantamiento físico, topográfico y geotecnia', ola:'OLA 3 meses · Ingeniería y terceros', entregables:['Topografía','Geotecnia','Redline','KMZ','Reporte fotográfico'], validadores:['direccion'], valPasos:['12 Sesión de presentación de levantamientos']},
+  {f:2, key:'H13', num:'13', tipo:'hito',   nombre:'Confirma y actualiza avance de proyecto', campo:'Confirmado con Dirección PMO Infra'},
+  {f:3, key:'X1',  num:'Insumo', tipo:'insumo', nombre:'Censo de afectación (se solicita en 06)', de:'Permisos'},
+  {f:3, key:'XT',  num:'Insumo', tipo:'insumo', nombre:'Infraestructura de terceros CFE y Telmex (se solicita en 06)', de:'Terceros (CFE / Telmex)'},
+  {f:3, key:'X14', num:'14', tipo:'insumo', nombre:'Permisos y requerimientos por tramo', de:'Permisos'},
+  {f:3, key:'F4',  num:'15–19', tipo:'folios', nombre:'Proyecto ejecutivo por folio (entidad administrativa)'},
+  {f:3, key:'G2',  num:'G2', tipo:'gis',    nombre:'Compartir con GIS · Proyecto ejecutivo en VETRO', gis:'Revisión de insumos, preparación y carga en VETRO, autorrevisión, certificados de calidad y conectividad.', comparte:'Proyecto ejecutivo (KMZ 3.0, DWG, memoria técnica)'},
+  {f:3, key:'H18', num:'18', tipo:'hito',   nombre:'Reporta avance de proyecto ejecutivo', campo:'Reportado a Dirección PMO Infra'},
+  {f:4, key:'T4',  num:'19.1', tipo:'tramite', nombre:'Trámite de permisos por entidad administrativa', ola:'OLA máx. 90 días · Permisos'},
+  {f:4, key:'H20', num:'20', tipo:'hito',   nombre:'Notifica la aceptación del proyecto ejecutivo', campo:'Áreas notificadas', aviso:'Permisos, Ingeniería, Construcción y PMO'},
+  {f:4, key:'H21', num:'21', tipo:'hito',   nombre:'Reporta avance a PMO', campo:'Reporte enviado'},
+  {f:4, key:'H22', num:'22', tipo:'hito',   nombre:'Comunica liberación de pago de permiso', campo:'Permisos → Dirección PMO Infra · pasa a construcción (obra civil)'},
+  {f:5, key:'X5',  num:'—', tipo:'insumo',  nombre:'Avance de obra civil', de:'Construcción', paralela:true},
+  {f:5, key:'F6',  num:'23–24', tipo:'bobinas', nombre:'Diseño de proyecto de conectividad por bobina (empalmes en VETRO)', paralela:true},
+  {f:5, key:'G3',  num:'G3', tipo:'gis',    nombre:'Compartir con GIS · Validación del plan de empalmes', gis:'Validación del plan de empalmes, bitácora y certificado de calidad.', comparte:'Plan de empalmes', paralela:true},
+  {f:5, key:'H25', num:'25', tipo:'hito',   nombre:'Notifica la aceptación del proyecto de conectividad', campo:'Áreas notificadas', aviso:'Gerencia de Ingeniería, Construcción y PMO', paralela:true},
+  {f:6, key:'X6',  num:'—', tipo:'insumo',  nombre:'Reporte final de construcción', de:'Construcción'},
+  {f:6, key:'F7',  num:'26', tipo:'fase',   nombre:'Desarrollo de as-built', entregables:['KMZ','CSV'], validadores:[]},
+  {f:6, key:'G4',  num:'G4', tipo:'gis',    nombre:'Compartir con GIS · Cierre en VETRO', gis:'Actualización en VETRO, capas fantasma, validación, cierre y estatus operacional.', comparte:'As-built (KMZ, CSV)'},
+  {f:6, key:'F8',  num:'27', tipo:'fase',   nombre:'Cierre con dependencias y clientes', entregables:['Expediente de cierre','Indicaciones de la dependencia atendidas'], validadores:['cierre'], valPasos:['27.1 ¿Cierre aceptado?']}
+];
+const PF_FOLIO_ST = { diseno:['En diseño','accent'], revision:['En revisión de Permisos','rev'], carpeta:['Carpeta física por entregar','accent'], entregada:['En trámite con la entidad','warn'], liberado:['Permiso liberado','ok'] };
 const PF_BOB_ST = { diseno:['En diseño','accent'], validacion:['En validación (Sergio)','rev'], validada:['Validada','ok'] };
 const PF_TONO = { ok:'g', warn:'a', bad:'r', accent:'b', rev:'v', idle:'' };
 const PF_MES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 let PF_ITEMS = [];            // {id, tipo:'proyecto'|'folio'|'vinculo', proyecto_id, data, updated_at, pend}
 let PF_SEL = null;            // proyecto abierto
+let PF_FASE_AB = {};          // fases desplegadas
 let PF_GRUPOS = [];           // sugerencias de la pantalla principal
 let PF_ASIG = { q:'', tp:'', pid:'', nuevo:'', auto:true, dest:{}, destPre:'', sel:{}, msg:'' };
 let PF_FORM = null;           // cuadro de captura abierto
@@ -16285,10 +16309,10 @@ function pfDel(ids){
 }
 
 // ── Modelo ──
-function pfMkEtapas(st){
+function pfMkEtapas(st, pid){
   st = st || {};
   return PF_PLANTILLA.map(t=>{
-    const e = Object.assign({ estado:'pendiente', ciclos:0, valIdx:0, validaciones:[], envios:[], ok:[], folios:[], bobinas:[] }, JSON.parse(JSON.stringify(t)), st[t.key]||{});
+    const e = Object.assign({ estado:'pendiente', ciclos:0, valIdx:0, validaciones:[], envios:[], ok:[], folios:[], bobinas:[], pid:pid||'' }, JSON.parse(JSON.stringify(t)), st[t.key]||{});
     if(t.insumo) e.insumo = Object.assign({}, t.insumo, (st[t.key]||{}).insumo||{});
     return e;
   });
@@ -16305,21 +16329,37 @@ function pfActsDe(pid, key, ref){
 function pfActsProy(pid){ const vm = pfVincMap(); return (PA_ITEMS||[]).filter(a=>vm[a.id] && vm[a.id].proyecto_id===pid); }
 function pfActiva(a){ return !/termin|cancel|complet/i.test(a.estatus||''); }
 
+function pfF4de(e){ const p = e.pid ? pfProy(e.pid) : null; const f = p ? pfEt(p,'F4') : null; return f ? f.folios : []; }
+function pfCuenta(e){ return e.tipo!=='gis'; }
 function pfEtapaHecha(e){
-  if(e.tipo==='hito') return !!e.fecha;
+  if(e.tipo==='hito' || e.tipo==='gis') return !!e.fecha;
   if(e.tipo==='insumo') return !!e.recibido;
-  if(e.tipo==='folios') return e.folios.length>0 && e.folios.every(f=>f.estado==='liberado');
+  if(e.tipo==='folios') return e.folios.length>0 && e.folios.every(f=>['entregada','liberado'].includes(f.estado));
+  if(e.tipo==='tramite'){ const fs = pfF4de(e); return fs.length>0 && fs.every(f=>f.estado==='liberado'); }
   if(e.tipo==='bobinas') return e.bobinas.length>0 && e.bobinas.every(b=>b.estado==='validada');
   return e.estado==='completada';
 }
 function pfEtapaEstado(e){   // [texto, tono]
   if(e.tipo==='hito') return e.fecha ? ['Registrado','ok'] : ['Pendiente','idle'];
+  if(e.tipo==='gis') return e.fecha ? ['Compartido con GIS','ok'] : ['Por compartir','idle'];
   if(e.tipo==='insumo') return e.recibido ? ['Recibido','ok'] : e.solicitado ? ['En espera · '+pfDiasDesde(e.solicitado)+' días','warn'] : ['Sin solicitar','idle'];
-  if(e.tipo==='folios'){ const n = e.folios.length, l = e.folios.filter(f=>f.estado==='liberado').length; return !n ? ['Sin foliar','idle'] : l===n ? ['Permisos liberados','ok'] : [l+'/'+n+' permisos liberados','accent']; }
+  if(e.tipo==='folios'){ const n = e.folios.length, c = e.folios.filter(f=>['entregada','liberado'].includes(f.estado)).length; return !n ? ['Sin foliar','idle'] : c===n ? ['Carpetas entregadas','ok'] : [c+'/'+n+' carpetas entregadas','accent']; }
+  if(e.tipo==='tramite'){ const fs = pfF4de(e), n = fs.length, l = fs.filter(f=>f.estado==='liberado').length, t = fs.filter(f=>f.estado==='entregada').length; return !n ? ['Sin folios','idle'] : l===n ? ['Permisos liberados','ok'] : [l+'/'+n+' liberados · '+t+' en trámite', t?'warn':'accent']; }
   if(e.tipo==='bobinas'){ const n = e.bobinas.length, v = e.bobinas.filter(b=>b.estado==='validada').length; return !n ? ['Sin bobinas','idle'] : v===n ? ['Bobinas validadas','ok'] : [v+'/'+n+' bobinas validadas','accent']; }
   return ({ pendiente:['Pendiente','idle'], en_curso:['En curso','accent'], en_validacion:['En validación: '+(PF_VALIDADOR[e.validadores[e.valIdx]]||''),'rev'], completada:['Completada','ok'] })[e.estado] || ['Pendiente','idle'];
 }
-function pfEtapaActual(p){ return (p.data.etapas||[]).find(e=>!e.paralela && !pfEtapaHecha(e)) || null; }
+function pfEtapaActual(p){ return (p.data.etapas||[]).find(e=>pfCuenta(e) && !e.paralela && !pfEtapaHecha(e)) || null; }
+function pfIniciada(e){
+  return pfEtapaHecha(e) || (e.tipo==='fase' && e.estado!=='pendiente') || (e.tipo==='insumo' && e.solicitado) || (e.folios && e.folios.length) || (e.bobinas && e.bobinas.length) || (e.tipo==='tramite' && pfF4de(e).some(f=>['entregada','liberado'].includes(f.estado)));
+}
+function pfFaseInfo(p, n){
+  const items = (p.data.etapas||[]).filter(e=>e.f===n), cuenta = items.filter(pfCuenta), hechos = cuenta.filter(pfEtapaHecha).length;
+  const estado = (cuenta.length && hechos===cuenta.length) ? 'completada' : items.some(pfIniciada) ? 'en_curso' : 'pendiente';
+  return { items, hechos, total:cuenta.length, estado };
+}
+function pfFaseActual(p){ return PF_FASES.find(f=>!f.paralela && pfFaseInfo(p,f.n).estado!=='completada') || null; }
+const PF_FASE_TONO = { completada:'ok', en_curso:'accent', pendiente:'idle' };
+
 function pfEsperas(p){
   const w = [];
   (p.data.etapas||[]).forEach(e=>{
@@ -16349,10 +16389,10 @@ function pfStats(p){
 function pfCrearProyecto(o){
   o = o || {}; const nombre = String(o.nombre||'').trim(); if(!nombre) return null;
   const ex = pfProyectos().find(p=>pfNorm(p.data.nombre)===pfNorm(nombre)); if(ex) return ex;
-  const id = pfId('pfp'); const st = {};
-  if(o.alcance || o.kickoff) st.E1 = { fecha:o.kickoff||'', nota:o.alcance||'' };
-  if(o.asignacion) st.E2 = { fecha:o.asignacion, medio:o.medio||'', nota:o.quien||'' };
-  return pfPut({ id, tipo:'proyecto', proyecto_id:id, data:{ v:2, clave:pfSigClave(), nombre, cliente:o.cliente||'', etapas:pfMkEtapas(st), log:[] } });
+  const id = pfId('pfp'); const st = {}; const alcance = String(o.alcance||'').trim();
+  if(o.kickoff) st.E1 = { fecha:o.kickoff };
+  if(o.asignacion || alcance) st.E2 = { fecha:o.asignacion||'', medio:o.medio||'', nota:(alcance?'Alcance: '+alcance:'')+((alcance&&o.quien)?' · ':'')+(o.quien?'Asignado por '+o.quien:'') };
+  return pfPut({ id, tipo:'proyecto', proyecto_id:id, data:{ v:3, clave:pfSigClave(), nombre, cliente:o.cliente||'', alcance, etapas:pfMkEtapas(st, id), log:[] } });
 }
 function pfFolioNuevo(clave, extra){
   return Object.assign({ clave:String(clave).trim(), dependencia:'', tramo:'', proyectista:'', estado:'diseno', ciclos:0, desde:pfHoy(), hist:[{ fecha:pfHoy(), txt:'Folio agregado' }], envios:[] }, extra||{});
@@ -16362,22 +16402,22 @@ function pfFolioNuevo(clave, extra){
 function pfRespaldoLocal(){
   try{ if(!localStorage.getItem(PF_BK_KEY)) localStorage.setItem(PF_BK_KEY, JSON.stringify({ ts:new Date().toISOString(), items:PF_ITEMS })); }catch(e){}
 }
-const PF_V1_A_KEY = { 'e:kickoff':'E1', 'e:lev':'F1', 'e:ap':'F2', 'e:censo':'X2', 'e:folio':'F4', 'f:censo':'F4', 'f:diseno':'F4', 'f:ejec':'F4', 'f:bob':'F6', 'f:asb':'F7' };
+const PF_V1_A_KEY = { 'e:kickoff':'E1', 'e:lev':'F1', 'e:ap':'F2', 'e:censo':'L10', 'e:folio':'F4', 'f:censo':'F4', 'f:diseno':'F4', 'f:ejec':'F4', 'f:bob':'F6', 'f:asb':'F7' };
 function pfMigrarProyecto(p){
   const d = p.data, old = d.etapa || {}, base = String(p.updated_at||'').slice(0,10) || pfHoy();
   const fol = PF_ITEMS.filter(i=>i.tipo==='folio' && i.proyecto_id===p.id);
   const st = {}, log = [];
   const o = k=>old[k]||{};
   const f0 = k=>o(k).fecha || base;
-  if(o('kickoff').est==='ok'){ st.E1 = { fecha:f0('kickoff'), nota:o('kickoff').nota||'', migrado:true }; st.E2 = { fecha:f0('kickoff'), medio:'', nota:'', migrado:true }; }
+  if(o('kickoff').est==='ok'){ st.E1 = { fecha:f0('kickoff'), migrado:true }; st.E2 = { fecha:f0('kickoff'), medio:'', nota:o('kickoff').nota?'Alcance: '+o('kickoff').nota:'', migrado:true }; if(o('kickoff').nota) d.alcance = d.alcance||o('kickoff').nota; }
   if(o('lev').est==='ok') st.F1 = { estado:'completada', valIdx:2, ok:[true,true], migrado:true };
   else if(o('lev').est==='espera') st.F1 = { estado:'en_validacion', valIdx:0, ok:[true,true], envio:f0('lev'), migrado:true };
   else if(o('lev').est==='curso') st.F1 = { estado:'en_curso', migrado:true };
   if(o('ap').est==='ok') st.F2 = { estado:'completada', valIdx:1, ok:[true,true,true,true], migrado:true };
   else if(o('ap').est==='espera') st.F2 = { estado:'en_validacion', valIdx:0, ok:[true,true,true,true], envio:f0('ap'), migrado:true };
   else if(o('ap').est==='curso') st.F2 = { estado:'en_curso', migrado:true };
-  if(o('censo').est==='ok'){ st.X1 = { solicitado:f0('censo'), recibido:f0('censo'), migrado:true }; st.X2 = { solicitado:f0('censo'), recibido:f0('censo'), migrado:true }; }
-  else if(o('censo').est==='espera') st.X2 = { solicitado:f0('censo'), migrado:true };
+  if(o('censo').est==='ok'){ st.X1 = { solicitado:f0('censo'), recibido:f0('censo'), migrado:true }; st.L10 = { estado:'completada', valIdx:1, ok:[true,true,true,true,true], migrado:true }; }
+  else if(o('censo').est==='espera') st.L10 = { estado:'en_curso', migrado:true };
   const NOM = { kickoff:'Kick-off y asignación', lev:'Levantamiento digital', ap:'Anteproyecto', censo:'Estudios y censo', folio:'Foliado' };
   Object.keys(NOM).forEach(k=>{ const e = o(k); if(e.est && e.est!=='pend' || e.nota) log.push({ ts:new Date().toISOString(), fecha:(e.fecha||base), txt:'Migrado de la versión 1 · '+NOM[k]+': '+({pend:'Pendiente',curso:'En curso',espera:'Esperando validación',ok:'Validada',na:'No aplica'}[e.est]||'')+(e.nota?' · '+e.nota:''), por:e.por||'' }); });
   // folios v1 → F4
@@ -16392,10 +16432,10 @@ function pfMigrarProyecto(p){
     const ult = (x.hist||[]).slice(-1)[0];
     folios.push(pfFolioNuevo(x.folio, { proyectista:resp, estado, ciclos:Math.max(0,(x.ronda||1)-1), desde:(ult&&String(ult.ts||'').slice(0,10))||base, hist, v1id:f.id }));
   });
-  const et = pfMkEtapas(st);
+  const et = pfMkEtapas(st, p.id);
   et.find(e=>e.key==='F4').folios = folios;
   d.v1 = d.v1 || { etapa:old };
-  d.v = 2; d.clave = d.clave || pfSigClave(); d.cliente = d.cliente || ''; d.etapas = et; d.log = (d.log||[]).concat(log);
+  d.v = 3; d.clave = d.clave || pfSigClave(); d.cliente = d.cliente || ''; d.etapas = et; d.log = (d.log||[]).concat(log);
   // vínculos: se les agrega etapa (faseKey) y folio (ref); lo que traían de v1 se conserva
   const mod = [];
   PF_ITEMS.filter(i=>i.tipo==='vinculo' && i.proyecto_id===p.id && !i.data.faseKey).forEach(v=>{
@@ -16405,13 +16445,47 @@ function pfMigrarProyecto(p){
   return mod;
 }
 function pfMigrar(){
-  const pend = PF_ITEMS.filter(i=>i.tipo==='proyecto' && i.data.v!==2);
+  const n3 = pfMigrarV3(); const n1 = pfMigrar1(); return n1 + n3;
+}
+function pfMigrar1(){
+  const pend = PF_ITEMS.filter(i=>i.tipo==='proyecto' && (i.data.v||1)<2);
   if(!pend.length) return 0;
   pfRespaldoLocal();
   const cambios = [];
   pend.sort((a,b)=>String(a.updated_at||'').localeCompare(String(b.updated_at||''))).forEach(p=>{ const m = pfMigrarProyecto(p); cambios.push(p, ...m); });
   pfPutMany(cambios);
-  window._pfMigMsg = 'Se migraron '+pend.length+' proyecto(s) de la versión anterior a las 12 etapas. No se borró nada: tus folios, enlaces y notas siguen guardados (y hay un respaldo en este navegador).';
+  window._pfMigMsg = 'Se migraron '+pend.length+' proyecto(s) de la versión anterior al Proceso Ingeniería Tikva (6 fases). No se borró nada: tus folios, enlaces y notas siguen guardados (y hay un respaldo en este navegador).';
+  return pend.length;
+}
+
+// ── Migración de las 12 etapas (v2) al proceso de 6 fases (v3). Conserva todo y deja copia de las etapas anteriores ──
+function pfMigrarV3Proyecto(p){
+  const d = p.data, old = d.etapas || [], g = k=>old.find(e=>e.key===k) || {};
+  const st = {}; const copia = (k, extra)=>{ const o = g(k); if(!o.key) return; const c = JSON.parse(JSON.stringify(o)); ['key','tipo','nombre','campo','aviso','entregables','validadores','medio_t','insumo'].forEach(x=>{ if(x!=='medio') delete c[x]; }); delete c.pid; Object.assign(c, extra||{}); st[k] = c; };
+  const e1 = g('E1'), e2 = g('E2');
+  if(!d.alcance && e1.nota) d.alcance = e1.nota;
+  if(e1.key) st.E1 = { fecha:e1.fecha||'', ajustes:e1.ajustes };
+  if(e2.key) st.E2 = { fecha:e2.fecha||'', medio:(typeof e2.medio==='string'?e2.medio:''), nota:(d.alcance?'Alcance: '+d.alcance:'')+((d.alcance&&e2.nota)?' · ':'')+(e2.nota?'Asignado por '+e2.nota:''), ajustes:e2.ajustes };
+  ['F1','H1','X1','F3','F4','F7','F8'].forEach(k=>copia(k));
+  copia('F2'); if(st.F2){ const ok = g('F2').ok||[]; st.F2.ok = st.F2.estado==='completada' ? [true,true,true] : [ok[0],ok[1],ok[2]]; }
+  copia('F6'); const f6i = (g('F6').insumo)||{}; if(f6i.solicitado || f6i.recibido) st.X5 = Object.assign({}, f6i, { nombre:undefined, de:undefined }); 
+  const f7i = (g('F7').insumo)||{}; if(f7i.solicitado || f7i.recibido) st.X6 = Object.assign({}, f7i, { nombre:undefined, de:undefined });
+  const x2 = g('X2'); if(x2.solicitado || x2.recibido) st.L10 = x2.recibido ? { estado:'completada', valIdx:1, ok:[true,true,true,true,true], solicitadoOrigen:x2.solicitado, migrado:true } : { estado:'en_curso', migrado:true };
+  Object.keys(st).forEach(k=>{ const o = st[k]; Object.keys(o).forEach(x=>{ if(o[x]===undefined) delete o[x]; }); });
+  d.v2 = d.v2 || { etapas:old };
+  d.etapas = pfMkEtapas(st, p.id); d.v = 3;
+  (d.log = d.log||[]).push({ ts:new Date().toISOString(), fecha:pfHoy(), txt:'Proyecto actualizado al Proceso Ingeniería Tikva (6 fases). Se conservó todo lo registrado'+(x2.solicitado||x2.recibido?'; el levantamiento físico (X2) pasó al paso 10–12':'')+'.', por:'' });
+  const mod = [];
+  PF_ITEMS.filter(i=>i.tipo==='vinculo' && i.proyecto_id===p.id && i.data.faseKey==='X2').forEach(v=>{ v.data.faseKey = 'L10'; mod.push(v); });
+  return mod;
+}
+function pfMigrarV3(){
+  const pend = PF_ITEMS.filter(i=>i.tipo==='proyecto' && i.data.v===2);
+  if(!pend.length) return 0;
+  pfRespaldoLocal();
+  const cambios = []; pend.forEach(p=>{ const m = pfMigrarV3Proyecto(p); cambios.push(p, ...m); });
+  pfPutMany(cambios);
+  window._pfMigMsg = 'Se actualizaron '+pend.length+' proyecto(s) al nuevo Proceso Ingeniería Tikva (6 fases). No se perdió nada de lo registrado; las etapas anteriores quedan guardadas como respaldo.';
   return pend.length;
 }
 
@@ -16462,9 +16536,9 @@ function pfCss(){
   .pf-kpis div{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:10.5px;color:var(--dim)}.pf-kpis b{display:block;font-size:20px;color:var(--text)}
   .pf-alert{background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.35);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12px}
   .pf-sec{font-size:11px;letter-spacing:.08em;color:var(--dim);margin:20px 0 8px;text-transform:uppercase}
-  .pf-stage{display:grid;grid-template-columns:44px 1fr;gap:8px}
+  .pf-stage{display:grid;grid-template-columns:58px 1fr;gap:8px}
   .pf-mk{display:flex;flex-direction:column;align-items:center}
-  .pf-mk b{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;border:2px solid var(--border);background:var(--surface2);color:var(--dim);flex:none}
+  .pf-mk b{min-width:34px;height:34px;padding:0 7px;border-radius:17px;white-space:nowrap;display:flex;align-items:center;justify-content:center;font-size:11px;border:2px solid var(--border);background:var(--surface2);color:var(--dim);flex:none}
   .pf-mk i{flex:1;width:2px;background:var(--border);margin:4px 0}
   .pf-mk b.ok{border-color:var(--green);color:var(--green)}.pf-mk b.warn{border-color:var(--amber);color:var(--amber)}.pf-mk b.accent{border-color:var(--accent);color:var(--accent)}.pf-mk b.rev{border-color:#b389f0;color:#b389f0}
   .pf-sbody{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;flex-direction:column;gap:10px}
@@ -16494,7 +16568,19 @@ function pfCss(){
   .pf-sel{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:4px 6px;color:var(--text);font-size:11px;font-family:var(--font);max-width:230px}
   .pf-asig{max-height:46vh;overflow:auto;border:1px solid var(--border);border-radius:8px;margin-top:10px}
   .pf-asig table{width:100%;border-collapse:collapse}.pf-asig td{padding:6px 8px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text)}.pf-asig tr:first-child td{border-top:0}
-  @media(max-width:900px){.pf-kpis{grid-template-columns:repeat(2,1fr)}.pf-stp span{font-size:8.5px}}
+  .pf-stp.fases span{height:auto;min-height:26px;padding:4px 6px;font-size:10.5px;line-height:1.2;text-align:center;flex-direction:row}
+  .pf-fb{border:1px solid var(--border);border-radius:14px;background:var(--surface);overflow:hidden;margin-bottom:12px;--c:var(--dim)}
+  .pf-fb.ok{--c:var(--green)}.pf-fb.accent{--c:var(--accent)}
+  .pf-fbh{display:grid;grid-template-columns:40px minmax(0,1fr) 150px auto 18px;gap:12px;align-items:center;width:100%;padding:12px 16px;background:linear-gradient(90deg,color-mix(in srgb,var(--c) 10%,var(--surface)),var(--surface) 60%);border:0;cursor:pointer;text-align:left;color:var(--text);font-family:var(--font)}
+  .pf-fbn{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-weight:800;font-size:16px;color:#fff;background:var(--c)}
+  .pf-fb.idle .pf-fbn{background:var(--surface2);color:var(--dim);border:1px solid var(--border)}
+  .pf-fbt b{display:block;font-size:14px}.pf-fbt small{display:block;color:var(--dim);font-size:11px;margin-top:2px}
+  .pf-fbp{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--dim)}.pf-fbp i{display:block;flex:1;height:6px;border-radius:4px;background:var(--surface2);overflow:hidden}.pf-fbp i u{display:block;height:100%;background:var(--c)}
+  .pf-fbb{padding:10px 16px 4px}
+  .pf-fbb .pf-sbody{background:var(--surface2)}
+  .pf-gisbox{display:grid;gap:6px;font-size:12.5px;padding:8px 10px;border-radius:9px;background:var(--surface2);color:var(--text)}
+  .pf-sbody.gis{border-style:dashed}
+  @media(max-width:900px){.pf-kpis{grid-template-columns:repeat(2,1fr)}.pf-stp span{font-size:8.5px}.pf-fbh{grid-template-columns:36px minmax(0,1fr) auto}.pf-fbp,.pf-fbh .chev{display:none}}
   `;
   document.head.appendChild(s);
 }
@@ -16538,21 +16624,22 @@ function pfFormOk(){
     if(need && !v[f.k]){ if(el) el.style.borderColor = 'var(--red)'; if(!bad) bad = el; }
   });
   if(bad){ bad.focus(); document.getElementById('pfFErr').textContent = 'Completa los campos marcados con *.'; return; }
+  if(PF_FORM.valida){ const err = PF_FORM.valida(v); if(err){ document.getElementById('pfFErr').textContent = err; return; } }
   const fn = PF_FORM.ok; pfCerrarModal(); if(fn) fn(v);
 }
 const pfMedioOpts = ()=>PF_MEDIOS.map(m=>[m,m]);
 
 // ── Proyecto: nuevo / datos / eliminar / respaldo ──
 function pfNuevoProyecto(){
-  pfForm({ titulo:'Nuevo proyecto', sub:'Se crea con la plantilla completa de las 12 etapas. La clave se asigna sola.', ancho:520, btn:'Crear proyecto',
+  pfForm({ titulo:'Nuevo proyecto', sub:'Se crea con las 6 fases del Proceso Ingeniería Tikva. La clave se asigna sola.', ancho:520, btn:'Crear proyecto',
     campos:[ {k:'nombre',l:'Nombre del proyecto',req:true,ph:'Ej. TIKVA México'}, {k:'cliente',l:'Cliente',ph:'Opcional'},
-      {k:'alcance',l:'Alcance de conectividad acordado (E1 · kick-off)',t:'textarea',req:true,ph:'Ej. Troncal de 42 km sobre derecho de vía federal'},
-      {k:'kickoff',l:'Fecha del kick-off (si ya se hizo)',t:'date'},
-      {k:'asignacion',l:'Fecha en que se asignó a coordinación (E2)',t:'date',v:pfHoy(),req:true},
+      {k:'alcance',l:'Alcance de conectividad acordado',t:'textarea',req:true,ph:'Ej. Troncal de 42 km sobre derecho de vía federal'},
+      {k:'kickoff',l:'Fecha del Meet con Dirección de Fibra (01) · si ya se hizo',t:'date'},
+      {k:'asignacion',l:'Fecha de asignación de carga (02)',t:'date',v:pfHoy(),req:true},
       {k:'quien',l:'Quién asignó',ph:'Ej. Sergio'}, {k:'medio',l:'Medio de la asignación',t:'select',o:pfMedioOpts()} ],
+    valida:v=>pfProyectos().some(p=>pfNorm(p.data.nombre)===pfNorm(v.nombre)) ? 'Ya existe un proyecto con ese nombre.' : '',
     ok:v=>{
-      if(pfProyectos().some(p=>pfNorm(p.data.nombre)===pfNorm(v.nombre))){ alert('Ya existe un proyecto con ese nombre.'); return; }
-      const p = pfCrearProyecto(v); if(p){ pfLog(p, 'Proyecto creado con la plantilla de 12 etapas'); pfPut(p); PF_SEL = p.id; pfRepinta(); }
+      const p = pfCrearProyecto(v); if(p){ pfLog(p, 'Proyecto creado con las 6 fases del proceso'); pfPut(p); PF_SEL = p.id; pfRepinta(); }
     } });
 }
 function pfAbrirProy(id){ PF_SEL = id; pfRepinta(); try{ window.scrollTo({top:0}); }catch(e){} }
@@ -16561,8 +16648,8 @@ function pfEditarProyecto(id){
   const p = pfProy(id); if(!p) return;
   pfForm({ titulo:'Datos del proyecto', sub:'Solo cambia el portafolio; el proyecto escrito en tus actividades no se modifica.', btn:'Guardar',
     campos:[ {k:'nombre',l:'Nombre',v:p.data.nombre,req:true}, {k:'cliente',l:'Cliente',v:p.data.cliente||''}, {k:'clave',l:'Clave',v:p.data.clave||'',req:true} ],
+    valida:v=>pfProyectos().some(x=>x.id!==id && pfNorm(x.data.nombre)===pfNorm(v.nombre)) ? 'Ya existe un proyecto con ese nombre.' : '',
     ok:v=>{
-      if(pfProyectos().some(x=>x.id!==id && pfNorm(x.data.nombre)===pfNorm(v.nombre))){ alert('Ya existe un proyecto con ese nombre.'); return; }
       p.data.nombre = v.nombre; p.data.cliente = v.cliente; p.data.clave = v.clave; pfGuarda(p);
     } });
 }
@@ -16581,19 +16668,26 @@ function pfRespaldo(){
 
 // ── Hitos e insumos ──
 function pfRegHito(pid, key, editar){
-  const p = pfProy(pid); if(!p) return; const e = pfEt(p, key); const t = PF_PLANTILLA.find(x=>x.key===key);
-  const campos = [ {k:'fecha',l:'Fecha',t:'date',v:e.fecha||pfHoy(),req:true} ];
-  if(t.medio) campos.push({k:'medio',l:'Medio',t:'select',o:pfMedioOpts(),v:typeof e.medio==='string'?e.medio:'Correo'});
-  campos.push({k:'nota',l:t.campo,t:'textarea',v:e.nota||''});
+  const p = pfProy(pid); if(!p) return; const e = pfEt(p, key); const t = PF_PLANTILLA.find(x=>x.key===key); const gis = e.tipo==='gis';
+  const campos = [ {k:'fecha',l:gis?'Fecha en que se compartió':'Fecha',t:'date',v:e.fecha||pfHoy(),req:true} ];
+  if(t.medio || gis) campos.push({k:'medio',l:'Medio',t:'select',o:pfMedioOpts(),v:typeof e.medio==='string'&&e.medio?e.medio:'Correo'});
+  campos.push({k:'nota',l:gis?'Qué se compartió':t.campo,t:'textarea',v:e.nota||''});
+  if(gis) campos.push({k:'link',l:'Link de la información compartida (opcional)',v:e.link||'',ph:'https://… carpeta o correo'});
   if(editar) campos.push({k:'motivo',l:'Motivo del cambio',req:true,ph:'Por qué se corrige este registro'});
-  pfForm({ titulo:(editar?'Corregir · ':'Registrar · ')+e.nombre, sub:t.aviso?'Áreas a notificar: '+t.aviso+'.':'', campos,
+  const sub = gis ? 'Registra qué compartiste con el equipo GIS ('+t.comparte+'). No bloquea el avance.' : (t.aviso ? 'Áreas a notificar: '+t.aviso+'.'+(key==='H1'?' También se registran las solicitudes del censo de afectación (Permisos) y de infraestructura de terceros (CFE y Telmex).':'') : '');
+  pfForm({ titulo:(editar?'Corregir · ':'Registrar · ')+e.nombre, sub, campos,
+    valida:v=>(gis && v.link && !/^https?:\/\//i.test(v.link)) ? 'El link debe empezar con https://' : '',
     ok:v=>{
       const antes = (e.fecha?pfFmt(e.fecha):'—')+(e.nota?' · '+e.nota:'');
-      e.fecha = v.fecha; if(t.medio) e.medio = v.medio; e.nota = v.nota;
-      if(editar){ (e.ajustes = e.ajustes||[]).push({ fecha:pfHoy(), cambios:'Antes: '+antes, motivo:v.motivo }); pfLog(p, e.key+' · '+e.nombre+' corregido. Motivo: '+v.motivo); }
+      e.fecha = v.fecha; if(t.medio || gis) e.medio = v.medio; e.nota = v.nota; if(gis) e.link = v.link || null;
+      const rot = (e.num && e.num!=='Insumo' && e.num!=='—' ? e.num : e.key);
+      if(editar){ (e.ajustes = e.ajustes||[]).push({ fecha:pfHoy(), cambios:'Antes: '+antes, motivo:v.motivo }); pfLog(p, rot+' · '+e.nombre+' corregido. Motivo: '+v.motivo); }
       else {
-        pfLog(p, e.key+' · '+e.nombre+' registrado ('+pfFmt(v.fecha)+')');
-        if(key==='H1'){ const x1 = pfEt(p,'X1'); if(x1 && !x1.solicitado){ x1.solicitado = v.fecha; pfLog(p, 'X1 · Solicitud del censo de afectación a Permisos registrada junto con la notificación'); } }
+        pfLog(p, rot+' · '+(gis?'Compartido con GIS: ':'')+e.nombre+' registrado ('+pfFmt(v.fecha)+')');
+        if(key==='H1'){
+          const x1 = pfEt(p,'X1'); if(x1 && !x1.solicitado){ x1.solicitado = v.fecha; pfLog(p, 'Solicitud del censo de afectación a Permisos registrada junto con la notificación'); }
+          const xt = pfEt(p,'XT'); if(xt && !xt.solicitado){ xt.solicitado = v.fecha; pfLog(p, 'Solicitud de infraestructura de terceros (CFE y Telmex) registrada junto con la notificación'); }
+        }
       }
       pfGuarda(p);
     } });
@@ -16617,18 +16711,18 @@ function pfRegInsumo(pid, key, sub, accion){
 
 // ── Fases con validación ──
 function pfToggleOk(pid, key, i, on){ const p = pfProy(pid); if(!p) return; const e = pfEt(p, key); e.ok = e.ok||[]; e.ok[i] = !!on; pfGuarda(p); }
-function pfIniciarFase(pid, key){ const p = pfProy(pid); const e = pfEt(p, key); e.estado = 'en_curso'; pfLog(p, e.key+' · '+e.nombre+' iniciada'); pfGuarda(p); }
-function pfCompletarFase(pid, key){ const p = pfProy(pid); const e = pfEt(p, key); e.estado = 'completada'; pfLog(p, e.key+' · '+e.nombre+' completada'); pfGuarda(p); }
+function pfIniciarFase(pid, key){ const p = pfProy(pid); const e = pfEt(p, key); e.estado = 'en_curso'; pfLog(p, e.num+' · '+e.nombre+' iniciada'); pfGuarda(p); }
+function pfCompletarFase(pid, key){ const p = pfProy(pid); const e = pfEt(p, key); e.estado = 'completada'; pfLog(p, e.num+' · '+e.nombre+' completada'); pfGuarda(p); }
 function pfEnviarValidacion(pid, key){
   const p = pfProy(pid); if(!p) return; const e = pfEt(p, key); const val = e.validadores[e.valIdx];
-  pfForm({ titulo:'Enviar a validación', sub:e.key+' · '+e.nombre+' → '+PF_VALIDADOR[val], btn:'Registrar envío',
+  pfForm({ titulo:'Enviar a validación', sub:(e.num||e.key)+' · '+e.nombre+' → '+(e.valPasos&&e.valPasos[e.valIdx]?e.valPasos[e.valIdx]+' · ':'')+PF_VALIDADOR[val], btn:'Registrar envío',
     campos:[ {k:'fecha',l:'Fecha de envío',t:'date',v:pfHoy(),req:true}, {k:'medio',l:'Medio',t:'select',o:pfMedioOpts()} ],
     ok:v=>{ e.estado = 'en_validacion'; e.envio = v.fecha; (e.envios = e.envios||[]).push({ val, ronda:(e.ciclos||0)+1, fecha:v.fecha, medio:v.medio });
       pfLog(p, e.nombre+' enviado a validación de '+PF_VALIDADOR[val]+' ('+v.medio+')'); pfGuarda(p); } });
 }
 function pfResultadoValidacion(pid, key){
   const p = pfProy(pid); if(!p) return; const e = pfEt(p, key); const val = e.validadores[e.valIdx];
-  pfForm({ titulo:'Resultado de '+PF_VALIDADOR[val], sub:e.key+' · '+e.nombre, btn:'Registrar resultado',
+  pfForm({ titulo:'Resultado de '+PF_VALIDADOR[val], sub:(e.num||e.key)+' · '+e.nombre+(e.valPasos&&e.valPasos[e.valIdx]?' · '+e.valPasos[e.valIdx]:''), btn:'Registrar resultado',
     campos:[ {k:'res',l:'Resultado',t:'select',o:[['aprobado','Aprobado'],['observaciones','Con observaciones']]}, {k:'fecha',l:'Fecha',t:'date',v:pfHoy(),req:true}, {k:'medio',l:'Medio',t:'select',o:pfMedioOpts()},
       {k:'nota',l:'Nota / observaciones',t:'textarea',req:v=>v.res==='observaciones',ph:'Qué pidió corregir (obligatorio si hay observaciones)'} ],
     ok:v=>{
@@ -16652,8 +16746,9 @@ function pfFolioAdd(pid){
   const p = pfProy(pid); if(!p) return;
   pfForm({ titulo:'Agregar folio', sub:'Cada folio avanza por separado hasta liberar el permiso.', btn:'Agregar folio',
     campos:[ {k:'clave',l:'Folio',req:true,ph:'Ej. F-01 o el folio como lo escribes en tus actividades'}, {k:'dependencia',l:'Dependencia',t:'select',o:pfDepOpts()}, {k:'tramo',l:'Tramo',ph:'Ej. km 0+000 – 4+200'}, {k:'proyectista',l:'Proyectista',t:'select',o:pfPersonaOpts()} ],
+    valida:v=>pfEt(p,'F4').folios.some(f=>pfNorm(f.clave)===pfNorm(v.clave)) ? 'Ese folio ya existe en el proyecto.' : '',
     ok:v=>{
-      const f4 = pfEt(p,'F4'); if(f4.folios.some(f=>pfNorm(f.clave)===pfNorm(v.clave))){ alert('Ese folio ya existe en el proyecto.'); return; }
+      const f4 = pfEt(p,'F4');
       f4.folios.push(pfFolioNuevo(v.clave, { dependencia:v.dependencia, tramo:v.tramo, proyectista:v.proyectista }));
       pfLog(p, 'Folio '+v.clave+' agregado'+(v.dependencia?' ('+v.dependencia+')':''), 'fase', v.clave); pfGuarda(p);
     } });
@@ -16662,10 +16757,10 @@ function pfFolioEditar(pid, i){
   const p = pfProy(pid); const f = pfEt(p,'F4').folios[i]; if(!f) return;
   pfForm({ titulo:'Datos del folio', sub:'Si cambias el nombre, las actividades enlazadas siguen unidas a este folio.', btn:'Guardar',
     campos:[ {k:'clave',l:'Folio',v:f.clave,req:true}, {k:'dependencia',l:'Dependencia',t:'select',o:pfDepOpts(),v:f.dependencia}, {k:'tramo',l:'Tramo',v:f.tramo}, {k:'proyectista',l:'Proyectista',t:'select',o:pfPersonaOpts(f.proyectista),v:f.proyectista} ],
+    valida:v=>pfEt(p,'F4').folios.some((x,j)=>j!==i && pfNorm(x.clave)===pfNorm(v.clave)) ? 'Ya existe otro folio con ese nombre.' : '',
     ok:v=>{
       const viejo = f.clave; f.dependencia = v.dependencia; f.tramo = v.tramo; f.proyectista = v.proyectista;
       if(v.clave!==viejo){
-        if(pfEt(p,'F4').folios.some((x,j)=>j!==i && pfNorm(x.clave)===pfNorm(v.clave))){ alert('Ya existe otro folio con ese nombre.'); return; }
         f.clave = v.clave; const mod = PF_ITEMS.filter(x=>x.tipo==='vinculo' && x.proyecto_id===pid && x.data.faseKey==='F4' && x.data.ref===viejo); mod.forEach(x=>{ x.data.ref = v.clave; });
         if(mod.length) pfPutMany(mod);
         f.hist.push({ fecha:pfHoy(), txt:'Renombrado de "'+viejo+'"' });
@@ -16690,8 +16785,8 @@ function pfFolioEnviar(pid, i){
 }
 function pfFolioResultado(pid, i, etapa){
   const p = pfProy(pid); const f = pfEt(p,'F4').folios[i]; const rev = etapa==='revision';
-  pfForm({ titulo:'Resultado · '+f.clave, sub:rev?'Revisión de Permisos':'Liberación de la dependencia'+(f.dependencia?' ('+f.dependencia+')':''), btn:'Registrar resultado',
-    campos:[ {k:'res',l:'Resultado',t:'select',o:rev?[['ok','Aprobado por Permisos'],['obs','Con observaciones']]:[['ok','Permiso liberado'],['obs','Con observaciones de la dependencia']]},
+  pfForm({ titulo:'Resultado · '+f.clave, sub:(rev?'Revisión de Permisos':'Trámite con la entidad'+(f.dependencia?' ('+f.dependencia+')':''))+(rev?'':' · si no la acepta, el folio regresa a diseño (fase 3) y suma un ciclo'), btn:'Registrar resultado',
+    campos:[ {k:'res',l:'Resultado',t:'select',o:rev?[['ok','Aprobado por Permisos'],['obs','Con observaciones']]:[['ok','Permiso liberado (19.1 aceptado)'],['obs','No aceptado por la entidad (19.2)']]},
       {k:'fecha',l:'Fecha',t:'date',v:pfHoy(),req:true}, {k:'nota',l:'Nota / observaciones',t:'textarea',req:v=>v.res==='obs'} ],
     ok:v=>{
       if(v.res==='ok') pfFolioMover(pid, i, rev?'carpeta':'liberado', rev?'Aprobado por Permisos':'Permiso liberado', v.fecha);
@@ -16703,7 +16798,8 @@ function pfFolioResultado(pid, i, etapa){
 function pfBobAdd(pid){
   const p = pfProy(pid); if(!p) return;
   pfForm({ titulo:'Agregar bobina', btn:'Agregar bobina', campos:[ {k:'clave',l:'Bobina',req:true,ph:'Ej. B-01'}, {k:'proyectista',l:'Proyectista',t:'select',o:pfPersonaOpts()} ],
-    ok:v=>{ const e = pfEt(p,'F6'); if(e.bobinas.some(b=>pfNorm(b.clave)===pfNorm(v.clave))){ alert('Esa bobina ya existe.'); return; }
+    valida:v=>pfEt(p,'F6').bobinas.some(b=>pfNorm(b.clave)===pfNorm(v.clave)) ? 'Esa bobina ya existe.' : '',
+    ok:v=>{ const e = pfEt(p,'F6');
       e.bobinas.push({ clave:v.clave, proyectista:v.proyectista, estado:'diseno', ciclos:0, hist:[{ fecha:pfHoy(), txt:'Bobina agregada' }] }); pfLog(p, 'Bobina '+v.clave+' agregada'); pfGuarda(p); } });
 }
 function pfBobQuitar(pid, i){
@@ -16732,31 +16828,34 @@ function pfBobResultado(pid, i){
 function pfDestinos(p){
   const L = [];
   PF_PLANTILLA.forEach(t=>{
+    const rot = t.num && t.num!=='Insumo' && t.num!=='—' ? t.num+' · ' : '';
+    if(t.tipo==='gis') return;
+    if(t.tipo==='tramite') return;
     if(t.tipo==='folios'){
-      L.push({ v:'F4|', t:'F4 · '+t.nombre+' (sin folio aún)' });
-      if(p) pfEt(p,'F4').folios.forEach(f=>L.push({ v:'F4|'+f.clave, t:'F4 · Folio '+f.clave+(f.dependencia?' ('+f.dependencia+')':'') }));
+      L.push({ v:'F4|', t:'F'+t.f+' · '+rot+t.nombre+' (sin folio aún)' });
+      if(p) pfEt(p,'F4').folios.forEach(f=>L.push({ v:'F4|'+f.clave, t:'F3 · Folio '+f.clave+(f.dependencia?' ('+f.dependencia+')':'') }));
     } else if(t.tipo==='bobinas'){
-      L.push({ v:'F6|', t:'F6 · '+t.nombre+' (sin bobina aún)' });
-      if(p) pfEt(p,'F6').bobinas.forEach(b=>L.push({ v:'F6|'+b.clave, t:'F6 · Bobina '+b.clave }));
-    } else L.push({ v:t.key+'|', t:t.key+' · '+t.nombre });
+      L.push({ v:'F6|', t:'F'+t.f+' · '+rot+t.nombre+' (sin bobina aún)' });
+      if(p) pfEt(p,'F6').bobinas.forEach(b=>L.push({ v:'F6|'+b.clave, t:'F5 · Bobina '+b.clave }));
+    } else L.push({ v:t.key+'|', t:'F'+t.f+' · '+rot+t.nombre });
   });
   return L;
 }
 function pfDestOpts(p, sel){
   return `<option value="">Sin etapa por ahora</option>`+pfDestinos(p).map(d=>`<option value="${pfEsc(d.v)}" ${sel===d.v?'selected':''}>${pfEsc(d.t)}</option>`).join('');
 }
-function pfDestTxt(v){ if(!v) return 'Sin etapa'; const i = v.indexOf('|'); const k = v.slice(0,i), r = v.slice(i+1); const t = PF_PLANTILLA.find(x=>x.key===k); return (t?k+' · '+t.nombre:k)+(r?' · '+r:''); }
+function pfDestTxt(v){ if(!v) return 'Sin etapa'; const i = v.indexOf('|'); const k = v.slice(0,i), r = v.slice(i+1); const t = PF_PLANTILLA.find(x=>x.key===k); return (t?t.nombre:k)+(r?' · '+r:''); }
 // Sugerencia de etapa según el nombre de la actividad (solo una propuesta: tú la ajustas)
 function pfSugDestino(a, p){
   const t = pfNorm((a.actividad||'')+' '+(a.tipo||'')), fol = pfNorm(a.folio||'');
   if(/bobina/.test(t)){ const b = p ? pfEt(p,'F6').bobinas.find(x=>t.includes(pfNorm(x.clave))) : null; return 'F6|'+(b?b.clave:''); }
   if(/as.?built|asbuilt/.test(t)) return 'F7|';
-  if(/cierre de obra|expediente/.test(t)) return 'F8|';
+  if(/cierre de obra|expediente de cierre|cierre con dependencia/.test(t)) return 'F8|';
   if(p && fol){ const f = pfEt(p,'F4').folios.find(x=>pfNorm(x.clave)===fol); if(f) return 'F4|'+f.clave; }
-  if(/geotec|topograf|levantamiento fisico/.test(t)) return 'X2|';
+  if(/geotec|topograf|levantamiento fisico|redline/.test(t)) return 'L10|';
   if(/censo/.test(t)) return 'X1|';
   if(/levantamiento|kmz 1/.test(t)) return 'F1|';
-  if(/\bap\b|anteproyecto|kmz 2|\bbom\b/.test(t)) return 'F2|';
+  if(/\bap\b|anteproyecto|kmz 2|\bdwg\b/.test(t)) return 'F2|';
   if(/impresion|doblad/.test(t)) return 'F3|';
   if(/permiso|ejecutivo|carpeta|plano|diseno|memoria|seccion|corte|trayectoria|planimetria|cruce|marginal|perfil|proyecto|foliad/.test(t)) return 'F4|';
   return '';
@@ -16869,14 +16968,14 @@ function pfRenderVista(){
   if(PF_SEL) pfRenderDetalle(top, mount); else pfRenderHome(top, mount);
 }
 function pfStepper(p){
-  const cur = pfEtapaActual(p);
-  return `<div class="pf-stp">${(p.data.etapas||[]).map(e=>{ const x = pfEtapaEstado(e); return `<span class="${x[1]} ${cur===e?'cur':''}" title="${pfEsc(e.key+' · '+e.nombre+': '+x[0])}">${e.key}</span>`; }).join('')}</div>`;
+  const cur = pfFaseActual(p);
+  return `<div class="pf-stp fases">${PF_FASES.map(f=>{ const fi = pfFaseInfo(p,f.n); const tn = PF_FASE_TONO[fi.estado]; return `<span class="${tn==='idle'?'':tn} ${cur&&cur.n===f.n?'cur':''}" title="${pfEsc('Fase '+f.n+' · '+f.nombre+': '+fi.hechos+'/'+fi.total+' pasos')}">${f.n} · ${pfEsc(f.corto)}${f.paralela&&fi.estado==='en_curso'?' ∥':''}</span>`; }).join('')}</div>`;
 }
 function pfEsperasHtml(w, max){ return `<div class="pf-waits">${w.slice(0,max||99).map(x=>`<div><span class="d">${x.dias} d</span>Esperando a <b>${pfEsc(x.quien)}</b>: ${pfEsc(x.que)}</div>`).join('')}</div>`; }
 function pfCardProyecto(p){
-  const cur = pfEtapaActual(p), w = pfEsperas(p), s = pfStats(p), x = cur ? pfEtapaEstado(cur) : ['Proyecto cerrado','ok'];
+  const cur = pfEtapaActual(p), fa = pfFaseActual(p), w = pfEsperas(p), s = pfStats(p), x = cur ? pfEtapaEstado(cur) : ['Proyecto cerrado','ok'];
   return `<div class="pf-card pf-pc" onclick="pfAbrirProy('${p.id}')">
-    <div class="pf-top"><span class="pf-mono">${pfEsc(p.data.clave||'')}</span><h3>${pfEsc(p.data.nombre)}</h3>${p.data.cliente?`<span class="pf-note">${pfEsc(p.data.cliente)}</span>`:''}<span style="flex:1"></span>${cur?`<span class="pf-note">${cur.key} · ${pfEsc(cur.nombre)}</span>`:''}<span class="pf-chip ${PF_TONO[x[1]]}">${pfEsc(x[0])}</span></div>
+    <div class="pf-top"><span class="pf-mono">${pfEsc(p.data.clave||'')}</span><h3>${pfEsc(p.data.nombre)}</h3>${p.data.cliente?`<span class="pf-note">${pfEsc(p.data.cliente)}</span>`:''}<span style="flex:1"></span>${fa?`<span class="pf-note">Fase ${fa.n} · ${pfEsc(fa.corto)}${cur?' · paso '+pfEsc(cur.num)+' '+pfEsc(cur.nombre):''}</span>`:''}<span class="pf-chip ${PF_TONO[x[1]]}">${pfEsc(x[0])}</span></div>
     ${pfStepper(p)}
     ${w.length ? pfEsperasHtml(w,3) : '<div class="pf-note" style="margin-top:8px">Sin esperas: el avance depende del equipo.</div>'}
     <div class="pf-stats"><span><b>${s.activas}</b>actividades activas</span><span><b>${w.length}</b>esperas</span><span><b>${s.ciclos}</b>ciclos de observaciones</span><span><b>${s.primera}</b>aprobado a la primera</span></div>
@@ -16884,7 +16983,7 @@ function pfCardProyecto(p){
 }
 function pfRenderHome(top, mount){
   const vm = pfVincMap(); const sin = (PA_ITEMS||[]).filter(a=>!vm[a.id]);
-  top.innerHTML = `<div><h1>Portafolio de proyectos</h1><div class="pf-sub">Etapa actual de cada proyecto y a quién se está esperando. Los folios de tu equipo avanzan (o regresan) por separado.</div></div>
+  top.innerHTML = `<div><h1>Portafolio de proyectos</h1><div class="pf-sub">Fase y paso actual de cada proyecto y a quién se está esperando. Los folios de tu equipo avanzan (o regresan) por separado.</div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="pfRecargar()">↻ Actualizar</button><button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="pfRespaldo()" title="Descarga una copia de todo el portafolio">⬇ Respaldo</button><button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="pfAsignarModal()">Asignar actividades${sin.length?' ('+sin.length+')':''}</button><button class="pa-btn pa-btn-primary" style="font-size:12px" onclick="pfNuevoProyecto()">＋ Nuevo proyecto</button></div>`;
   const g = {}; sin.forEach(a=>{ const k = pfNorm(a.proyecto); (g[k] = g[k] || { key:k, nombre:(a.proyecto||'').trim()||'(sin proyecto)', acts:[] }).acts.push(a); });
   PF_GRUPOS = Object.values(g).sort((x,y)=>y.acts.length-x.acts.length);
@@ -16893,7 +16992,7 @@ function pfRenderHome(top, mount){
       return `<div class="pf-sug"><b>${pfEsc(x.nombre)}</b><span class="pf-chip">${x.acts.length} actividades</span><span class="pf-chip">${nf} folios</span>${ex?'<span class="pf-chip g">ya existe en el portafolio</span>':''}<span style="margin-left:auto;display:flex;gap:6px">${x.key?`<button class="pf-btn" onclick="pfCrearDesdeGrupo(${i})">${ex?'Enlazar a ese proyecto':'Crear proyecto y enlazar'}</button>`:''}<button class="pf-btn" onclick="pfElegirGrupo(${i})">Elegir una por una…</button></span></div>`; }).join('')}</div>` : '';
   const ps = pfProyectos();
   mount.innerHTML = pfAvisoHtml() + (ps.length ? `<div class="pf-list">${ps.map(p=>pfCardProyecto(p)).join('')}</div>` :
-    `<div class="pf-card" style="text-align:center;padding:34px 20px"><div style="font-size:15px;font-weight:600;color:var(--text)">Tu portafolio está vacío</div><div class="pf-note" style="margin-top:6px;line-height:1.6">Crea un proyecto nuevo con la plantilla de las 12 etapas, o enlaza las actividades que ya tienes (abajo) para que se armen solos los proyectos y folios.</div></div>`) + sug;
+    `<div class="pf-card" style="text-align:center;padding:34px 20px"><div style="font-size:15px;font-weight:600;color:var(--text)">Tu portafolio está vacío</div><div class="pf-note" style="margin-top:6px;line-height:1.6">Crea un proyecto nuevo con el Proceso Ingeniería Tikva (6 fases), o enlaza las actividades que ya tienes (abajo) para que se armen solos los proyectos y folios.</div></div>`) + sug;
 }
 function pfMiniActs(list){
   if(!list.length) return '';
@@ -16932,6 +17031,12 @@ function pfFolioAcc(p, i){
   if(f.estado==='entregada') b += `<button class="pf-btn pri" onclick="pfFolioResultado('${pid}',${i},'entregada')">Registrar resultado</button>`;
   return b+`<button class="pf-btn" title="Editar datos del folio" onclick="pfFolioEditar('${pid}',${i})">✎</button><button class="pf-btn" title="Quitar folio" onclick="pfFolioQuitar('${pid}',${i})">🗑</button>`;
 }
+function pfFolioAccTramite(p, i){
+  const f = pfEt(p,'F4').folios[i], pid = p.id;
+  if(f.estado==='carpeta') return `<button class="pf-btn" onclick="pfFolioCarpeta('${pid}',${i})">Carpeta entregada</button>`;
+  if(f.estado==='entregada') return `<button class="pf-btn pri" onclick="pfFolioResultado('${pid}',${i},'entregada')">Registrar resultado</button>`;
+  return '';
+}
 function pfFolioCarpeta(pid, i){
   const p = pfProy(pid); const f = pfEt(p,'F4').folios[i];
   pfForm({ titulo:'Carpeta física entregada', sub:f.clave, btn:'Registrar', campos:[ {k:'fecha',l:'Fecha de entrega',t:'date',v:pfHoy(),req:true} ], ok:v=>pfFolioMover(pid, i, 'entregada', 'Carpeta física entregada', v.fecha) });
@@ -16945,7 +17050,7 @@ function pfBobAcc(p, i){
 }
 function pfEtapaHtml(p, e, esCur){
   const x = pfEtapaEstado(e), pid = p.id;
-  const tipoTxt = { hito:'Hito', insumo:'Insumo externo', fase:'Fase del equipo', folios:'Fase del equipo · por folio', bobinas:'Fase del equipo · por bobina · en paralelo' }[e.tipo];
+  const tipoTxt = ({ hito:'Hito', insumo:'Insumo / proceso relacionado', fase:'Actividad del equipo', folios:'Actividad del equipo · por folio', bobinas:'Actividad del equipo · por bobina', tramite:'Proceso relacionado · Permisos · por folio', gis:'Brazo paralelo · Equipo GIS · solo compartimos información' }[e.tipo]) + (e.ola?' · '+e.ola:'');
   const general = ()=>pfMiniActs(pfActsDe(pid, e.key, ''));
   let body = '';
   if(e.tipo==='hito'){
@@ -16954,17 +17059,29 @@ function pfEtapaHtml(p, e, esCur){
       : `<div class="pf-line" style="color:var(--dim)">${e.nota?`${pfEsc(e.campo)}: <span style="color:var(--text)">${pfEsc(e.nota)}</span>`:pfEsc(e.campo)}${e.aviso?`. Áreas a notificar: ${pfEsc(e.aviso)}.`:''}<span style="flex:1"></span><button class="pf-btn pri" onclick="pfRegHito('${pid}','${e.key}')">Registrar</button></div>`;
     body += general();
   }
+  else if(e.tipo==='gis'){
+    const cod = '['+(p.data.clave||'')+']['+e.key+'-GIS][NOT-GIS]';
+    body = `<div class="pf-gisbox"><div><span class="pf-stype">Lo que hace GIS</span> ${pfEsc(e.gis)}</div><div><span class="pf-stype">Qué compartimos</span> ${pfEsc(e.comparte)}</div></div>`+
+      (e.fecha ? `<div class="pf-line"><span>Compartido el <b>${pfFmt(e.fecha)}</b>${typeof e.medio==='string'&&e.medio?' · '+pfEsc(e.medio):''}${e.nota?' · '+pfEsc(e.nota):''}${e.link?` · <a href="${pfEsc(e.link)}" target="_blank" rel="noopener" style="color:var(--accent)">información compartida</a>`:''}</span><span style="flex:1"></span><button class="pf-btn" onclick="pfRegHito('${pid}','${e.key}',true)">Editar</button></div>${e.ajustes&&e.ajustes.length?`<div class="pf-note">Corregido ${e.ajustes.length}× · último motivo: ${pfEsc(e.ajustes[e.ajustes.length-1].motivo)}</div>`:''}`
+            : `<div class="pf-act"><button class="pf-btn" onclick="pfRegHito('${pid}','${e.key}')">Registrar que se compartió</button><span class="pf-note" style="align-self:center">No bloquea el avance: GIS trabaja en paralelo.</span></div>`);
+  }
   else if(e.tipo==='insumo'){ body = pfInsumoHtml(p, e, e, false) + general(); }
+  else if(e.tipo==='tramite'){
+    const fs = pfF4de(e).map((f,i)=>[f,i]), enT = fs.filter(([f])=>['carpeta','entregada','liberado'].includes(f.estado)), antes = fs.length-enT.length;
+    body = `${antes?`<div class="pf-warn">${antes} folio${antes>1?'s':''} aún en proyecto ejecutivo (fase 3).</div>`:''}
+      ${enT.length?`<div style="overflow-x:auto"><table class="pf-tbl"><thead><tr><th>Folio</th><th>Entidad</th><th>Estado</th><th>Días</th><th>Ciclos</th><th></th></tr></thead><tbody>${enT.map(([f,i])=>{ const st = PF_FOLIO_ST[f.estado]; return `<tr><td class="pf-mono">${pfEsc(f.clave)}</td><td>${pfEsc(f.dependencia||'—')}</td><td><span class="pf-chip ${PF_TONO[st[1]]}">${st[0]}</span></td><td>${f.estado==='entregada'?`<span style="${pfDiasDesde(f.desde)>90?'color:var(--red);font-weight:700':''}">${pfDiasDesde(f.desde)} / 90</span>`:'—'}</td><td>${f.ciclos||'—'}</td><td><div class="pf-act" style="justify-content:flex-end">${['carpeta','entregada'].includes(f.estado)?pfFolioAccTramite(p,i):''}</div></td></tr>`; }).join('')}</tbody></table></div>`:(fs.length?'':'<div class="pf-note">Aún no hay folios.</div>')}
+      <div class="pf-note">Si la entidad no acepta (19.2), el folio regresa a diseño en la fase 3 (paso 15) y suma un ciclo.</div>`;
+  }
   else if(e.tipo==='fase'){
     body = `${e.insumo?pfInsumoHtml(p, e, e.insumo, true):''}
       <div><div class="pf-stype" style="margin-bottom:6px">Entregables mínimos</div><div class="pf-ent">${e.entregables.map((t,i)=>`<label class="${(e.ok||[])[i]?'ok':''}"><input type="checkbox" ${(e.ok||[])[i]?'checked':''} ${e.estado==='completada'?'disabled':''} onchange="pfToggleOk('${pid}','${e.key}',${i},this.checked)">${pfEsc(t)}</label>`).join('')}</div></div>
-      ${e.validadores.length?`<div class="pf-chain"><span class="pf-stype">Validación</span>${e.validadores.map((v,i)=>`<span class="pf-chip ${i<e.valIdx||e.estado==='completada'?'g':(i===e.valIdx&&e.estado==='en_validacion'?'v':'')}">${pfEsc(PF_VALIDADOR[v])}</span>`).join('<span style="color:var(--dim)">→</span>')}${e.ciclos?`<span class="pf-chip a">${e.ciclos} ciclo${e.ciclos>1?'s':''} de observaciones</span>`:''}</div>`:''}
+      ${e.validadores.length?`<div class="pf-chain"><span class="pf-stype">Validación</span>${e.validadores.map((v,i)=>`<span class="pf-chip ${i<e.valIdx||e.estado==='completada'?'g':(i===e.valIdx&&e.estado==='en_validacion'?'v':'')}">${e.valPasos&&e.valPasos[i]?pfEsc(e.valPasos[i])+' · ':''}${pfEsc(PF_VALIDADOR[v])}</span>`).join('<span style="color:var(--dim)">→</span>')}${e.ciclos?`<span class="pf-chip a">${e.ciclos} ciclo${e.ciclos>1?'s':''} de observaciones</span>`:''}</div>`:''}
       ${(e.validaciones||[]).length?`<ul class="pf-hist">${e.validaciones.map(v=>`<li>${pfFmt(v.fecha)} · ${pfEsc(PF_VALIDADOR[v.val]||v.val)}: <b style="color:var(--${v.res==='aprobado'?'green':'amber'})">${v.res==='aprobado'?'Aprobado':'Con observaciones'}</b>${v.medio?' · '+pfEsc(v.medio):''}${v.nota?' · '+pfEsc(v.nota):''}</li>`).join('')}</ul>`:''}
       ${general()}
       ${e.estado!=='completada'?`<div class="pf-act">${pfFaseAcciones(p, e)}</div>`:`<div class="pf-act"><button class="pf-btn" onclick="pfAsigDesdeEtapa('${pid}','${e.key}')">Asignar actividad</button></div>`}`;
   }
   else if(e.tipo==='folios'){
-    const falta = [pfEt(p,'X1'), pfEt(p,'X2')].filter(z=>z && !z.recibido).map(z=>z.nombre);
+    const falta = [pfEt(p,'X1'), pfEt(p,'XT'), pfEt(p,'X14')].filter(z=>z && !z.recibido).map(z=>z.nombre.replace(/ \(se solicita en 06\)/,''));
     body = `${falta.length&&!e.folios.length?`<div class="pf-warn">Para foliar se necesita recibir: ${falta.map(pfEsc).join(' y ')}.</div>`:''}
       ${e.folios.length?`<div style="overflow-x:auto"><table class="pf-tbl"><thead><tr><th>Folio</th><th>Dependencia</th><th>Tramo</th><th>Proyectista</th><th>Estado</th><th>Ciclos</th><th></th></tr></thead><tbody>${e.folios.map((f,i)=>{
         const st = PF_FOLIO_ST[f.estado]||PF_FOLIO_ST.diseno, ac = pfActsDe(pid,'F4',f.clave);
@@ -16975,7 +17092,7 @@ function pfEtapaHtml(p, e, esCur){
       <div class="pf-act"><button class="pf-btn" onclick="pfFolioAdd('${pid}')">+ Agregar folio</button><button class="pf-btn" onclick="pfAsigDesdeEtapa('${pid}','F4')">Asignar actividad</button></div>`;
   }
   else if(e.tipo==='bobinas'){
-    body = `${pfInsumoHtml(p, e, e.insumo, true)}
+    body = `${e.insumo?pfInsumoHtml(p, e, e.insumo, true):''}${(()=>{ const x = pfEt(p,'X5'); return x && !x.recibido ? '<div class="pf-warn">Falta recibir el avance de obra civil de Construcción.</div>' : ''; })()}
       ${e.bobinas.length?`<div style="overflow-x:auto"><table class="pf-tbl"><thead><tr><th>Bobina</th><th>Proyectista</th><th>Estado</th><th>Ciclos</th><th></th></tr></thead><tbody>${e.bobinas.map((b,i)=>{
         const st = PF_BOB_ST[b.estado]||PF_BOB_ST.diseno, ac = pfActsDe(pid,'F6',b.clave);
         return `<tr><td class="pf-mono">${pfEsc(b.clave)}</td><td>${b.proyectista?pfEsc(bitNombreResp(b.proyectista)):'<span class="pf-note">—</span>'}</td><td><span class="pf-chip ${PF_TONO[st[1]]}">${st[0]}</span>${b.estado==='validacion'?` <span class="pf-note">${pfDiasDesde(b.desde)} d</span>`:''}</td><td>${b.ciclos||'—'}</td><td><div class="pf-act" style="justify-content:flex-end">${pfBobAcc(p,i)}</div></td></tr>
@@ -16983,19 +17100,33 @@ function pfEtapaHtml(p, e, esCur){
       ${general()?`<div><div class="pf-stype">Actividades de esta etapa sin bobina</div>${general()}</div>`:''}
       <div class="pf-act"><button class="pf-btn" onclick="pfBobAdd('${pid}')">+ Agregar bobina</button><button class="pf-btn" onclick="pfAsigDesdeEtapa('${pid}','F6')">Asignar actividad</button></div>`;
   }
-  return `<div class="pf-stage"><div class="pf-mk"><b class="${x[1]}">${e.key}</b><i></i></div>
-    <div class="pf-sbody ${esCur?'cur':''}"><div class="pf-shead"><h3>${pfEsc(e.nombre)}</h3><span class="pf-stype">${tipoTxt}</span><span class="pf-chip ${PF_TONO[x[1]]}">${pfEsc(x[0])}</span></div>${body}</div></div>`;
+  return `<div class="pf-stage"><div class="pf-mk"><b class="${x[1]}">${pfEsc(e.num||e.key)}</b><i></i></div>
+    <div class="pf-sbody ${esCur?'cur':''} ${e.tipo==='gis'?'gis':''}"><div class="pf-shead"><h3>${pfEsc(e.nombre)}</h3><span class="pf-stype">${tipoTxt}</span><span class="pf-chip ${PF_TONO[x[1]]}">${pfEsc(x[0])}</span></div>${body}</div></div>`;
+}
+function pfToggleFase(k, abierta){ PF_FASE_AB[k] = !abierta; pfRepinta(); }
+function pfFaseBloque(p, f, cur){
+  const fi = pfFaseInfo(p, f.n), k = p.id+'_'+f.n, fa = pfFaseActual(p);
+  const abierta = PF_FASE_AB[k] !== undefined ? PF_FASE_AB[k] : ((fa && fa.n===f.n) || (f.paralela && fi.estado==='en_curso'));
+  const tn = PF_FASE_TONO[fi.estado];
+  return `<section class="pf-fb ${tn}"><button class="pf-fbh" onclick="pfToggleFase('${k}',${abierta})" aria-expanded="${abierta}">
+    <span class="pf-fbn">${f.n}</span>
+    <span class="pf-fbt"><b>Fase ${f.n} · ${pfEsc(f.nombre)}</b><small>Sale con ${pfEsc(f.sale)}${f.paralela?' · corre en paralelo a la fase 4':''}</small></span>
+    <span class="pf-fbp"><i><u style="width:${fi.total?Math.round(fi.hechos/fi.total*100):0}%"></u></i><span>${fi.hechos}/${fi.total}</span></span>
+    <span class="pf-chip ${PF_TONO[tn]}">${({completada:'Completada',en_curso:'En curso',pendiente:'Pendiente'})[fi.estado]}</span>
+    <span class="chev" style="color:var(--dim)">${abierta?'▾':'▸'}</span></button>
+    ${abierta?`<div class="pf-fbb">${fi.items.map(e=>pfEtapaHtml(p, e, cur===e)).join('')}</div>`:''}</section>`;
 }
 function pfRenderDetalle(top, mount){
-  const p = pfProy(PF_SEL), cur = pfEtapaActual(p), s = pfStats(p), w = pfEsperas(p), vm = pfVincMap();
-  top.innerHTML = `<div><div style="font-size:11.5px;color:var(--accent);cursor:pointer;margin-bottom:4px" onclick="pfVolver()">‹ Todos los proyectos</div><div class="pf-note"><span class="pf-mono">${pfEsc(p.data.clave||'')}</span>${p.data.cliente?' · '+pfEsc(p.data.cliente):''}</div><h1>${pfEsc(p.data.nombre)}</h1><div class="pf-sub">${cur?'Etapa actual: '+cur.key+' · '+pfEsc(cur.nombre):'Todas las etapas completadas'}</div></div>
+  const p = pfProy(PF_SEL), cur = pfEtapaActual(p), fa = pfFaseActual(p), s = pfStats(p), w = pfEsperas(p), vm = pfVincMap();
+  top.innerHTML = `<div><div style="font-size:11.5px;color:var(--accent);cursor:pointer;margin-bottom:4px" onclick="pfVolver()">‹ Todos los proyectos</div><div class="pf-note"><span class="pf-mono">${pfEsc(p.data.clave||'')}</span>${p.data.cliente?' · '+pfEsc(p.data.cliente):''}</div><h1>${pfEsc(p.data.nombre)}</h1><div class="pf-sub">${fa?'Fase actual: '+fa.n+' · '+pfEsc(fa.nombre)+(cur?' · paso '+pfEsc(cur.num)+' '+pfEsc(cur.nombre):''):'Todas las fases completadas'}${pfFaseInfo(p,5).estado==='en_curso'?' · Conectividad en paralelo':''}</div>${p.data.alcance?`<div class="pf-note" style="margin-top:4px">Alcance: ${pfEsc(p.data.alcance)}</div>`:''}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="pfEditarProyecto('${p.id}')">✎ Datos</button><button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="pfAsignarModal('${p.id}')">Asignar actividades</button><button class="pa-btn pa-btn-ghost" style="font-size:12px" onclick="pfRespaldo()">⬇ Respaldo</button><button class="pa-btn pa-btn-ghost" style="font-size:12px;color:var(--red)" onclick="pfEliminarProyecto('${p.id}')">🗑 Eliminar</button></div>`;
   const sinEtapa = pfActsProy(p.id).filter(a=>!vm[a.id].data.faseKey);
   const log = (p.data.log||[]).slice().reverse().slice(0,40);
   mount.innerHTML = pfAvisoHtml()+`
     <div class="pf-kpis"><div><b>${s.activas}</b>Actividades activas</div><div><b>${w.length}</b>Esperando a otros</div><div><b>${s.ciclos}</b>Ciclos de observaciones</div><div><b>${s.primera}</b>Aprobado a la primera</div></div>
     ${w.length?`<div class="pf-alert"><b>Esperando a otros</b>${pfEsperasHtml(w)}</div>`:''}
-    <div>${(p.data.etapas||[]).map(e=>pfEtapaHtml(p, e, cur===e)).join('')}</div>
+    ${pfStepper(p)}
+    <div style="margin-top:14px">${PF_FASES.map(f=>pfFaseBloque(p, f, cur)).join('')}</div>
     ${sinEtapa.length?`<div class="pf-sec">Actividades del proyecto sin etapa · ${sinEtapa.length}</div><div class="pf-card">${pfMiniActs(sinEtapa)}<div class="pf-note" style="margin-top:8px">Usa ⇄ para ubicarlas en su etapa, folio o bobina.</div></div>`:''}
     <div class="pf-sec">Historial del proyecto</div><div class="pf-card">${log.length?`<ul class="pf-hist">${log.map(l=>`<li><b>${pfFmt(l.fecha)}</b> · ${pfEsc(l.txt)}${l.por?` <span class="pf-note">— ${pfEsc(l.por)}</span>`:''}</li>`).join('')}</ul>`:'<div class="pf-note">Aún sin movimientos.</div>'}</div>`;
 }
