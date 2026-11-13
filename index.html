@@ -16666,7 +16666,7 @@ function pfForm(o){
   PF_FORM = o;
   const c = (o.campos||[]).map(f=>{
     const id = 'pfF_'+f.k, lbl = `<label>${pfEsc(f.l)}${f.req?' *':''}</label>`;
-    if(f.t==='select') return lbl+`<select id="${id}">${f.o.map(x=>`<option value="${pfEsc(x[0])}" ${String(f.v)===String(x[0])?'selected':''}>${pfEsc(x[1])}</option>`).join('')}</select>`;
+    if(f.t==='select') return lbl+`<select id="${id}" ${f.chg?`onchange="pfFormChg('${f.k}')"`:''}>${f.o.map(x=>`<option value="${pfEsc(x[0])}" ${String(f.v)===String(x[0])?'selected':''}>${pfEsc(x[1])}</option>`).join('')}</select>`;
     if(f.t==='checks') return lbl+`<div id="${id}" style="display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:4px">${(f.o||[]).map(x=>`<label style="display:inline-flex;align-items:center;gap:6px;margin:0;font-size:12.5px;color:var(--text);cursor:pointer"><input type="checkbox" value="${pfEsc(x)}" ${(f.v||[]).includes(x)?'checked':''} style="width:auto;margin:0"> ${pfEsc(x)}</label>`).join('')||'<span class="pf-note">Sin áreas definidas.</span>'}</div>`;
     if(f.t==='textarea') return lbl+`<textarea id="${id}" rows="3" placeholder="${pfEsc(f.ph||'')}">${pfEsc(f.v||'')}</textarea>`;
     return lbl+`<input type="${f.t||'text'}" id="${id}" value="${pfEsc(f.v||'')}" placeholder="${pfEsc(f.ph||'')}">`;
@@ -16675,6 +16675,9 @@ function pfForm(o){
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px"><button class="pa-btn pa-btn-ghost" onclick="pfCerrarModal()">Cancelar</button><button class="pa-btn pa-btn-primary" id="pfFOk" onclick="pfFormOk()">${pfEsc(o.btn||'Guardar')}</button></div>`, o.ancho||480);
   setTimeout(()=>{ const f = document.querySelector('#pfModalBg input,#pfModalBg select,#pfModalBg textarea'); if(f) f.focus(); }, 30);
 }
+// Campo con 'chg': al cambiarlo se puede rellenar otros campos del mismo formulario
+function pfFormSet(k, val){ const el = document.getElementById('pfF_'+k); if(el) el.value = val==null ? '' : val; }
+function pfFormChg(k){ if(!PF_FORM) return; const f = PF_FORM.campos.find(x=>x.k===k); if(f && f.chg) f.chg(pfFormVals(), pfFormSet); }
 function pfFormVals(){ const v = {}; PF_FORM.campos.forEach(f=>{ const el = document.getElementById('pfF_'+f.k); if(f.t==='checks'){ v[f.k] = el ? [...el.querySelectorAll('input:checked')].map(i=>i.value) : []; return; } v[f.k] = el ? el.value.trim() : ''; }); return v; }
 function pfFormOk(){
   if(!PF_FORM) return; const v = pfFormVals(); let bad = null;
@@ -17257,7 +17260,11 @@ function pfTerceroForm(pid, key, i){
   const srvs = pfSrvLista().slice().sort((x,y)=>(pfNorm(y.proyecto)===pfNorm(p.data.nombre)) - (pfNorm(x.proyecto)===pfNorm(p.data.nombre)));
   const srvOpts = [['','Sin servicio ligado'], ...srvs.map(s=>[s.id, (pfNorm(s.proyecto)===pfNorm(p.data.nombre)?'★ ':'')+pfSrvEtq(s)])];
   pfForm({ titulo:(t?'Editar':'Registrar')+' tercerización · '+e.nombre, sub:'Úsalo cuando parte del trabajo lo hizo un tercero. El entregable sigue siendo de tu equipo: aquí queda quién lo hizo, una nota y el link.', btn:t?'Guardar':'Registrar', ancho:520,
-    campos:[ {k:'servicio',l:'Servicio especial ligado (del módulo Servicios Esp.)',t:'select',o:srvOpts,v:t?t.servicioId||'':''},
+    campos:[ {k:'servicio',l:'Servicio especial ligado (del módulo Servicios Esp.) · al elegirlo se llenan solos contratista, fecha y link',t:'select',o:srvOpts,v:t?t.servicioId||'':'',
+        chg:(v,set)=>{ const s = pfSrv(v.servicio); if(!s) return;
+          set('proveedor', s.contratista||''); const fe = String(s.fechaEntrega||'').slice(0,10); if(/^\d{4}-\d{2}-\d{2}$/.test(fe)) set('fecha', fe);
+          const l = [['Entregable del servicio',s.linkEntregable],['Validación del servicio',s.linkValidacion],['OS del servicio',s.linkOS],['COT del servicio',s.linkCOT]].find(x=>x[1]);
+          set('link', l?l[1]:''); set('linkNombre', l?l[0]:''); } },
       {k:'proveedor',l:'Quién lo hizo (si ligas un servicio, se toma su contratista)',req:v=>!v.servicio,v:t?t.proveedor:'',ph:'Ej. Topografía del Norte S.A.'},
       {k:'entregable',l:'Qué se tercerizó',t:'select',o:[['','Todo el paso'], ...(e.entregables||[]).map(x=>[x,x])],v:t?t.entregable:''},
       {k:'fecha',l:'Fecha',t:'date',v:t?t.fecha:pfHoy()},
