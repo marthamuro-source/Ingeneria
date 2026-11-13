@@ -16662,6 +16662,7 @@ function pfForm(o){
   const c = (o.campos||[]).map(f=>{
     const id = 'pfF_'+f.k, lbl = `<label>${pfEsc(f.l)}${f.req?' *':''}</label>`;
     if(f.t==='select') return lbl+`<select id="${id}">${f.o.map(x=>`<option value="${pfEsc(x[0])}" ${String(f.v)===String(x[0])?'selected':''}>${pfEsc(x[1])}</option>`).join('')}</select>`;
+    if(f.t==='checks') return lbl+`<div id="${id}" style="display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:4px">${(f.o||[]).map(x=>`<label style="display:inline-flex;align-items:center;gap:6px;margin:0;font-size:12.5px;color:var(--text);cursor:pointer"><input type="checkbox" value="${pfEsc(x)}" ${(f.v||[]).includes(x)?'checked':''} style="width:auto;margin:0"> ${pfEsc(x)}</label>`).join('')||'<span class="pf-note">Sin áreas definidas.</span>'}</div>`;
     if(f.t==='textarea') return lbl+`<textarea id="${id}" rows="3" placeholder="${pfEsc(f.ph||'')}">${pfEsc(f.v||'')}</textarea>`;
     return lbl+`<input type="${f.t||'text'}" id="${id}" value="${pfEsc(f.v||'')}" placeholder="${pfEsc(f.ph||'')}">`;
   }).join('');
@@ -16669,7 +16670,7 @@ function pfForm(o){
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px"><button class="pa-btn pa-btn-ghost" onclick="pfCerrarModal()">Cancelar</button><button class="pa-btn pa-btn-primary" id="pfFOk" onclick="pfFormOk()">${pfEsc(o.btn||'Guardar')}</button></div>`, o.ancho||480);
   setTimeout(()=>{ const f = document.querySelector('#pfModalBg input,#pfModalBg select,#pfModalBg textarea'); if(f) f.focus(); }, 30);
 }
-function pfFormVals(){ const v = {}; PF_FORM.campos.forEach(f=>{ const el = document.getElementById('pfF_'+f.k); v[f.k] = el ? el.value.trim() : ''; }); return v; }
+function pfFormVals(){ const v = {}; PF_FORM.campos.forEach(f=>{ const el = document.getElementById('pfF_'+f.k); if(f.t==='checks'){ v[f.k] = el ? [...el.querySelectorAll('input:checked')].map(i=>i.value) : []; return; } v[f.k] = el ? el.value.trim() : ''; }); return v; }
 function pfFormOk(){
   if(!PF_FORM) return; const v = pfFormVals(); let bad = null;
   PF_FORM.campos.forEach(f=>{
@@ -16752,23 +16753,32 @@ function pfRespaldo(){
 }
 
 // ── Hitos e insumos ──
+function pfAreas(txt){ return String(txt||'').split(/,|\s+y\s+/).map(x=>x.trim().replace(/\.$/,'')).filter(Boolean); }
 function pfRegHito(pid, key, editar){
   const p = pfProy(pid); if(!p) return; const e = pfEt(p, key); const t = { medio:e.pideMedio, campo:e.campo, aviso:e.aviso, comparte:e.comparte }; const gis = e.tipo==='gis';
   const campos = [ {k:'fecha',l:gis?'Fecha en que se compartió':'Fecha',t:'date',v:e.fecha||pfHoy(),req:true} ];
   if(t.medio || gis) campos.push({k:'medio',l:'Medio',t:'select',o:pfMedioOpts(),v:typeof e.medio==='string'&&e.medio?e.medio:'Correo'});
-  campos.push({k:'nota',l:gis?'Qué se compartió':t.campo,t:'textarea',v:e.nota||''});
+  const areas = (e.tipo==='hito' && e.aviso) ? pfAreas(e.aviso) : null;
+  if(areas){
+    campos.push({k:'correo',l:'Nombre / asunto del correo con el que se notificó',v:e.correo||'',ph:'Ej. [PRY-002] Aceptación de levantamiento digital'});
+    campos.push({k:'linkCorreo',l:'Link del correo (opcional)',v:e.correoLink||'',ph:'https://… enlace al correo o carpeta'});
+    campos.push({k:'areas',l:'Áreas avisadas o copiadas',t:'checks',o:areas,v:e.areas||[]});
+    campos.push({k:'otras',l:'Otras áreas o personas copiadas (opcional)',v:e.otras||'',ph:'Ej. Dirección PMO, cliente'});
+    campos.push({k:'nota',l:'Notas (opcional)',t:'textarea',v:e.nota||''});
+  } else campos.push({k:'nota',l:gis?'Qué se compartió':t.campo,t:'textarea',v:e.nota||''});
   if(gis) campos.push({k:'link',l:'Link de la información compartida (opcional)',v:e.link||'',ph:'https://… carpeta o correo'});
   if(editar) campos.push({k:'motivo',l:'Motivo del cambio',req:true,ph:'Por qué se corrige este registro'});
   const sub = gis ? 'Registra qué compartiste con el equipo GIS ('+t.comparte+'). No bloquea el avance.' : (t.aviso ? 'Áreas a notificar: '+t.aviso+'.'+((e.solicita&&e.solicita.length)?' También se registran las solicitudes de: '+e.solicita.map(k=>{ const x = (p.data.etapas||[]).find(y=>y.key===k); return x?x.nombre.replace(/ \(se solicita en \d+\)/,''):k; }).join(', ')+'.':'') : '');
   pfForm({ titulo:(editar?'Corregir · ':'Registrar · ')+e.nombre, sub, campos,
-    valida:v=>(gis && v.link && !/^https?:\/\//i.test(v.link)) ? 'El link debe empezar con https://' : '',
+    valida:v=>((gis && v.link && !/^https?:\/\//i.test(v.link)) || (v.linkCorreo && !/^https?:\/\/\S+$/i.test(v.linkCorreo))) ? 'El link debe empezar con https:// y no llevar espacios.' : '',
     ok:v=>{
       const antes = (e.fecha?pfFmt(e.fecha):'—')+(e.nota?' · '+e.nota:'');
       e.fecha = v.fecha; if(t.medio || gis) e.medio = v.medio; e.nota = v.nota; if(gis) e.link = v.link || null;
+      if(areas){ e.correo = v.correo; e.correoLink = v.linkCorreo || null; e.areas = v.areas; e.otras = v.otras; }
       const rot = (e.num && e.num!=='Insumo' && e.num!=='—' ? e.num : e.key);
       if(editar){ (e.ajustes = e.ajustes||[]).push({ fecha:pfHoy(), cambios:'Antes: '+antes, motivo:v.motivo }); pfLog(p, rot+' · '+e.nombre+' corregido. Motivo: '+v.motivo); }
       else {
-        pfLog(p, rot+' · '+(gis?'Compartido con GIS: ':'')+e.nombre+' registrado ('+pfFmt(v.fecha)+')');
+        pfLog(p, rot+' · '+(gis?'Compartido con GIS: ':'')+e.nombre+' registrado ('+pfFmt(v.fecha)+')'+(areas?(v.correo?' · Correo: '+v.correo:'')+(v.areas.length?' · Avisadas: '+v.areas.join(', '):''):''));
         (e.solicita||[]).forEach(k=>{ const x = (p.data.etapas||[]).find(y=>y.key===k); if(x && x.tipo==='insumo' && !x.solicitado){ x.solicitado = v.fecha; pfLog(p, 'Solicitud registrada junto con la notificación: '+x.nombre.replace(/ \(se solicita en \d+\)/,'')+' (de '+x.de+')'); } });
       }
       pfGuarda(p);
@@ -17102,14 +17112,36 @@ function pfLinkObj(kind, x, y){
   const o = kind==='etapa' ? pfEt(p, y) : kind==='folio' ? pfEtF(p).folios[y] : pfEtB(p).bobinas[y]; if(!o) return null;
   return { arr:()=>o.links = o.links||[], guarda:()=>pfGuarda(p), p, txt:kind==='etapa' ? (o.num&&o.num!=='Insumo'&&o.num!=='—'?o.num+' · ':'')+o.nombre : (kind==='folio'?'el folio ':'la bobina ')+o.clave };
 }
+const PF_SLOTS = [['drive','Drive'],['bc','BC']];
 function pfLinksBloque(kind, x, y, links){
   const arg = `'${kind}','${x}',${typeof y==='number'?y:`'${y===undefined?'':y}'`}`;
-  return `<div class="pf-links">${(links||[]).map((l,i)=>`<span class="pf-lk"><a href="${pfEsc(l.url)}" target="_blank" rel="noopener" title="${pfEsc(l.nombre+' · '+l.url)}">🔗 ${pfEsc(l.nombre)}</a><button title="Quitar enlace" onclick="pfLinkDel(${arg},${i})">✕</button></span>`).join('')}<button class="pf-btn" style="padding:2px 9px" title="Agrega el link de la carpeta, correo o archivo relacionado" onclick="pfLinkAdd(${arg})">+ Enlace</button></div>`;
+  const L = links||[];
+  const chip = (l,i)=>`<span class="pf-lk"><a href="${pfEsc(l.url)}" target="_blank" rel="noopener" title="${pfEsc(l.nombre+' · '+l.url)}">🔗 ${pfEsc(l.nombre)}</a><button title="Quitar enlace" onclick="pfLinkDel(${arg},${i})">✕</button></span>`;
+  if(kind!=='etapa') return `<div class="pf-links">${L.map(chip).join('')}<button class="pf-btn" style="padding:2px 9px" title="Agrega el link de la carpeta, correo o archivo relacionado" onclick="pfLinkAdd(${arg})">+ Enlace</button></div>`;
+  // en cada etapa: dos enlaces fijos (Drive y BC) y los otros enlaces con su nombre
+  const fijos = PF_SLOTS.map(([k,t])=>{
+    const i = L.findIndex(l=>l.slot===k);
+    if(i<0) return `<button class="pf-btn" style="padding:2px 9px;border-style:dashed" title="Agrega el link de ${t} de esta etapa" onclick="pfLinkSlot(${arg},'${k}')">＋ ${t}</button>`;
+    const l = L[i];
+    return `<span class="pf-lk"><a href="${pfEsc(l.url)}" target="_blank" rel="noopener" title="${pfEsc(t+' · '+l.url)}">🔗 ${t}</a><button title="Cambiar el link de ${t}" onclick="pfLinkSlot(${arg},'${k}')">✎</button><button title="Quitar" onclick="pfLinkDel(${arg},${i})">✕</button></span>`;
+  }).join('');
+  return `<div class="pf-links">${fijos}${L.map((l,i)=>l.slot?'':chip(l,i)).join('')}<button class="pf-btn" style="padding:2px 9px" title="Agrega otro enlace con su nombre (correo, memoria, carpeta…)" onclick="pfLinkAdd(${arg})">+ Otro enlace</button></div>`;
+}
+function pfLinkSlot(kind, x, y, slot){
+  const o = pfLinkObj(kind, x, y); if(!o) return; const t = (PF_SLOTS.find(s=>s[0]===slot)||[])[1] || slot; const ex = o.arr().find(l=>l.slot===slot);
+  pfForm({ titulo:(ex?'Cambiar':'Agregar')+' enlace de '+t, sub:'Para '+o.txt+'. Pega el link de '+t+' de esta etapa.', btn:ex?'Guardar':'Agregar enlace',
+    campos:[ {k:'url',l:'Link de '+t,req:true,v:ex?ex.url:'',ph:'https://…'} ],
+    valida:v=>/^https?:\/\/\S+$/i.test(v.url) ? '' : 'El link debe empezar con https:// y no llevar espacios.',
+    ok:v=>{
+      if(ex){ ex.url = v.url; ex.fecha = pfHoy(); ex.por = pfYo(); } else o.arr().push({ id:pfId('lk'), nombre:t, slot, url:v.url, fecha:pfHoy(), por:pfYo() });
+      if(o.p) pfLog(o.p, 'Enlace de '+t+(ex?' actualizado':' agregado')+' en '+o.txt);
+      o.guarda();
+    } });
 }
 function pfLinkAdd(kind, x, y){
   const o = pfLinkObj(kind, x, y); if(!o) return;
-  pfForm({ titulo:'Agregar enlace', sub:'Para '+o.txt+'. Pega el link de la carpeta, correo o archivo; al darle clic se abre o se descarga desde ahí.', btn:'Agregar enlace',
-    campos:[ {k:'nombre',l:'Nombre del enlace',req:true,ph:'Ej. KMZ 1.0 · carpeta de Drive'}, {k:'url',l:'Link',req:true,ph:'https://…'} ],
+  pfForm({ titulo:'Agregar enlace', sub:'Para '+o.txt+'. Ponle un nombre y pega el link de la carpeta, correo o archivo; al darle clic se abre o se descarga desde ahí.', btn:'Agregar enlace',
+    campos:[ {k:'nombre',l:'Nombre del enlace',req:true,ph:'Ej. Correo de aceptación · memoria técnica'}, {k:'url',l:'Link',req:true,ph:'https://…'} ],
     valida:v=>/^https?:\/\/\S+$/i.test(v.url) ? '' : 'El link debe empezar con https:// y no llevar espacios.',
     ok:v=>{
       o.arr().push({ id:pfId('lk'), nombre:v.nombre, url:v.url, fecha:pfHoy(), por:pfYo() });
@@ -17194,6 +17226,14 @@ function pfBobAcc(p, i){
   if(b.estado==='validacion') h += `<button class="pf-btn pri" onclick="pfBobResultado('${pid}',${i})">Registrar resultado</button>`;
   return h+`<button class="pf-btn" title="Quitar bobina" onclick="pfBobQuitar('${pid}',${i})">🗑</button>`;
 }
+// Correo con el que se notificó + áreas avisadas (hitos con 'áreas a notificar')
+function pfAvisoReg(e){
+  if(!e.aviso) return '';
+  const todas = pfAreas(e.aviso), hechas = e.areas||[], otras = String(e.otras||'').split(',').map(x=>x.trim()).filter(Boolean);
+  const correo = e.correo ? (e.correoLink ? `<a href="${pfEsc(e.correoLink)}" target="_blank" rel="noopener" style="color:var(--accent)">✉ ${pfEsc(e.correo)}</a>` : `✉ ${pfEsc(e.correo)}`) : (e.correoLink ? `<a href="${pfEsc(e.correoLink)}" target="_blank" rel="noopener" style="color:var(--accent)">✉ Ver correo</a>` : '<span class="pf-note">Sin nombre de correo registrado (usa Editar)</span>');
+  const falta = todas.filter(a=>!hechas.includes(a));
+  return `<div style="margin-top:8px"><div style="font-size:12px">${correo}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center"><span class="pf-stype">Áreas avisadas</span>${todas.map(a=>`<span class="pf-chip ${hechas.includes(a)?'g':''}">${hechas.includes(a)?'✓':'○'} ${pfEsc(a)}</span>`).join('')}${otras.map(a=>`<span class="pf-chip g">✓ ${pfEsc(a)}</span>`).join('')}</div>${falta.length?`<div class="pf-note" style="margin-top:4px">Sin marcar: ${pfEsc(falta.join(', '))}</div>`:''}</div>`;
+}
 function pfEtapaHtml(p, e, esCur){
   const x = pfEtapaEstado(e), pid = p.id;
   const tipoTxt = ({ hito:'Hito', insumo:'Insumo / proceso relacionado', fase:'Actividad del equipo', folios:'Actividad del equipo · por folio', bobinas:'Actividad del equipo · por bobina', tramite:'Proceso relacionado · Permisos · por folio', gis:'Brazo paralelo · Equipo GIS · solo compartimos información' }[e.tipo]) + (e.ola?' · '+e.ola:'');
@@ -17201,7 +17241,7 @@ function pfEtapaHtml(p, e, esCur){
   let body = '';
   if(e.tipo==='hito'){
     body = e.fecha
-      ? `<div class="pf-line"><span><b>${pfFmt(e.fecha)}</b>${typeof e.medio==='string'&&e.medio?' · '+pfEsc(e.medio):''}${e.nota?' · '+pfEsc(e.nota):''}</span><span style="flex:1"></span><button class="pf-btn" onclick="pfRegHito('${pid}','${e.key}',true)">Editar</button></div>${e.ajustes&&e.ajustes.length?`<div class="pf-note">Corregido ${e.ajustes.length}× · último motivo: ${pfEsc(e.ajustes[e.ajustes.length-1].motivo)}</div>`:''}`
+      ? `<div class="pf-line"><span><b>${pfFmt(e.fecha)}</b>${typeof e.medio==='string'&&e.medio?' · '+pfEsc(e.medio):''}${e.nota?' · '+pfEsc(e.nota):''}</span><span style="flex:1"></span><button class="pf-btn" onclick="pfRegHito('${pid}','${e.key}',true)">Editar</button></div>${pfAvisoReg(e)}${e.ajustes&&e.ajustes.length?`<div class="pf-note">Corregido ${e.ajustes.length}× · último motivo: ${pfEsc(e.ajustes[e.ajustes.length-1].motivo)}</div>`:''}`
       : `<div class="pf-line" style="color:var(--dim)">${e.nota?`${pfEsc(e.campo)}: <span style="color:var(--text)">${pfEsc(e.nota)}</span>`:pfEsc(e.campo)}${e.aviso?`. Áreas a notificar: ${pfEsc(e.aviso)}.`:''}<span style="flex:1"></span><button class="pf-btn pri" onclick="pfRegHito('${pid}','${e.key}')">Registrar</button></div>`;
     body += general();
   }
@@ -17396,7 +17436,7 @@ function pfPlPasoHtml(s, i){
   const insumos = d.pasos.filter(x=>x.tipo==='insumo' && x.key!==s.key);
   const checks = (campo, txt)=>insumos.length ? `<div style="margin-top:8px"><span class="pl-lab">${txt}</span>${insumos.map(x=>`<label class="pl-chk"><input type="checkbox" ${(s[campo]||[]).includes(x.key)?'checked':''} onchange="pfPlLista(${i},'${campo}','${x.key}',this.checked)">${pfEsc(x.nombre)}</label>`).join('')}</div>` : '';
   let extra = '';
-  if(s.tipo==='hito') extra = `<div class="pl-h" style="margin-top:8px;align-items:flex-end">${inp('campo','Qué se registra en este paso','Ej. Áreas notificadas')}${inp('aviso','Áreas a notificar (opcional)','Ej. Ingeniería y PMO')}
+  if(s.tipo==='hito') extra = `<div class="pl-h" style="margin-top:8px;align-items:flex-end">${inp('campo','Qué se registra en este paso','Ej. Áreas notificadas')}${inp('aviso','Áreas a notificar (separadas por coma, opcional)','Ej. Ingeniería, PMO, Permisos')}
       <div style="min-width:170px"><label class="pl-lab">Papel especial</label><select class="pl-in" onchange="pfPlRolSet(${i}, this.value)"><option value="">Ninguno</option><option value="kickoff" ${s.rol==='kickoff'?'selected':''}>Reunión de arranque</option><option value="asignacion" ${s.rol==='asignacion'?'selected':''}>Asignación de carga</option></select></div></div>
       <div style="margin-top:6px"><label class="pl-chk"><input type="checkbox" ${s.medio?'checked':''} onchange="pfPlMedioSet(${i}, this.checked)">Preguntar el medio (correo, WhatsApp…)</label></div>${checks('solicita','Al registrarlo, marcar como solicitados estos insumos:')}`;
   else if(s.tipo==='insumo') extra = `<div class="pl-h" style="margin-top:8px">${inp('de','Quién lo entrega','Ej. Permisos')}</div>`;
