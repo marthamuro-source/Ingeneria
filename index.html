@@ -16379,6 +16379,10 @@ function pfFaseInfo(p, n){
 function pfFaseActual(p){ return pfFasesDe(p).find(f=>!f.paralela && pfFaseInfo(p,f.n).estado!=='completada') || null; }
 const PF_FASE_TONO = { completada:'ok', en_curso:'accent', pendiente:'idle' };
 
+// Servicios Especiales (módulo existente): solo se leen, nunca se modifican desde el Portafolio
+function pfSrvLista(){ try{ if(typeof SRV_ITEMS!=='undefined'){ if(!SRV_ITEMS.length && typeof srvLoad==='function') srvLoad(); return SRV_ITEMS||[]; } }catch(e){} return []; }
+function pfSrv(id){ return id ? pfSrvLista().find(s=>s.id===id) || null : null; }
+function pfSrvEtq(s){ return [s.proyecto||'s/proyecto', s.tipo, s.contratista, s.estado, s.estatus].filter(Boolean).join(' · '); }
 function pfEsperas(p){
   const w = [];
   (p.data.etapas||[]).forEach(e=>{
@@ -16389,6 +16393,7 @@ function pfEsperas(p){
       if(f.estado==='revision') w.push({ quien:'Permisos'+(f.dependencia?' ('+f.dependencia+')':''), que:'Revisión del folio '+f.clave, dias:pfDiasDesde(f.desde) });
       if(f.estado==='entregada') w.push({ quien:f.dependencia||'La dependencia', que:'Liberación del folio '+f.clave, dias:pfDiasDesde(f.desde) });
     });
+    (e.terceros||[]).forEach(t=>{ const s = pfSrv(t.servicioId); if(s && s.estatus!=='Liberada'){ const f = /^\d{4}-\d{2}-\d{2}/.test(s.fechaSolicitud||'') ? s.fechaSolicitud : (t.fecha||pfHoy()); w.push({ quien:s.contratista||t.proveedor, que:'Servicio especial'+(s.tipo?' de '+s.tipo:'')+(t.entregable?' ('+t.entregable+')':'')+' · '+s.estatus, dias:pfDiasDesde(f) }); } });
     (e.bobinas||[]).forEach(b=>{ if(b.estado==='validacion') w.push({ quien:(e.valNombre||PF_VALIDADOR.sergio), que:'Validación de bobina '+b.clave, dias:pfDiasDesde(b.desde) }); });
   });
   return w.sort((a,b)=>b.dias-a.dias);
@@ -17234,6 +17239,44 @@ function pfAvisoReg(e){
   const falta = todas.filter(a=>!hechas.includes(a));
   return `<div style="margin-top:8px"><div style="font-size:12px">${correo}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center"><span class="pf-stype">Áreas avisadas</span>${todas.map(a=>`<span class="pf-chip ${hechas.includes(a)?'g':''}">${hechas.includes(a)?'✓':'○'} ${pfEsc(a)}</span>`).join('')}${otras.map(a=>`<span class="pf-chip g">✓ ${pfEsc(a)}</span>`).join('')}</div>${falta.length?`<div class="pf-note" style="margin-top:4px">Sin marcar: ${pfEsc(falta.join(', '))}</div>`:''}</div>`;
 }
+// ── Tercerización: parte de un entregable (o de todo el paso) que hizo un tercero; con nota y link ──
+function pfTercerosHtml(p, e){
+  const L = e.terceros||[], pid = p.id;
+  return `<div style="margin-top:10px"><div class="pf-stype" style="margin-bottom:6px">Tercerización</div>${L.map((t,i)=>`<div class="pf-line" style="align-items:flex-start;gap:8px;margin-bottom:8px"><span>🤝 <b>${pfEsc(t.proveedor)}</b> · ${t.entregable?pfEsc(t.entregable):'todo el paso'}${t.fecha?' · <span class="pf-note">'+pfFmt(t.fecha)+'</span>':''}${t.nota?'<div class="pf-note" style="margin-top:2px;color:var(--text)">'+pfEsc(t.nota)+'</div>':''}${t.link?`<div style="margin-top:2px"><a href="${pfEsc(t.link)}" target="_blank" rel="noopener" style="color:var(--accent);font-size:12px">🔗 ${pfEsc(t.linkNombre||'Ver link')}</a></div>`:''}${pfSrvHtml(t)}</span><span style="flex:1"></span><button class="pf-btn" onclick="pfTerceroForm('${pid}','${e.key}',${i})">Editar</button><button class="pf-btn" title="Quitar" onclick="pfTerceroDel('${pid}','${e.key}',${i})">✕</button></div>`).join('')}<button class="pf-btn" style="padding:2px 9px;${L.length?'margin-top:6px;':''}border-style:dashed" onclick="pfTerceroForm('${pid}','${e.key}')">＋ Registrar tercerización</button></div>`;
+}
+function pfSrvHtml(t){
+  if(!t.servicioId) return '';
+  const s = pfSrv(t.servicioId);
+  if(!s) return `<div class="pf-note" style="margin-top:4px">🔧 Servicio especial ligado: ya no aparece en el módulo de Servicios (puede haberse eliminado).</div>`;
+  const st = (typeof SRV_STATUS!=='undefined' ? SRV_STATUS.find(k=>k.key===s.estatus) : null) || {};
+  const lk = [['COT',s.linkCOT],['OS',s.linkOS],['Validación',s.linkValidacion],['Entregable',s.linkEntregable]].filter(x=>x[1]).map(x=>`<a href="${pfEsc(x[1])}" target="_blank" rel="noopener" style="color:var(--accent)">${x[0]}</a>`).join(' · ');
+  return `<div style="margin-top:6px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);font-size:12px"><div>🔧 <b>Servicio especial</b> · ${pfEsc([s.tipo,s.contratista,s.estado].filter(Boolean).join(' · '))}${s.km?' · '+pfEsc(s.km)+' km/pruebas':''}</div><div style="margin-top:3px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="pf-chip"><span style="width:7px;height:7px;border-radius:50%;background:${st.dot||'var(--dim)'};display:inline-block"></span> ${pfEsc(s.estatus||'')}</span>${s.fechaEntrega?`<span class="pf-note">Entrega: ${pfEsc(/^\d{4}-\d{2}-\d{2}/.test(s.fechaEntrega)?pfFmt(s.fechaEntrega):s.fechaEntrega)}</span>`:''}${lk?`<span>${lk}</span>`:''}<a href="#" style="color:var(--accent);margin-left:auto" onclick="event.preventDefault();goView('servicios')">Ver en Servicios ›</a></div></div>`;
+}
+function pfTerceroForm(pid, key, i){
+  const p = pfProy(pid); if(!p) return; const e = pfEt(p, key); const t = i===undefined ? null : (e.terceros||[])[i];
+  const srvs = pfSrvLista().slice().sort((x,y)=>(pfNorm(y.proyecto)===pfNorm(p.data.nombre)) - (pfNorm(x.proyecto)===pfNorm(p.data.nombre)));
+  const srvOpts = [['','Sin servicio ligado'], ...srvs.map(s=>[s.id, (pfNorm(s.proyecto)===pfNorm(p.data.nombre)?'★ ':'')+pfSrvEtq(s)])];
+  pfForm({ titulo:(t?'Editar':'Registrar')+' tercerización · '+e.nombre, sub:'Úsalo cuando parte del trabajo lo hizo un tercero. El entregable sigue siendo de tu equipo: aquí queda quién lo hizo, una nota y el link.', btn:t?'Guardar':'Registrar', ancho:520,
+    campos:[ {k:'servicio',l:'Servicio especial ligado (del módulo Servicios Esp.)',t:'select',o:srvOpts,v:t?t.servicioId||'':''},
+      {k:'proveedor',l:'Quién lo hizo (si ligas un servicio, se toma su contratista)',req:v=>!v.servicio,v:t?t.proveedor:'',ph:'Ej. Topografía del Norte S.A.'},
+      {k:'entregable',l:'Qué se tercerizó',t:'select',o:[['','Todo el paso'], ...(e.entregables||[]).map(x=>[x,x])],v:t?t.entregable:''},
+      {k:'fecha',l:'Fecha',t:'date',v:t?t.fecha:pfHoy()},
+      {k:'nota',l:'Nota',t:'textarea',v:t?t.nota:'',ph:'Alcance, condiciones, qué falta por recibir…'},
+      {k:'linkNombre',l:'Nombre del link (opcional)',v:t?t.linkNombre||'':'',ph:'Ej. Entregable del proveedor · carpeta'}, {k:'link',l:'Link (opcional)',v:t?t.link||'':'',ph:'https://…'} ],
+    valida:v=>(v.link && !/^https?:\/\/\S+$/i.test(v.link)) ? 'El link debe empezar con https:// y no llevar espacios.' : '',
+    ok:v=>{
+      const sv = pfSrv(v.servicio);
+      const o = { id:t?t.id:pfId('tc'), servicioId:v.servicio||null, proveedor:v.proveedor || (sv&&sv.contratista) || 'Servicio especial', entregable:v.entregable, fecha:v.fecha, nota:v.nota, link:v.link||null, linkNombre:v.linkNombre||'', por:pfYo() };
+      if(t) e.terceros[i] = o; else (e.terceros = e.terceros||[]).push(o);
+      pfLog(p, (e.num&&e.num!=='Insumo'?e.num+' · ':'')+e.nombre+': tercerización '+(t?'actualizada':'registrada')+' con '+o.proveedor+(sv?' (servicio especial ligado)':'')+(v.entregable?' ('+v.entregable+')':''));
+      pfGuarda(p);
+    } });
+}
+function pfTerceroDel(pid, key, i){
+  const p = pfProy(pid); if(!p) return; const e = pfEt(p, key); const t = (e.terceros||[])[i]; if(!t) return;
+  if(!confirm('¿Quitar la tercerización con "'+t.proveedor+'"?\n\nSolo se quita este registro.')) return;
+  e.terceros.splice(i,1); pfLog(p, e.nombre+': tercerización con '+t.proveedor+' quitada'); pfGuarda(p);
+}
 function pfEtapaHtml(p, e, esCur){
   const x = pfEtapaEstado(e), pid = p.id;
   const tipoTxt = ({ hito:'Hito', insumo:'Insumo / proceso relacionado', fase:'Actividad del equipo', folios:'Actividad del equipo · por folio', bobinas:'Actividad del equipo · por bobina', tramite:'Proceso relacionado · Permisos · por folio', gis:'Brazo paralelo · Equipo GIS · solo compartimos información' }[e.tipo]) + (e.ola?' · '+e.ola:'');
@@ -17261,6 +17304,7 @@ function pfEtapaHtml(p, e, esCur){
   else if(e.tipo==='fase'){
     body = `${e.insumo?pfInsumoHtml(p, e, e.insumo, true):''}
       <div><div class="pf-stype" style="margin-bottom:6px">Entregables mínimos</div><div class="pf-ent">${e.entregables.map((t,i)=>`<label class="${(e.ok||[])[i]?'ok':''}"><input type="checkbox" ${(e.ok||[])[i]?'checked':''} ${e.estado==='completada'?'disabled':''} onchange="pfToggleOk('${pid}','${e.key}',${i},this.checked)">${pfEsc(t)}</label>`).join('')}</div></div>
+      ${pfTercerosHtml(p, e)}
       ${e.validadores.length?`<div class="pf-chain"><span class="pf-stype">Validación</span>${e.validadores.map((v,i)=>`<span class="pf-chip ${i<e.valIdx||e.estado==='completada'?'g':(i===e.valIdx&&e.estado==='en_validacion'?'v':'')}">${e.valPasos&&e.valPasos[i]?pfEsc(e.valPasos[i])+' · ':''}${pfEsc(pfVL(e, i))}</span>`).join('<span style="color:var(--dim)">→</span>')}${e.ciclos?`<span class="pf-chip a">${e.ciclos} ciclo${e.ciclos>1?'s':''} de observaciones</span>`:''}</div>`:''}
       ${(e.validaciones||[]).length?`<ul class="pf-hist">${e.validaciones.map(v=>`<li>${pfFmt(v.fecha)} · ${pfEsc(v.label||PF_VALIDADOR[v.val]||v.val)}: <b style="color:var(--${v.res==='aprobado'?'green':'amber'})">${v.res==='aprobado'?'Aprobado':'Con observaciones'}</b>${v.medio?' · '+pfEsc(v.medio):''}${v.nota?' · '+pfEsc(v.nota):''}</li>`).join('')}</ul>`:''}
       ${general()}
