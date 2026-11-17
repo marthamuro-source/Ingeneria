@@ -10921,6 +10921,9 @@ function planExportPDF(detallado) {
     +'.cv{background:#b91c1c;color:#fff}'
     +'.cs{background:#e5e7eb;color:#374151}'
     +'.vc{background:#f3e8ff}'
+    +'.fe{background:#fff4e0}'
+    +'th.fe{background:#fde7bd!important;color:#92400e!important}'
+    +'.cfe{font-size:9px;font-weight:700;color:#b45309}'
     +'.cvac{font-size:9px;font-weight:700;color:#9333ea}'
     +'.av{width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#fff;vertical-align:middle;margin-right:3px}'
     +'table.lst{width:100%;border-collapse:collapse;font-size:9px;margin-bottom:8px}'
@@ -10989,11 +10992,12 @@ function planExportPDF(detallado) {
     +'<span style="display:flex;align-items:center;gap:3px"><span class="sb2" style="background:#e5e7eb;border:1px solid #ccc"></span>Sin iniciar</span>'
     +'<span style="display:flex;align-items:center;gap:3px"><span class="sb2" style="background:#b91c1c"></span>Vencida</span>'
     +'<span style="display:flex;align-items:center;gap:3px"><span class="sb2" style="background:#f3e8ff;border:1px solid #c084fc"></span>Vacaciones</span>'
+    +'<span style="display:flex;align-items:center;gap:3px"><span class="sb2" style="background:#fff4e0;border:1px solid #f59e0b"></span>Festivo / descanso oficial</span>'
     +'</span></div>';
   weeks.forEach(function(week,wi){
     h+='<div class="whdr">Semana '+(wi+1)+' - '+fWk(week)+'</div>';
     h+='<table class="cal-table"><thead><tr><th class="ncel">Proyectista</th>';
-    week.forEach(function(day){h+='<th>'+fDay(day)+'</th>';});
+    week.forEach(function(day){var _dk=day.toISOString().slice(0,10),_fe=(typeof FESTIVOS!=='undefined'&&FESTIVOS.indexOf(_dk)>=0);h+=_fe?'<th class="fe">'+fDay(day)+'<div style="font-size:7px;font-weight:600;margin-top:1px">Festivo'+((typeof FEST_LABELS!=='undefined'&&FEST_LABELS[_dk])?': '+escapeHtml(FEST_LABELS[_dk]):'')+'</div></th>':'<th>'+fDay(day)+'</th>';});
     h+='</tr></thead><tbody>';
     planMiembros().forEach(function(member){
       var col=gc(member),ini=gi(member);
@@ -11006,11 +11010,14 @@ function planExportPDF(detallado) {
         var isVac=vs&&vs.has&&vs.has(ds);
         var _pm2=cronoPermisoDia(member,ds); var _isPerm2=!!(_pm2&&_pm2.fr>=1&&!isVac);
         if(_isPerm2) isVac=true;
-        if(isVac) acts=[]; // día de vacaciones o permiso: solo se marca la etiqueta, sin actividades
+        var isFest=(typeof FESTIVOS!=='undefined'&&FESTIVOS.indexOf(ds)>=0);
+        if(isFest){isVac=false;_isPerm2=false;_pm2=null;} // día festivo / descanso oficial: pesa más que vacaciones o permiso
+        if(isVac||isFest) acts=[]; // día de vacaciones, permiso o festivo: solo se marca la etiqueta, sin actividades
         var isOnly=acts.length===1&&!isVac;
-        h+='<td'+(isVac?' class="vc"':'')+' style="min-width:80px;padding:4px;vertical-align:top">';
+        h+='<td'+(isFest?' class="fe"':isVac?' class="vc"':'')+' style="min-width:80px;padding:4px;vertical-align:top">';
         h+='<div class="day-cell">';
-        if(isVac&&acts.length===0){h+='<div class="cvac" style="flex:1;display:flex;align-items:center;justify-content:center;text-align:center">'+(_isPerm2?'<div>Permiso'+(_pm2.motivo?'<div style="font-size:7.5px;font-weight:500;color:#4b5563;line-height:1.2;margin-top:2px">'+permEsc(_pm2.motivo)+'</div>':'')+'</div>':'Vacaciones')+'</div>';}
+        if(isFest){h+='<div class="cfe" style="flex:1;display:flex;align-items:center;justify-content:center;text-align:center"><div>Descanso oficial'+((typeof FEST_LABELS!=='undefined'&&FEST_LABELS[ds])?'<div style="font-size:7.5px;font-weight:500;color:#92400e;line-height:1.2;margin-top:2px">'+escapeHtml(FEST_LABELS[ds])+'</div>':'')+'</div></div>';}
+        else if(isVac&&acts.length===0){h+='<div class="cvac" style="flex:1;display:flex;align-items:center;justify-content:center;text-align:center">'+(_isPerm2?'<div>Permiso'+(_pm2.motivo?'<div style="font-size:7.5px;font-weight:500;color:#4b5563;line-height:1.2;margin-top:2px">'+permEsc(_pm2.motivo)+'</div>':'')+'</div>':'Vacaciones')+'</div>';}
         else if(isVac){h+='<div class="cvac">'+(_isPerm2?'Perm'+(_pm2.motivo?': '+permEsc(_pm2.motivo):''):'Vac')+'</div>';}
         else if(_pm2&&_pm2.fr<1){h+='<div class="cvac" style="background:#fef3c7;color:#92400e" title="'+permEsc(_pm2.motivo||'Permiso de medio día')+'">Permiso ½'+(_pm2.motivo?': '+permEsc(_pm2.motivo):'')+'</div>';}
         acts.forEach(function(a){
@@ -11104,6 +11111,7 @@ function planExportPDF(detallado) {
   h+='<div style="display:flex;align-items:center;gap:5px"><div class="sb" style="background:#e5e7eb;border:1px solid #ccc"></div>Sin iniciar</div>';
   h+='<div style="display:flex;align-items:center;gap:5px"><div class="sb" style="background:#b91c1c"></div>Vencida</div>';
   h+='<div style="display:flex;align-items:center;gap:5px"><div class="sb" style="background:#f3e8ff;border:1px solid #c084fc"></div>Vacaciones</div>';
+  h+='<div style="display:flex;align-items:center;gap:5px"><div class="sb" style="background:#fff4e0;border:1px solid #f59e0b"></div>Festivo / descanso oficial</div>';
   h+='</div>';
   h+='<div class="pbt" style="margin-top:16px"><button onclick="window.print()">Exportar PDF / Imprimir</button></div>';
   h+='</body></html>';
