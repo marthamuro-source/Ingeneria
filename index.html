@@ -10508,9 +10508,10 @@ function cronoDesgloseDiario(a){
   const subs = ((item && item.subtareas) || []).filter(st=>!st.pendienteValidacion);
   if(!subs.length) return { piezas:[], sinSubtareas:true };
   const hoy = repDateKey(new Date());
-  let base = cronoFechaEfectiva(a, a.fechaAsig || item.fechaInicio) || hoy;
+  // Los días de pausa se saltan en el calendario (no se suman a la fecha base: así no se cuentan dos veces)
+  let base = (a.reapertura && a.reapertura.inicio) || a.fechaAsig || item.fechaInicio || hoy;
   if(base < hoy) base = hoy;
-  const capFn = d => cronoEsVacacionPersona(a.responsable, repDateKey(d)) ? 0 : cronoCapacidadDia(d);
+  const capFn = d => { const k = repDateKey(d); return (cronoEsVacacionPersona(a.responsable, k) || paEnPausaProyectada(a, k)) ? 0 : cronoCapacidadDia(d); };
   let d0 = new Date(base+'T00:00:00'), g = 0;
   while(capFn(d0)===0 && g++ < 800) d0.setDate(d0.getDate()+1);
   let cursor = repDateKey(d0), usado = 0;
@@ -20188,7 +20189,13 @@ function paEsVencida(a, hoyStr){
     const e = String(a.fechaEntregaProy||a.fechaReal||'').slice(0,10);
     return !!e && e > a.fechaTermino;
   }
-  return a.fechaTermino < (hoyStr || repDateKey(new Date()));
+  // Con pausa (vigente o previa): la entrega se recorrió por esos días, así que se compara contra el pronóstico
+  // con pausa y no contra la fecha de término original (la pausa solo puede recorrer la fecha, nunca adelantarla).
+  const _hoyV = hoyStr || repDateKey(new Date());
+  if(a.estatus==='En pausa' || (a.diasEnPausaAcum>0) || (Array.isArray(a.pausasHistorial) && a.pausasHistorial.length)){
+    try{ const pi = cronoPronosticoInfo(a); if(pi && pi.fecha && pi.fecha > a.fechaTermino) return pi.fecha < _hoyV; }catch(e){}
+  }
+  return a.fechaTermino < _hoyV;
 }
 // ¿La actividad estaba (o está) en pausa en esa fecha? Se usa en el calendario del plan de trabajo:
 // un día pausado no se pinta, porque se leería como "ese día se trabaja". En la lista sí se mantiene.
@@ -20217,6 +20224,13 @@ function paEnPausaEnFecha(a, ds){
     return true;
   }
   return false;
+}
+// Igual que paEnPausaEnFecha, pero para PROYECTAR trabajo futuro: una pausa abierta SIN estimado de prioridad
+// no tiene fin conocido; el pronóstico solo cuenta los días ya transcurridos, así que hacia adelante se proyecta
+// como si se retomara hoy. Con prioridad ligada sí se salta la ventana completa (y se reajusta sola si cambia).
+function paEnPausaProyectada(a, ds){
+  if(a && a.estatus==='En pausa' && a.pausaInicio && paPausaPrioridadRestante(a)<=0 && ds>=repDateKey(new Date())) return false;
+  return paEnPausaEnFecha(a, ds);
 }
 // ¿Este cambio de estatus es "entrar a pausa"?
 function paEsEntradaPausa(a, nuevo){ return !!a && nuevo==='En pausa' && a.estatus!=='En pausa'; }
