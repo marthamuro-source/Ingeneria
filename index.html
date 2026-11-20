@@ -3473,6 +3473,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
             <button id="hoEditBtn" class="ho-edit-btn" onclick="hoOpenModal()">✏️ Editar días</button>
             <button class="ho-edit-btn" id="hoDlBtn" onclick="hoDlMenu(event)" title="Descargar en PDF los días de Home Office y/o la planeación de viernes">⬇ Descargar</button>
             <div id="hoDlMenu" style="display:none;position:absolute;right:0;top:calc(100% + 6px);z-index:60;min-width:230px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.28);padding:5px">
+              <div class="ho-dl-opt" onclick="hoDescargarPDF('resumen')">✅ Día de home de cada persona<small>Lo más sencillo: lunes a viernes normal</small></div>
               <div class="ho-dl-opt" onclick="hoDescargarPDF('home')">🏠 Días de Home Office<small>Lunes a viernes de las 4 semanas</small></div>
               <div class="ho-dl-opt" onclick="hoDescargarPDF('viernes')">⭐ Planeación de viernes<small>Quién tiene su 2.º día especial</small></div>
               <div class="ho-dl-opt" onclick="hoDescargarPDF('ambas')">📄 Ambas en un solo PDF<small>Home + planeación de viernes</small></div>
@@ -27428,7 +27429,58 @@ function hoDlMenu(ev){
   m.style.display = abrir ? 'block' : 'none';
   if(abrir) setTimeout(()=>document.addEventListener('click', hoDlCerrar, {once:true}), 0);
 }
+function hoDlResumenHtml(){
+  const E = s=>String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const nom = n=>String(n||'').split(' ').slice(0,2).join(' ');
+  const dias = [['lunes','Lunes'],['martes','Martes'],['miercoles','Miércoles'],['jueves','Jueves']];
+  const vfijo = HO_PATTERN.viernes_fijo || [], vesp = HO_PATTERN.viernes || [];
+  const personas = [];
+  const add = n=>{ if(n && !personas.includes(n)) personas.push(n); };
+  dias.forEach(([k])=>(HO_PATTERN[k]||[]).forEach(add)); vfijo.forEach(add); vesp.forEach(l=>(l||[]).forEach(add));
+  // Quien no tiene home también aparece (se ve que no se le olvidó)
+  try{ PA_MEMBERS.forEach(add); }catch(e){}
+  const ord = n=>{ for(let i=0;i<dias.length;i++) if((HO_PATTERN[dias[i][0]]||[]).includes(n)) return i; if(vfijo.includes(n)) return 4; if(vesp.some(l=>(l||[]).includes(n))) return 4; return 9; };
+  personas.sort((a,b)=>ord(a)-ord(b));
+  const filas = personas.map(n=>{
+    let tds = '', alguno = false;
+    dias.forEach(([k])=>{ const si = (HO_PATTERN[k]||[]).includes(n); if(si) alguno = true; tds += `<td class="${si?'si':'no'}">${si?'🏠 Home':'—'}</td>`; });
+    let v = '—', cls = 'no';
+    if(vfijo.includes(n)){ v = '🏠 Home'; cls = 'si'; alguno = true; }
+    else {
+      const sem = []; vesp.forEach((l,i)=>{ if((l||[]).includes(n)) sem.push(i+1); });
+      if(sem.length){ v = '🏠 Home<span>semana '+sem.join(' y ')+' del ciclo</span>'; cls = 'si'; alguno = true; }
+    }
+    tds += `<td class="${cls}">${v}</td>`;
+    return `<tr><th class="n">${E(nom(n))}</th>${tds}${alguno?'':'<td class="sh">Sin día de home asignado</td>'}</tr>`;
+  }).join('');
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Día de Home Office por persona · C3NTRO</title>
+<style>
+@page{size:A4 landscape;margin:14mm 12mm}
+*{box-sizing:border-box}body{font-family:'Inter','Segoe UI',Arial,sans-serif;color:#1c2733;margin:0;font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.top{background:#12305a;color:#fff;padding:10px 16px;border-radius:8px;display:flex;justify-content:space-between;font-size:11px}
+h1{font-size:22px;margin:18px 0 4px}.per{color:#5b6b7d;font-size:12px;margin-bottom:14px}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+thead th{background:#12305a;color:#fff;padding:9px 6px;font-size:12px;text-align:center;border:1px solid #12305a}
+thead th:first-child{text-align:left;width:19%}
+tbody th.n{text-align:left;padding:10px 8px;border:1px solid #d5dde6;background:#f4f7fb;font-size:13px}
+td{border:1px solid #d5dde6;padding:10px 6px;text-align:center;vertical-align:middle}
+td.si{background:#e3f6ec;color:#16703f;font-weight:700}td.si span{display:block;font-weight:500;font-size:10px;margin-top:2px;color:#2f7d56}
+td.no{color:#b7c0ca}td.sh{border:0;text-align:left;color:#9a6a00;font-size:11px;width:auto;white-space:nowrap}
+.nota{margin-top:14px;color:#5b6b7d;font-size:11px;line-height:1.5}
+.foot{margin-top:18px;padding-top:8px;border-top:1px solid #d5dde6;display:flex;justify-content:space-between;color:#8896a5;font-size:10px}
+.pbt{margin:16px 0;text-align:center}.pbt button{padding:8px 18px;border:0;border-radius:7px;background:#2a78d6;color:#fff;font-size:13px;cursor:pointer}
+@media print{.pbt{display:none}}
+</style></head><body onload="setTimeout(function(){window.print();},500)">
+<div class="top"><span>C3NTRO Telecom · Coordinación de Ingeniería</span><span>Home Office</span></div>
+<h1>Día de Home Office de cada persona</h1><div class="per">Lunes a viernes · asignación normal de la semana</div>
+<table><thead><tr><th>Persona</th><th>Lunes</th><th>Martes</th><th>Miércoles</th><th>Jueves</th><th>Viernes</th></tr></thead><tbody>${filas}</tbody></table>
+<div class="nota">🏠 Home = ese día trabaja en casa. Los demás días está en oficina.${vesp.length?` El <b>viernes</b> rota: quien tiene "semana N" lo hace en home solo cuando le toca esa semana del ciclo (ciclo de ${vesp.length} semanas).`:''}</div>
+<div class="foot"><span>Generado el ${E(new Date().toLocaleString('es-MX',{dateStyle:'long',timeStyle:'short'}))}</span><span>C3NTRO · Ausencias y Permisos</span></div>
+<div class="pbt"><button onclick="window.print()">Exportar PDF / Imprimir</button></div>
+</body></html>`;
+}
 function hoDlHtml(modo){
+  if(modo==='resumen') return hoDlResumenHtml();
   const E = s=>String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const nom = n=>String(n||'').split(' ').slice(0,2).join(' ');
   const totalSem = (Array.isArray(HO_PATTERN.viernes) && HO_PATTERN.viernes.length) ? HO_PATTERN.viernes.length : 4;
