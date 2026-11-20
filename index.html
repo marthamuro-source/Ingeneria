@@ -363,6 +363,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .ho-btn-save:hover{box-shadow:0 0 22px rgba(0,180,255,.5);}
 .ho-edit-btn{font-size:10px;background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.25);color:rgba(0,229,255,.8);border-radius:6px;padding:3px 9px;cursor:pointer;transition:all .15s;white-space:nowrap;}
 .ho-edit-btn:hover{background:rgba(0,229,255,.2);color:#fff;}
+.ho-dl-opt{padding:8px 11px;border-radius:7px;font-size:12px;cursor:pointer;color:var(--text);line-height:1.3}
+.ho-dl-opt:hover{background:var(--surface2)}
+.ho-dl-opt small{display:block;font-size:10.5px;color:var(--dim);margin-top:1px}
 .ho-week-current{font-size:10.5px;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 .ho-week-now{color:#3dd68c;font-size:8px;}
 .ho-week-fix-btn{font-size:9.5px;background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:2px 8px;cursor:pointer;transition:all .15s;}
@@ -3465,9 +3468,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <!-- Home Office -->
       <div class="panel" style="margin-bottom:18px">
         <div class="ph"><div><div class="pt">Home Office</div><div class="ps">Asignación semanal — quién está en casa y quién en oficina</div></div>
-          <div style="display:flex;gap:8px">
+          <div style="display:flex;gap:8px;position:relative">
             <button class="ho-edit-btn" onclick="hoAbrirPlaneacionViernes()" title="Ver la planeación del ciclo de viernes con fechas reales">📅 Planeación viernes</button>
             <button id="hoEditBtn" class="ho-edit-btn" onclick="hoOpenModal()">✏️ Editar días</button>
+            <button class="ho-edit-btn" id="hoDlBtn" onclick="hoDlMenu(event)" title="Descargar en PDF los días de Home Office y/o la planeación de viernes">⬇ Descargar</button>
+            <div id="hoDlMenu" style="display:none;position:absolute;right:0;top:calc(100% + 6px);z-index:60;min-width:230px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.28);padding:5px">
+              <div class="ho-dl-opt" onclick="hoDescargarPDF('home')">🏠 Días de Home Office<small>Lunes a viernes de las 4 semanas</small></div>
+              <div class="ho-dl-opt" onclick="hoDescargarPDF('viernes')">⭐ Planeación de viernes<small>Quién tiene su 2.º día especial</small></div>
+              <div class="ho-dl-opt" onclick="hoDescargarPDF('ambas')">📄 Ambas en un solo PDF<small>Home + planeación de viernes</small></div>
+            </div>
           </div>
         </div>
         <div class="pb">
@@ -27409,6 +27418,115 @@ function hoRenderPlaneacionViernes(){
 function hoCerrarPlaneacionViernes(){
   const el = document.getElementById('hoPlanBg');
   if(el) el.classList.remove('open');
+}
+// ── Descargar Home Office en PDF: días de Home (lunes a viernes) y/o planeación de viernes · ciclo completo ──
+function hoDlCerrar(){ const m = document.getElementById('hoDlMenu'); if(m) m.style.display = 'none'; }
+function hoDlMenu(ev){
+  if(ev) ev.stopPropagation();
+  const m = document.getElementById('hoDlMenu'); if(!m) return;
+  const abrir = m.style.display==='none';
+  m.style.display = abrir ? 'block' : 'none';
+  if(abrir) setTimeout(()=>document.addEventListener('click', hoDlCerrar, {once:true}), 0);
+}
+function hoDlHtml(modo){
+  const E = s=>String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const nom = n=>String(n||'').split(' ').slice(0,2).join(' ');
+  const totalSem = (Array.isArray(HO_PATTERN.viernes) && HO_PATTERN.viernes.length) ? HO_PATTERN.viernes.length : 4;
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const hoyK = repDateKey(hoy);
+  const dn = ['Lunes','Martes','Miércoles','Jueves','Viernes'];
+  const fCorta = d=>d.toLocaleDateString('es-MX',{day:'numeric',month:'short'}).replace('.','');
+  const fLarga = d=>{ const s = d.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); return s.charAt(0).toUpperCase()+s.slice(1); };
+  // Lunes de la semana en curso (si hoy es fin de semana, arranca el lunes que viene)
+  const mon0 = hoMondayOf(hoy); if(hoy.getDay()===6 || hoy.getDay()===0) mon0.setDate(mon0.getDate()+7);
+  const finCiclo = new Date(mon0); finCiclo.setDate(mon0.getDate()+totalSem*7-3);
+  let cuerpo = '';
+  // ── Parte 1: días de Home Office, semana por semana ──
+  if(modo==='home' || modo==='ambas'){
+    cuerpo += `<h2>🏠 Días de Home Office</h2><div class="nota">Quién trabaja en casa cada día. El resto del equipo está en oficina.</div>`;
+    for(let w=0; w<totalSem; w++){
+      const lun = new Date(mon0); lun.setDate(mon0.getDate()+w*7);
+      const vie = new Date(lun); vie.setDate(lun.getDate()+4);
+      const semIdx = ausGetCycleWeek(lun), esp = (HO_PATTERN.viernes && HO_PATTERN.viernes[semIdx]) || [];
+      let ths = '', tds = '';
+      for(let i=0;i<5;i++){
+        const d = new Date(lun); d.setDate(lun.getDate()+i); const k = repDateKey(d);
+        const fest = festIsHoliday(k), esHoy = k===hoyK;
+        ths += `<th class="${esHoy?'hoy':''}">${dn[i]}<span>${E(fCorta(d))}</span></th>`;
+        if(fest){ tds += `<td class="fest">🎌 Día festivo<span>${E((typeof FEST_LABELS!=='undefined' && FEST_LABELS[k])||'')}</span></td>`; continue; }
+        const aus = AUSENCIAS.filter(a=>a.inicio && a.fin && k>=a.inicio && k<=a.fin);
+        const chips = [];
+        aus.forEach(a=> chips.push(`<div class="ch aus">${a.tipo==='vacaciones'?'🏖️ Vacaciones':'📋 Permiso'} · ${E(nom(a.persona))}</div>`));
+        ausHomeOfficeFor(d).forEach(n=>{
+          if(aus.some(a=>a.persona===n)) return;
+          chips.push(`<div class="ch">🏠 ${E(nom(n))}${(i===4 && esp.includes(n))?' <b title="Viernes especial">★</b>':''}</div>`);
+        });
+        tds += `<td>${chips.length ? chips.join('') : '<span class="of">Todos en oficina</span>'}</td>`;
+      }
+      const cur = lun.getTime() <= hoy.getTime() && hoy.getTime() <= vie.getTime()+86400000;
+      cuerpo += `<div class="sem"><div class="semh"><b>Semana ${semIdx+1} del ciclo</b> · ${E(fCorta(lun))} al ${E(fCorta(vie))}${cur?' <em>semana en curso</em>':''}</div><table class="g"><thead><tr>${ths}</tr></thead><tbody><tr>${tds}</tr></tbody></table></div>`;
+    }
+    cuerpo += `<div class="leg">🏠 Home office · 🏖️ Vacaciones · 📋 Permiso · 🎌 Festivo · <b>★</b> viernes especial (2.º día)</div>`;
+  }
+  // ── Parte 2: planeación de viernes (mismas filas que la ventana "Planeación viernes") ──
+  if(modo==='viernes' || modo==='ambas'){
+    if(modo==='ambas') cuerpo += `<div class="salto"></div>`;
+    cuerpo += `<h2>⭐ Planeación de viernes</h2><div class="nota">Próximos ${totalSem} viernes · quién tiene su 2.º día especial de Home Office. Se actualiza solo cuando el ciclo se reinicia.</div>`;
+    let d = new Date(hoy); while(d.getDay()!==5) d.setDate(d.getDate()+1);
+    let filas = '';
+    for(let i=0;i<totalSem;i++){
+      const f = new Date(d); f.setDate(d.getDate()+i*7);
+      const k = repDateKey(f), semIdx = ausGetCycleWeek(f), pers = (HO_PATTERN.viernes && HO_PATTERN.viernes[semIdx]) || [], fijo = HO_PATTERN.viernes_fijo || [];
+      const fest = festIsHoliday(k);
+      filas += `<tr><td class="fv">${E(fLarga(f))}${fest?`<div class="fe">🎌 Día festivo${(typeof FEST_LABELS!=='undefined' && FEST_LABELS[k])?' · '+E(FEST_LABELS[k]):''}</div>`:''}</td><td class="c">Semana ${semIdx+1}</td><td>${pers.length ? pers.map(n=>'⭐ '+E(nom(n))).join('<br>') : '<span class="of">Nadie asignado</span>'}${fijo.length?`<div class="fj">🏠 Viernes normal: ${fijo.map(n=>E(nom(n))).join(', ')}</div>`:''}</td></tr>`;
+    }
+    cuerpo += `<table class="v"><thead><tr><th>Viernes</th><th class="c">Semana del ciclo</th><th>2.º día especial de Home Office</th></tr></thead><tbody>${filas}</tbody></table>`;
+  }
+  const titulo = modo==='home' ? 'Días de Home Office' : modo==='viernes' ? 'Planeación de viernes' : 'Home Office y planeación de viernes';
+  const periodo = modo==='viernes' ? 'Próximos '+totalSem+' viernes' : 'Del '+fCorta(mon0)+' al '+fCorta(finCiclo)+' de '+finCiclo.getFullYear()+' · ciclo de '+totalSem+' semanas';
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>${E(titulo)} · C3NTRO</title>
+<style>
+@page{size:A4 portrait;margin:13mm 12mm}
+*{box-sizing:border-box}body{font-family:'Inter','Segoe UI',Arial,sans-serif;color:#1c2733;margin:0;font-size:11.5px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.top{background:#12305a;color:#fff;padding:10px 16px;border-radius:8px;display:flex;justify-content:space-between;font-size:10.5px}
+h1{font-size:20px;margin:16px 0 2px}.per{color:#2a62b8;font-weight:600;font-size:12.5px;margin-bottom:6px}
+h2{font-size:14px;margin:18px 0 2px;padding-bottom:4px;border-bottom:2px solid #2a78d6}.nota{color:#5b6b7d;font-size:10.5px;margin:3px 0 8px}
+.sem{margin-top:11px;break-inside:avoid}.semh{font-size:11.5px;margin-bottom:4px}.semh em{font-style:normal;background:#e3f6ec;color:#1f8a52;border-radius:9px;padding:1px 8px;font-size:10px;font-weight:600;margin-left:6px}
+table{width:100%;border-collapse:collapse}table.g{table-layout:fixed}
+table.g th{background:#eef3f9;color:#34495e;font-size:10px;text-transform:uppercase;letter-spacing:.04em;padding:6px 5px;border:1px solid #d5dde6;text-align:left}
+table.g th span{display:block;font-weight:500;color:#7a8a9a;text-transform:none;letter-spacing:0;font-size:10px;margin-top:1px}
+table.g th.hoy{background:#2a78d6;color:#fff}table.g th.hoy span{color:#dbe9fb}
+table.g td{border:1px solid #d5dde6;padding:6px 5px;vertical-align:top;height:58px}
+.ch{background:#eaf3fd;border-radius:6px;padding:3px 6px;margin-bottom:3px;font-size:10.5px;line-height:1.3}.ch.aus{background:#fff4de;color:#8a5a00}.ch b{color:#c98a00}
+td.fest{background:#fff8e6;color:#9a6a00;font-size:10.5px;font-weight:600}td.fest span{display:block;font-weight:400;font-size:10px;margin-top:2px}
+.of{color:#8896a5;font-size:10px}.leg{margin-top:10px;color:#5b6b7d;font-size:10px}
+table.v th{font-size:9.5px;text-align:left;color:#5b6b7d;text-transform:uppercase;letter-spacing:.05em;padding:6px;border-bottom:1px solid #d5dde6}
+table.v td{padding:8px 6px;border-bottom:1px solid #e8edf2;vertical-align:top;line-height:1.5}table.v tr{break-inside:avoid}
+.fv{font-weight:600}.c{text-align:center;width:16%;color:#5b6b7d}.fe{color:#9a6a00;font-weight:500;font-size:10px;text-transform:none}.fj{color:#5b6b7d;font-size:10.5px;margin-top:3px}
+.salto{break-after:page}
+.foot{margin-top:20px;padding-top:8px;border-top:1px solid #d5dde6;display:flex;justify-content:space-between;color:#8896a5;font-size:9.5px}
+.pbt{margin:16px 0;text-align:center}.pbt button{padding:8px 18px;border:0;border-radius:7px;background:#2a78d6;color:#fff;font-size:13px;cursor:pointer}
+@media print{.pbt{display:none}}
+</style></head><body onload="setTimeout(function(){window.print();},500)">
+<div class="top"><span>C3NTRO Telecom · Coordinación de Ingeniería</span><span>Home Office</span></div>
+<h1>${E(titulo)}</h1><div class="per">${E(periodo)}</div>
+${cuerpo}
+<div class="foot"><span>Generado el ${E(new Date().toLocaleString('es-MX',{dateStyle:'long',timeStyle:'short'}))}</span><span>C3NTRO · Ausencias y Permisos</span></div>
+<div class="pbt"><button onclick="window.print()">Exportar PDF / Imprimir</button></div>
+</body></html>`;
+}
+async function hoDescargarPDF(modo){
+  hoDlCerrar();
+  // La ventana se abre YA (con el clic) para que el navegador no la bloquee; luego se llena con el PDF
+  const win = window.open('about:blank','_blank');
+  if(!win){ alert('Tu navegador bloqueó la ventana. Permite las ventanas emergentes para este sitio e inténtalo de nuevo.'); return; }
+  try{ win.document.write('<p style="font-family:Arial;padding:24px;color:#555">Preparando el PDF de Home Office…</p>'); }catch(e){}
+  try{ await Promise.race([ hoLoadSchedule(), new Promise(r=>setTimeout(r,2500)) ]); }catch(e){}
+  try{
+    const url = URL.createObjectURL(new Blob([hoDlHtml(modo)], { type:'text/html;charset=utf-8' }));
+    win.location.href = url;
+    setTimeout(()=>URL.revokeObjectURL(url), 120000);
+  }catch(e){ try{ win.close(); }catch(_){} alert('No se pudo generar el PDF: '+(e.message||e)); }
 }
 let hoActiveViernesSem = 0;
 function hoOpenModal(){
