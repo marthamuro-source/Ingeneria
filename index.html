@@ -6019,9 +6019,18 @@ function cronoRendimientoDiarioEsperado(st){
 // rendimiento diario normal de la subtarea).
 // IMPORTANTE: st.avanceAcum debe reflejar el acumulado ANTES de sumar cantidadHoy — llamar esta función
 // antes de actualizar st.avanceAcum en el punto de guardado.
-function cronoEvaluarRendimientoReporte(st, cantidadHoy){
+// El rendimiento capturado está calibrado para un día completo (lunes a jueves). El viernes la jornada es de
+// 6h (6/9) y un permiso de medio día resta la mitad, así que la meta de ESE día se ajusta con la misma capacidad
+// que usa el pronóstico: si cumplen lo pronosticado para el viernes, NO es bajo rendimiento.
+// fecha/persona son opcionales; sin fecha se evalúa contra el día completo (comportamiento anterior).
+function cronoFactorMetaDia(fecha, persona){
+  if(!fecha) return 1;
+  try{ const c = cronoCapacidadDia(fecha, persona||null); return c>0 ? c : 1; }catch(e){ return 1; }   // día no laborable: no se baja la meta
+}
+function cronoEvaluarRendimientoReporte(st, cantidadHoy, fecha, persona){
   const esPct = st.unidad==='%' || st.esOperativo;
-  const esperado = esPct ? null : cronoRendimientoDiarioEsperado(st);
+  let esperado = esPct ? null : cronoRendimientoDiarioEsperado(st);
+  if(esperado!=null){ const f = cronoFactorMetaDia(fecha, persona); if(f!==1) esperado = Math.round(esperado*f*100)/100; }
   const cant = parseFloat(cantidadHoy)||0;
   const acumPrevio = parseFloat(st.avanceAcum)||0;
   const total = parseFloat(st.cantidad)||0;
@@ -8396,7 +8405,7 @@ function cronoRecalcularReportesSubtarea(item, st){
       runningAcum = Math.max(0, Math.min(100, runningAcum + cant));
       return;
     }
-    const { bajo, esperado } = cronoEvaluarRendimientoReporte({...st, avanceAcum: runningAcum}, cant);
+    const { bajo, esperado } = cronoEvaluarRendimientoReporte({...st, avanceAcum: runningAcum}, cant, r.fecha, item.responsable);
     r.bajoRendimiento = bajo;
     r.rendimientoEsperado = esperado;
     const nuevoAcum = runningAcum + cant;
@@ -8501,10 +8510,12 @@ function cronoGuardarReporte(){
   const st = item?.subtareas?.find(s=>s.id===cronoReportStId);
   if(!st||!item) return;
   if(st.confirmada===false){ alert('Esta subtarea sigue por confirmar: confirma el plan antes de reportarla.'); return; }
+  { const _paE = PA_ITEMS.find(x=>x.id===item.actividadId);
+    if(_userRole==='proyectista' && _paE && _paE.estatus!=='En progreso'){ alert('Esta actividad está «'+_paE.estatus+'». Solo se puede reportar cuando tu coordinación la marca como «En progreso».'); return; } }
 
   // ¿Este reporte quedó por debajo del rendimiento diario esperado de la subtarea?
   // (se evalúa contra el acumulado ANTES de sumar este reporte, así detecta si con esto se completa la subtarea)
-  const { bajo, esperado } = cronoEvaluarRendimientoReporte(st, cantidad);
+  const { bajo, esperado } = cronoEvaluarRendimientoReporte(st, cantidad, repDateKey(new Date()), item.responsable);
 
   // Actualizar acumulado y estatus (topado al total de la subtarea, no tiene sentido pasarse)
   const nuevoAcum = (st.avanceAcum||0) + cantidad;
@@ -11376,6 +11387,17 @@ function calProyVerDia(fecha){
   </div>`;
 }
 
+// Actividades mías que todavía NO se pueden reportar: la coordinación aún no las marca «En progreso»
+function calProyAvisoBloqueadas(){
+  try{
+    const mias = PA_ITEMS.filter(a=>toCanonical(a.responsable||'')===toCanonical(_miNombre||'') &&
+      ['Proyecto','Trabajo Operativo','Impresiones','Planos de Conectividad'].includes(a.tipo) &&
+      ['Sin iniciar','En pausa','En revisión'].includes(a.estatus));
+    if(!mias.length) return '';
+    const lista = mias.slice(0,6).map(a=>`${a.folio||a.actividad||a.proyecto||'Actividad'} <span style="opacity:.7">(${a.estatus})</span>`).join(' · ');
+    return `<div style="margin:10px 0 0;padding:8px 10px;border-radius:8px;background:rgba(245,166,35,.08);border:0.5px solid rgba(245,166,35,.3);font-size:11px;color:var(--amber);line-height:1.45">⏳ ${mias.length} actividad${mias.length!==1?'es':''} aún no se puede${mias.length!==1?'n':''} reportar: ${lista}${mias.length>6?' …':''}. Se habilita${mias.length!==1?'n':''} cuando tu coordinación la marque como <b>En progreso</b>.</div>`;
+  }catch(e){ return ''; }
+}
 function renderCalProyPanelHoy(fecha, repsExistentes){
   const panel = document.getElementById('calProyPanelHoy');
   if(!panel) return;
@@ -11394,7 +11416,7 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
   const misActividades = PA_ITEMS.filter(a=>
     toCanonical(a.responsable||'')===toCanonical(_miNombre||'') &&
     ['Proyecto','Trabajo Operativo','Impresiones','Planos de Conectividad'].includes(a.tipo) &&
-    a.estatus!=='Terminado'
+    a.estatus==='En progreso'   // solo se reporta lo que la coordinación ya marcó «En progreso»
   );
 
   const subtareasDisponibles = [];
@@ -11444,6 +11466,7 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
     </div>`;
   }
 
+  if(esHoy) html += calProyAvisoBloqueadas();
   if(!esHoy){
     html+=`<div style="font-size:12px;color:var(--dim);text-align:center;padding:10px 0">Solo puedes reportar el día de hoy.</div></div>`;
     panel.innerHTML=html;
@@ -11550,7 +11573,7 @@ function renderCalProyPanelHoyGeneral(fecha, repsExistentes, esHoy){
   const misActividades = PA_ITEMS.filter(a=>
     toCanonical(a.responsable||'')===toCanonical(_miNombre||'') &&
     ['Proyecto','Trabajo Operativo','Impresiones','Planos de Conectividad'].includes(a.tipo) &&
-    a.estatus!=='Terminado'
+    a.estatus==='En progreso'   // solo se reporta lo que la coordinación ya marcó «En progreso»
   );
 
   const dObj = new Date(fecha+'T00:00:00');
@@ -11592,6 +11615,7 @@ function renderCalProyPanelHoyGeneral(fecha, repsExistentes, esHoy){
     </div>`;
   }
 
+  if(esHoy) html += calProyAvisoBloqueadas();
   if(!esHoy){
     html+=`<div style="font-size:12px;color:var(--dim);text-align:center;padding:10px 0">Solo puedes reportar el día de hoy.</div></div>`;
     panel.innerHTML=html;
@@ -11751,10 +11775,11 @@ async function calProyGuardarReporteHoyG(){
 
   await cronoRecargarDeSupabase();
 
-  const itemsAfectados = new Set();
+  const itemsAfectados = new Set(), noEnProgreso = [];
   pendientes.forEach(entry=>{
     const pa = PA_ITEMS.find(x=>x.id===entry.actData.id);
     if(!pa) return;
+    if(_userRole==='proyectista' && pa.estatus!=='En progreso'){ noEnProgreso.push((pa.folio||pa.actividad||'actividad')+' ('+pa.estatus+')'); return; }
     const item = cronoGetOrCreate(pa);
     if(!item.reportes) item.reportes=[];
     item.reportes.push({
@@ -11771,6 +11796,7 @@ async function calProyGuardarReporteHoyG(){
     }
   });
   itemsAfectados.forEach(id=>cronoSaveItem(id));
+  if(noEnProgreso.length) alert('No se guardó el reporte de: '+noEnProgreso.join(', ')+'.\n\nSolo se puede reportar una actividad cuando tu coordinación la marca como «En progreso».');
 
   // Si alguna actividad quedó al 100% o se marcó completada, pasarla a "En revisión" (misma cortesía que el modo Subtareas)
   pendientes.forEach(entry=>{
@@ -11808,7 +11834,7 @@ function calProyLeerFormActual(){
   const estatus = document.getElementById('calProyEstatus')?.value||'en_progreso';
   const nota = document.getElementById('calProyNota')?.value.trim()||'';
   if(!nota && !cantidad) return null;
-  const { bajo, esperado } = cronoEvaluarRendimientoReporte(subtareas[idx].st, cantidad);
+  const { bajo, esperado } = cronoEvaluarRendimientoReporte(subtareas[idx].st, cantidad, window._calProyFechaHoy||repDateKey(new Date()), _miNombre);
   return { stData: subtareas[idx], cantidad, estatus, nota, bajoRendimiento: bajo, rendimientoEsperado: esperado };
 }
 
@@ -11821,7 +11847,7 @@ function calProyCantCheckRendimiento(){
   if(isNaN(idx)||idx<0||!subtareas[idx]||!infoEl) return;
   const st = subtareas[idx].st;
   const cantidad = parseFloat(document.getElementById('calProyCant')?.value)||0;
-  const { bajo, esperado } = cronoEvaluarRendimientoReporte(st, cantidad);
+  const { bajo, esperado } = cronoEvaluarRendimientoReporte(st, cantidad, window._calProyFechaHoy||repDateKey(new Date()), _miNombre);
   if(bajo){
     infoEl.innerHTML = `⚠️ <span style="color:var(--amber)">Vas por debajo del rendimiento esperado: reportaste ${cantidad} ${st.unidad}, se esperaban ${esperado} ${st.unidad}/día. Se guardará con esta marca.</span>`;
   } else {
@@ -11919,16 +11945,18 @@ async function calProyGuardarReporteHoy(){
   await cronoRecargarDeSupabase();
 
   const itemsAfectados = new Set();
-  const bloqueadasConf = [];
+  const bloqueadasConf = [], bloqueadasEst = [];
   for(const entry of pendientes){
     const item = CRONO_ITEMS.find(x=>x.actividadId===entry.stData.actividadId);
     const st = item?.subtareas?.find(s=>s.id===entry.stData.st.id);
     if(!st||!item) continue;
     if(st.confirmada===false){ bloqueadasConf.push(st.nombre); continue; } // plan sin confirmar: no se puede reportar
+    { const _paE = PA_ITEMS.find(x=>x.id===item.actividadId);
+      if(_userRole==='proyectista' && _paE && _paE.estatus!=='En progreso'){ bloqueadasEst.push((_paE.folio||_paE.actividad||st.nombre)+' ('+_paE.estatus+')'); continue; } }
 
     // Recalcular contra la subtarea recién recargada (por si su rendimiento cambió desde que se agregó a la lista)
     // Se evalúa contra el acumulado ANTES de sumar este reporte, así detecta si con esto se completa la subtarea.
-    const { bajo, esperado } = cronoEvaluarRendimientoReporte(st, entry.cantidad);
+    const { bajo, esperado } = cronoEvaluarRendimientoReporte(st, entry.cantidad, fecha, item.responsable);
 
     const esPct = st.unidad==='%' || st.esOperativo;
     if(esPct){
@@ -11967,6 +11995,9 @@ async function calProyGuardarReporteHoy(){
   itemsAfectados.forEach(id=>cronoSaveItem(id));
   if(bloqueadasConf.length){
     alert('No se guardó el reporte de: '+bloqueadasConf.join(', ')+'.\n\nEstas subtareas siguen por confirmar. Confirma tu plan primero (Panel de seguimiento > Subtareas).');
+  }
+  if(bloqueadasEst.length){
+    alert('No se guardó el reporte de: '+bloqueadasEst.join(', ')+'.\n\nSolo se puede reportar una actividad cuando tu coordinación la marca como «En progreso».');
   }
 
   // Si con este reporte alguna actividad llegó al 100% de avance en subtareas,
