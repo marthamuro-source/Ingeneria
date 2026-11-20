@@ -7871,6 +7871,16 @@ function cronoCumplimiento(a, crono, hasta){
   const estado = pct===null ? 'sin_inicio' : pct>=CRONO_CUMP_OK ? 'cumple' : pct>=CRONO_CUMP_PARCIAL ? 'parcial' : 'atrasada';
   return {plan, hasta, filas, pct, estado};
 }
+// ¿Lo reportado ACUMULADO hasta ese día ya alcanza lo esperado acumulado? Si sí (la subtarea va adelantada o ya se cumplió),
+// un día con menos de lo esperado NO es atraso: solo se repartió distinto (ej. reportó todo el 18 y el 19 quedaba 0.08).
+function cronoAcumCumpleHasta(plan, f, ds){
+  let esp = 0, rea = 0;
+  Object.keys(plan.dias).forEach(k=>{ if(k<=ds) esp += (plan.dias[k][f.st.id]||0); });
+  Object.keys(f.real||{}).forEach(k=>{ if(k<=ds) rea += (f.real[k]||0); });
+  const cant = f.v && f.v.cantidad ? f.v.cantidad : Infinity;
+  esp = Math.min(esp, cant); rea = Math.min(Math.max(rea,0), cant);
+  return rea >= esp*CRONO_CUMP_OK - 1e-9;
+}
 function cronoCumpColor(e){ return e==='cumple'||e==='completada'||e==='adelantada' ? 'var(--green)' : e==='parcial' ? 'var(--amber)' : e==='atrasada' ? 'var(--red)' : 'var(--dim)'; }
 function cronoCumpLabel(e){ return {cumple:'✓ Al día', completada:'✓ Completada', adelantada:'↑ Adelantada', parcial:'◐ Parcial', atrasada:'⚠ Atrasada', sin_inicio:'Sin iniciar'}[e]||e; }
 function cronoCumpMover(d){ cronoCumpSem += d; renderReporteoView(); }
@@ -7899,7 +7909,7 @@ function cronoCumpHTML(a, crono){
     if(ds>(f.hasta||cump.hasta)) return `<td style="padding:6px;text-align:center;color:var(--dim)" title="Esperado ${cronoFmtU(e)}${r?' · reportado '+cronoFmtU(r):''}">${r>0?cronoFmtU(r)+'/':''}<span style="opacity:.8">${cronoFmtU(e)}</span></td>`;
     let col = 'var(--green)';
     if(e<=1e-9) col = 'var(--accent)';
-    else if(r/e < CRONO_CUMP_OK) col = r/e>=CRONO_CUMP_PARCIAL ? 'var(--amber)' : 'var(--red)';
+    else if(r/e < CRONO_CUMP_OK && !cronoAcumCumpleHasta(cump.plan, f, ds)) col = r/e>=CRONO_CUMP_PARCIAL ? 'var(--amber)' : 'var(--red)';
     return `<td style="padding:6px;text-align:center;color:${col};font-weight:500" title="Reportado ${cronoFmtU(r)} · esperado ${cronoFmtU(e)} ${f.st.unidad||''}">${cronoFmtU(r)}/${cronoFmtU(e)}</td>`;
   };
   const filas = cump.filas.map(f=>`<tr style="border-bottom:0.5px solid var(--border)">
@@ -10836,7 +10846,7 @@ function planCorteSeccion(weeks, C){
               return;
             }
             var c='#166534';
-            if(e<=1e-9) c='#1a4fa0'; else if(r/e<CRONO_CUMP_OK) c=(r/e>=CRONO_CUMP_PARCIAL)?'#92400e':'#b91c1c';
+            if(e<=1e-9) c='#1a4fa0'; else if(r/e<CRONO_CUMP_OK && !cronoAcumCumpleHasta(plan, f, ds)) c=(r/e>=CRONO_CUMP_PARCIAL)?'#92400e':'#b91c1c';
             h+='<td class="dc" style="color:'+c+';font-weight:700">'+fq(r)+'/'+fq(e)+'</td>';
           });
           h+='<td class="dc">'+fq(v.metaV)+'</td>';
