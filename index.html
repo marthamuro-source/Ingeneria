@@ -6696,7 +6696,8 @@ function renderReporteoView(){
               <span style="font-size:11px;font-weight:500;color:var(--accent);min-width:65px">${(r.quien||'').split(' ')[0]}</span>
               <span style="font-size:12px;color:var(--text);flex:1">${r.descripcion||''}</span>
               <span style="font-size:11px;font-weight:500;color:var(--accent);white-space:nowrap">${r.avance||0}%</span>
-            </div>`;
+              ${cronoRechazoBoton(a.id, r.id)}
+            </div>${cronoRechazoBadge(r)}`;
             return;
           }
           html += `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);${r.bajoRendimiento?'background:rgba(245,166,35,.06)':''}">
@@ -6704,7 +6705,8 @@ function renderReporteoView(){
             <span style="font-size:11px;font-weight:500;color:var(--accent);min-width:65px">${(r.quien||'').split(' ')[0]}</span>
             <span style="font-size:12px;color:var(--text);flex:1">${r.subtareaNombre||''} — ${r.nota||''}${r.bajoRendimiento?` <span title="Por debajo del rendimiento esperado (${r.rendimientoEsperado} ${r.unidad}/día)" style="font-size:10px;padding:1px 7px;border-radius:10px;background:rgba(245,166,35,.15);color:var(--amber);font-weight:600;margin-left:4px">⚠ Bajo rendimiento</span>`:''}</span>
             ${r.cantidad?`<span style="font-size:11px;font-weight:500;color:${r.bajoRendimiento?'var(--amber)':'var(--dim)'};white-space:nowrap">+${r.cantidad} ${r.unidad||''}</span>`:''}
-          </div>`;
+            ${cronoRechazoBoton(a.id, r.id)}
+          </div>${cronoRechazoBadge(r)}`;
         });
         html += `</div>`;
       }
@@ -6779,6 +6781,10 @@ function cronoToggle(actId){
 
 // ── Modal agregar subtarea ──
 let cronoModalActId = null;
+let cronoCatTabActual = 'paq';
+let cronoMultiSel = [];   // ids de catálogo seleccionados (en orden de selección)
+let cronoMultiStep = 1;   // 1 = elegir tarjetas, 2 = capturar cantidades
+let cronoMultiVals = {};  // {catId:{cant, rend}} para conservar lo capturado al regresar
 let cronoCorrNuevas = []; // correcciones nuevas capturadas a mano (sin entrega anterior) dentro del panel de corrección dinámica
 let cronoCorrNvTab = 'paq'; // pestaña activa dentro de "agregar corrección nueva": 'paq' | 'suel' | 'pers'
 let cronoCorrNvSelPaqId = ''; // paquete del catálogo seleccionado (pestaña Paquetes)
@@ -6859,6 +6865,7 @@ async function cronoGuardarOperativa(){
 function cronoAddSubtareaModal(actId){
   cronoModalActId = actId;
   cronoLoadCatalogo();
+  cronoMultiSel=[]; cronoMultiStep=1; cronoMultiVals={}; cronoCatTabActual='paq';
   // Siempre eliminar y recrear para actualizar catálogo y actId
   const old = document.getElementById('cronoSubtareaModalBg');
   if(old) old.remove();
@@ -6871,8 +6878,8 @@ function cronoAddSubtareaModal(actId){
   const bg = document.createElement('div');
   bg.id = 'cronoSubtareaModalBg';
   bg.className = 'pa-modal-bg open';
-  bg.innerHTML = `<div class="pa-modal" style="max-width:500px" onclick="event.stopPropagation()">
-    <div class="pa-modal-title">Agregar subtarea</div>
+  bg.innerHTML = `<div class="pa-modal" style="max-width:680px;padding:20px 22px" onclick="event.stopPropagation()">
+    <div class="pa-modal-title" style="margin-bottom:12px">Agregar subtarea</div>
 
     <div style="background:rgba(74,143,212,.08);border:0.5px solid rgba(74,143,212,.2);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:11px;color:var(--dim);line-height:1.6">
       <b style="color:var(--accent)">💡 Tipos de rendimiento:</b><br>
@@ -6887,8 +6894,20 @@ function cronoAddSubtareaModal(actId){
         <div id="cronoTabSuel" onclick="cronoSetCatTab('suel')" style="padding:6px 2px;font-size:11.5px;color:var(--dim);border-bottom:2px solid transparent;cursor:pointer">Sueltas</div>
         <div id="cronoTabPers" onclick="cronoSetCatTab('pers')" style="padding:6px 2px;font-size:11.5px;color:var(--dim);border-bottom:2px solid transparent;cursor:pointer">Personalizada</div>
       </div>
-      <div id="cronoListPaq" style="max-height:160px;overflow-y:auto"></div>
-      <div id="cronoListSuel" style="display:none;max-height:160px;overflow-y:auto"></div>
+      <div id="cronoListPaq" style="max-height:300px;overflow-y:auto"></div>
+      <div id="cronoListSuel" style="display:none">
+        <div id="cronoMultiStep1">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+            <input id="cronoMultiBuscar" type="text" placeholder="🔍 Buscar subtarea…" oninput="cronoMultiRender()"
+              style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+            <button type="button" class="pa-btn pa-btn-ghost" style="font-size:11px;padding:5px 10px;white-space:nowrap" onclick="cronoMultiLimpiar()">Limpiar</button>
+          </div>
+          <div style="font-size:10.5px;color:var(--dim);margin-bottom:6px">Toca las tarjetas para seleccionar una o varias. Después te pido la cantidad de cada una.</div>
+          <div id="cronoMultiGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;max-height:360px;overflow-y:auto;padding:2px"></div>
+          <div id="cronoMultiResumen" style="font-size:11.5px;color:var(--accent);margin-top:8px;min-height:16px"></div>
+        </div>
+        <div id="cronoMultiStep2" style="display:none"></div>
+      </div>
       <div id="cronoListPers" style="display:none;font-size:11px;color:var(--dim);padding:6px 0">Vas a capturar una subtarea nueva desde cero, abajo.</div>
       <input type="hidden" id="cronoStCat" value="">
       <input type="hidden" id="cronoStPaq" value="">
@@ -7056,14 +7075,196 @@ function cronoRenderCatTabs(){
         <span style="font-size:10.5px;color:${p.dinamico?'var(--amber)':'var(--accent)'}">${p.dinamico?'🔧 corrección dinámica':`${p.rendimiento} ${p.unidad}/día · ${p.entregables.length} entregables`}</span>
       </div>`).join('') : `<div style="font-size:11px;color:var(--dim);padding:8px 0">Sin paquetes en el catálogo todavía.</div>`;
   }
-  if(listSuel){
-    listSuel.innerHTML = CRONO_CATALOGO.filter(c=>cronoCatVisible(c, cronoProyectoDeActividad(cronoModalActId))).map(c=>`
-      <div onclick="cronoPickSuelta('${c.id}')" style="padding:8px 10px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;background:var(--surface2);border:1px solid var(--border)"
-        onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-        <span style="font-size:12px;color:var(--text)">${c.nombre}${c.proyecto?` <span style="font-size:9.5px;color:var(--accent);border:1px solid var(--accent);border-radius:8px;padding:0 5px;margin-left:4px">📁 solo ${escapeHtml(c.proyecto)}</span>`:''}</span>
-        <span style="font-size:10.5px;color:var(--dim)">${c.unidad} · ${c.rendimiento}/día</span>
-      </div>`).join('');
+  if(listSuel){ cronoMultiRender(); }
+}
+
+
+// ── Selección múltiple de subtareas sueltas + captura guiada de cantidades ──
+function cronoMultiCatalogoVisible(){
+  const proy = cronoProyectoDeActividad(cronoModalActId);
+  return CRONO_CATALOGO.filter(c=>cronoCatVisible(c, proy));
+}
+function cronoMultiRendTxt(c){
+  return (c.tipo==='dias_por_unidad') ? `${c.rendimiento} días/${c.unidad}` : `${c.rendimiento} ${c.unidad}/día`;
+}
+function cronoMultiRender(){
+  const grid = document.getElementById('cronoMultiGrid');
+  if(!grid) return;
+  const q = (document.getElementById('cronoMultiBuscar')?.value||'').trim().toLowerCase();
+  const lista = cronoMultiCatalogoVisible().filter(c=>!q || (c.nombre||'').toLowerCase().includes(q));
+  if(!lista.length){
+    grid.innerHTML = `<div style="font-size:11.5px;color:var(--dim);padding:10px 0;grid-column:1/-1">${q?'Ninguna subtarea coincide con la búsqueda.':'Sin subtareas sueltas en el catálogo todavía.'}</div>`;
+  } else {
+    grid.innerHTML = lista.map(c=>{
+      const on = cronoMultiSel.includes(c.id);
+      const orden = on ? cronoMultiSel.indexOf(c.id)+1 : '';
+      return `<div onclick="cronoMultiToggle('${c.id}')" style="position:relative;padding:10px 12px;border-radius:8px;cursor:pointer;min-height:62px;background:${on?'rgba(74,143,212,.12)':'var(--surface2)'};border:1.5px solid ${on?'var(--accent)':'var(--border)'};transition:all .12s">
+        <div style="position:absolute;top:8px;right:8px;width:18px;height:18px;border-radius:50%;border:1.5px solid ${on?'var(--accent)':'var(--border2)'};background:${on?'var(--accent)':'transparent'};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">${orden}</div>
+        <div style="font-size:12px;color:var(--text);font-weight:${on?'600':'400'};padding-right:24px;line-height:1.35">${escapeHtml(c.nombre)}</div>
+        <div style="font-size:10.5px;color:var(--dim);margin-top:4px">${escapeHtml(cronoMultiRendTxt(c))}</div>
+        ${c.proyecto?`<div style="font-size:9.5px;color:var(--accent);margin-top:3px">📁 solo ${escapeHtml(c.proyecto)}</div>`:''}
+      </div>`;
+    }).join('');
   }
+  const res = document.getElementById('cronoMultiResumen');
+  if(res) res.textContent = cronoMultiSel.length ? `✓ ${cronoMultiSel.length} seleccionada${cronoMultiSel.length!==1?'s':''}` : '';
+  cronoMultiSyncBtn();
+}
+function cronoMultiToggle(id){
+  const i = cronoMultiSel.indexOf(id);
+  if(i>=0) cronoMultiSel.splice(i,1); else cronoMultiSel.push(id);
+  cronoMultiRender();
+}
+function cronoMultiLimpiar(){
+  cronoMultiSel=[]; cronoMultiVals={};
+  const b=document.getElementById('cronoMultiBuscar'); if(b) b.value='';
+  cronoMultiRender();
+}
+function cronoMultiSyncBtn(){
+  const btn = document.getElementById('crono-guardar-btn');
+  if(!btn || cronoCatTabActual!=='suel') return;
+  const n = cronoMultiSel.length;
+  if(cronoMultiStep===1) btn.textContent = n ? `Continuar con ${n} →` : 'Continuar →';
+  else btn.textContent = `Agregar ${n} subtarea${n!==1?'s':''}`;
+}
+function cronoMultiGuardarVals(){
+  cronoMultiSel.forEach(id=>{
+    const c = document.getElementById('cronoMq_'+id), r = document.getElementById('cronoMr_'+id);
+    if(c || r) cronoMultiVals[id] = { cant: c?c.value:'', rend: r?r.value:'' };
+  });
+}
+function cronoMultiRenderPaso2(){
+  const cont = document.getElementById('cronoMultiStep2');
+  if(!cont) return;
+  const esAdmin = _userRole!=='proyectista';
+  const n = cronoMultiSel.length;
+  cont.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div style="font-size:12px;color:var(--text);font-weight:600">Cantidad de cada subtarea</div>
+      <button type="button" class="pa-btn pa-btn-ghost" style="font-size:11px;padding:4px 10px" onclick="cronoMultiVolver()">← Cambiar selección</button>
+    </div>
+    <div id="cronoMultiProg" style="font-size:11px;color:var(--accent);margin-bottom:8px"></div>
+    <div style="max-height:360px;overflow-y:auto;padding:2px">
+    ${cronoMultiSel.map((id,i)=>{
+      const c = CRONO_CATALOGO.find(x=>x.id===id); if(!c) return '';
+      const v = cronoMultiVals[id]||{};
+      const rend = (v.rend!==undefined && v.rend!=='') ? v.rend : c.rendimiento;
+      return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin-bottom:8px">
+          <div style="font-size:12px;color:var(--text);font-weight:600"><span style="color:var(--accent)">${i+1}.</span> ${escapeHtml(c.nombre)}</div>
+          <div style="font-size:10.5px;color:var(--dim);white-space:nowrap">${escapeHtml(c.unidad)}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label style="font-size:10.5px;color:var(--dim);display:block;margin-bottom:3px">Cantidad total (${escapeHtml(c.unidad)})</label>
+            <input id="cronoMq_${id}" type="number" min="0.1" step="0.1" placeholder="0" value="${v.cant||''}" data-idx="${i}"
+              oninput="cronoMultiCalc('${id}')" onkeydown="cronoMultiEnter(event,${i})"
+              style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12.5px">
+          </div>
+          <div>
+            <label style="font-size:10.5px;color:var(--dim);display:block;margin-bottom:3px">Rendimiento (${c.tipo==='dias_por_unidad'?'días/unidad':'unidades/día'})</label>
+            ${esAdmin
+              ? `<input id="cronoMr_${id}" type="number" min="0.1" step="0.1" value="${rend}" oninput="cronoMultiCalc('${id}')"
+                  style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12.5px">`
+              : `<div style="padding:7px 10px;font-size:12.5px;color:var(--dim);background:var(--surface);border:1px dashed var(--border);border-radius:6px">${rend} <span style="font-size:10px">(fijo, del catálogo)</span></div>`}
+          </div>
+        </div>
+        <div id="cronoMd_${id}" style="font-size:11.5px;color:var(--accent);margin-top:6px;min-height:15px"></div>
+      </div>`;
+    }).join('')}
+    </div>`;
+  cronoMultiSel.forEach(id=>cronoMultiCalc(id));
+}
+function cronoMultiCalc(id){
+  const c = CRONO_CATALOGO.find(x=>x.id===id); if(!c) return;
+  const cant = parseFloat(document.getElementById('cronoMq_'+id)?.value)||0;
+  const rEl = document.getElementById('cronoMr_'+id);
+  const rend = rEl ? (parseFloat(rEl.value)||0) : (parseFloat(c.rendimiento)||0);
+  const el = document.getElementById('cronoMd_'+id);
+  if(el){
+    if(cant>0 && rend>0){
+      const dias = c.tipo==='dias_por_unidad' ? cant*rend : cant/rend;
+      el.textContent = c.tipo==='dias_por_unidad'
+        ? `→ ${cant} × ${rend} días/${c.unidad} = ${cronoFmtDiasHoras(dias)}`
+        : `→ ${cant} ÷ ${rend} = ${cronoFmtDiasHoras(dias)}`;
+    } else el.textContent = '';
+  }
+  const hechas = cronoMultiSel.filter(x=>(parseFloat(document.getElementById('cronoMq_'+x)?.value)||0)>0).length;
+  const pr = document.getElementById('cronoMultiProg');
+  if(pr) pr.textContent = `Capturadas ${hechas} de ${cronoMultiSel.length}`;
+}
+function cronoMultiEnter(ev, idx){
+  if(ev.key!=='Enter') return;
+  ev.preventDefault();
+  const sig = cronoMultiSel[idx+1];
+  if(sig){ const el = document.getElementById('cronoMq_'+sig); if(el){ el.focus(); el.select?.(); el.scrollIntoView({block:'nearest'}); } }
+  else cronoMultiAccion();
+}
+function cronoMultiVolver(){
+  cronoMultiGuardarVals();
+  cronoMultiStep = 1;
+  document.getElementById('cronoMultiStep1').style.display='block';
+  document.getElementById('cronoMultiStep2').style.display='none';
+  cronoMultiRender();
+}
+async function cronoMultiAccion(){
+  if(cronoMultiStep===1){
+    if(!cronoMultiSel.length){ alert('Selecciona al menos una subtarea (toca las tarjetas).'); return; }
+    cronoMultiStep = 2;
+    document.getElementById('cronoMultiStep1').style.display='none';
+    document.getElementById('cronoMultiStep2').style.display='block';
+    cronoMultiRenderPaso2();
+    cronoMultiSyncBtn();
+    const first = document.getElementById('cronoMq_'+cronoMultiSel[0]);
+    if(first) first.focus();
+    return;
+  }
+  // Paso 2: validar y crear todas
+  const filas = [];
+  for(const id of cronoMultiSel){
+    const c = CRONO_CATALOGO.find(x=>x.id===id); if(!c) continue;
+    const cantEl = document.getElementById('cronoMq_'+id);
+    const cant = parseFloat(cantEl?.value)||0;
+    const rEl = document.getElementById('cronoMr_'+id);
+    const rend = rEl ? (parseFloat(rEl.value)||0) : (parseFloat(c.rendimiento)||0);
+    if(!cant){ alert(`Falta la cantidad de "${c.nombre}".`); cantEl?.focus(); return; }
+    if(!rend){ alert(`Falta el rendimiento de "${c.nombre}".`); rEl?.focus(); return; }
+    filas.push({cat:c, cantidad:cant, rendimiento:rend});
+  }
+  if(!filas.length) return;
+  if(!cronoModalActId){ alert('Error: no se identificó la actividad. Cierra y vuelve a abrir.'); return; }
+  const actId = cronoModalActId;
+  cronoCloseSubModal();
+  await cronoRecargarDeSupabase();
+
+  let item = CRONO_ITEMS.find(x=>x.actividadId===actId);
+  if(!item){
+    const pa = PA_ITEMS.find(x=>x.id===actId);
+    if(!pa) return;
+    item = cronoGetOrCreate(pa);
+  }
+  if(!item.subtareas) item.subtareas=[];
+  const esProyectista = _userRole==='proyectista';
+  const base = Date.now();
+  filas.forEach((f,i)=>{
+    item.subtareas.push({
+      id:'st_'+base+'_'+i,
+      nombre:f.cat.nombre, unidad:f.cat.unidad, cantidad:f.cantidad, rendimiento:f.rendimiento,
+      tipo:f.cat.tipo||'unidades_por_dia',
+      esDeCatalogo:true, catId:f.cat.id,
+      pendienteValidacion:false,
+      propuestaPor: esProyectista ? _miNombre : null,
+      estatus:'pendiente',
+      confirmada: cronoConfInicial(),
+      avanceAcum:0
+    });
+  });
+  cronoSaveItem(actId);
+  cronoNotificarPorConfirmar(actId);
+  cronoMultiSel=[]; cronoMultiVals={}; cronoMultiStep=1;
+  cronoSubTab = 'cronograma';
+  cronoExpandedId = actId;
+  renderReporteoView();
 }
 
 function cronoSetCatTab(tab){
@@ -7074,9 +7275,29 @@ function cronoSetCatTab(tab){
     if(k===tab){ el.style.color='var(--accent)'; el.style.borderBottomColor='var(--accent)'; el.style.fontWeight='600'; }
     else { el.style.color='var(--dim)'; el.style.borderBottomColor='transparent'; el.style.fontWeight='400'; }
   });
+  cronoCatTabActual = tab;
   document.getElementById('cronoListPaq').style.display = tab==='paq' ? 'block' : 'none';
   document.getElementById('cronoListSuel').style.display = tab==='suel' ? 'block' : 'none';
   document.getElementById('cronoListPers').style.display = tab==='pers' ? 'block' : 'none';
+  if(tab==='suel'){
+    document.getElementById('cronoStCat').value = '';
+    document.getElementById('cronoStPaq').value = '';
+    document.getElementById('cronoCorrPanel').style.display = 'none';
+    document.getElementById('cronoPaqPanel').style.display = 'none';
+    document.getElementById('cronoFormNormal').style.display = 'none';
+    cronoMultiRender();
+    cronoMultiSyncBtn();
+    return;
+  }
+  if(tab==='paq'){
+    const pq = document.getElementById('cronoStPaq').value;
+    if(pq){ cronoPickPaquete(pq); }
+    else {
+      document.getElementById('cronoFormNormal').style.display = 'block';
+      const gb = document.getElementById('crono-guardar-btn'); if(gb) gb.textContent = 'Agregar';
+    }
+    return;
+  }
   if(tab==='pers'){
     document.getElementById('cronoStCat').value = '';
     document.getElementById('cronoStPaq').value = '';
@@ -7422,6 +7643,7 @@ function cronoCloseSubModal(){
 }
 
 async function cronoGuardarSubtarea(){
+  if(cronoCatTabActual==='suel') return cronoMultiAccion();
   const paqId = document.getElementById('cronoStPaq')?.value;
   if(paqId){
     const paqSel = CRONO_PAQUETES.find(p=>p.id===paqId);
@@ -7833,6 +8055,99 @@ function cronoRealPorDia(crono, stId){
     m[f] = (m[f]||0) + (parseFloat(r.cantidad)||0);
   });
   return m;
+}
+// ═════════════════════════════════════════════════════════════════
+//  VALIDAR REPORTES: la coordinación puede RECHAZAR o CORREGIR un reporte que no es cierto.
+//  · El reporte original se conserva (cantidadOriginal / avanceOriginal + motivo) y su cantidad pasa a ser la que SÍ se cumplió,
+//    así el cumplimiento por día (cronoRealPorDia) muestra el incumplimiento real.
+//  · Si la subtarea se había dado por completada o la actividad pasó a «En revisión» por ese reporte, regresan a trabajo y se
+//    quita la fecha de entrega falsa (la válida será la del día en que realmente terminen). No cuenta como devolución.
+// ═════════════════════════════════════════════════════════════════
+function cronoRechazoBadge(r){
+  if(!r || !r.rechazo) return '';
+  const z = r.rechazo, gen = r.modo==='general', u = gen ? '%' : (r.unidad||''), fd = d=>d?String(d).slice(8,10)+'/'+String(d).slice(5,7):'';
+  const quien = String(z.por||'').split(' ')[0];
+  return `<div style="margin-top:4px;padding:5px 8px;border-radius:6px;background:rgba(255,92,92,.10);border:0.5px solid rgba(255,92,92,.35);font-size:10.5px;color:var(--red);line-height:1.45">⛔ <b>Rechazado</b>${quien?' por '+paTxtE(quien):''}${z.fecha?' el '+fd(z.fecha):''} · reportó <s>${paTxtE(z.original)}${paTxtE(u)}</s> → se contó <b>${paTxtE(z.corregida)}${paTxtE(u)}</b>${z.motivo?' · Motivo: '+paTxtE(z.motivo):''}</div>`;
+}
+function cronoRechazoBoton(actId, repId){
+  if(_userRole==='proyectista' || !repId) return '';
+  return `<button type="button" onclick="event.stopPropagation();cronoRechazarReporte('${actId}','${repId}')" title="Este reporte no es cierto: rechazarlo o corregir la cantidad" style="background:none;border:0.5px solid rgba(255,92,92,.4);color:var(--red);border-radius:6px;font-size:10px;padding:2px 7px;cursor:pointer;white-space:nowrap">⛔ Rechazar</button>`;
+}
+function cronoRechazarCerrar(){ const el = document.getElementById('cronoRechBg'); if(el) el.remove(); }
+function cronoRechazarReporte(actId, repId){
+  if(_userRole==='proyectista') return;
+  cronoLoad();
+  const item = CRONO_ITEMS.find(x=>x.actividadId===actId), r = item && (item.reportes||[]).find(x=>x.id===repId), pa = PA_ITEMS.find(x=>x.id===actId);
+  if(!r){ alert('No se encontró el reporte.'); return; }
+  if(r.rechazo){ alert('Este reporte ya fue rechazado el '+(r.rechazo.fecha||'')+'.'); return; }
+  if(pa && pa.estatus==='Terminado'){ alert('La actividad ya está «Terminado» (aprobada). Regrésala a proceso desde ✎ Editar si necesitas rechazar este reporte.'); return; }
+  const gen = r.modo==='general', orig = gen ? (parseFloat(r.avance)||0) : (parseFloat(r.cantidad)||0), u = gen ? '%' : (r.unidad||'');
+  const fd = d=>d?String(d).slice(8,10)+'/'+String(d).slice(5,7):'';
+  const completaba = !gen && (r.estatus==='completada');
+  cronoRechazarCerrar();
+  const bg = document.createElement('div'); bg.id = 'cronoRechBg'; bg.className = 'pa-modal-bg open'; bg.style.zIndex = '4300';
+  bg.innerHTML = `<div class="pa-modal" style="max-width:480px;width:94vw;max-height:92vh;overflow:auto;padding:20px 22px" onclick="event.stopPropagation()">
+    <div class="pa-modal-title" style="margin-bottom:4px">⛔ Rechazar o corregir reporte</div>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:10px">${paTxtE(String(r.quien||'').split(' ').slice(0,2).join(' '))} · ${fd(r.fecha)} · ${paTxtE((pa&&(pa.folio||pa.actividad))||'')}${r.subtareaNombre?' · '+paTxtE(r.subtareaNombre):''}</div>
+    <div style="font-size:12.5px;line-height:1.5;padding:9px 11px;border-radius:9px;background:var(--surface2);margin-bottom:12px">Reportó <b>${paTxtE(orig)}${paTxtE(u)}</b>${completaba?' y marcó la subtarea como <b>completada</b>':''}. Al rechazarlo se cuenta lo que <b>sí</b> se cumplió, el día queda como incumplido${completaba||(pa&&pa.estatus==='En revisión')?', la subtarea y la actividad regresan a trabajo (sin fecha de entrega falsa)':''} y se le avisa con tu motivo. El reporte original queda a la vista.</div>
+    <div class="pa-field"><label>¿Cuánto SÍ se cumplió realmente? (${paTxtE(u||'cantidad')}) — 0 si nada</label><input type="number" id="cronoRechCant" min="0" max="${orig}" step="any" value="0"></div>
+    <div class="pa-field"><label>Motivo *</label><textarea id="cronoRechMotivo" rows="3" placeholder="Ej. El plano sigue en revisión interna; faltan los cortes y la señalización"></textarea></div>
+    <div id="cronoRechErr" style="color:var(--red);font-size:11.5px;min-height:14px;margin-top:6px"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px"><button class="pa-btn pa-btn-ghost" onclick="cronoRechazarCerrar()">Cancelar</button><button class="pa-btn pa-btn-primary" onclick="cronoRechazarConfirmar('${actId}','${repId}')">Rechazar reporte</button></div>
+  </div>`;
+  bg.onclick = e=>{ if(e.target===bg) cronoRechazarCerrar(); };
+  document.body.appendChild(bg);
+}
+function cronoRechazarConfirmar(actId, repId){
+  const motivo = ((document.getElementById('cronoRechMotivo')||{}).value||'').trim();
+  let nueva = parseFloat((document.getElementById('cronoRechCant')||{}).value); if(isNaN(nueva)||nueva<0) nueva = 0;
+  const err = document.getElementById('cronoRechErr');
+  if(!motivo){ if(err) err.textContent = 'Escribe el motivo del rechazo.'; return; }
+  cronoLoad();
+  const item = CRONO_ITEMS.find(x=>x.actividadId===actId), r = item && (item.reportes||[]).find(x=>x.id===repId), pa = PA_ITEMS.find(x=>x.id===actId);
+  if(!r || r.rechazo){ cronoRechazarCerrar(); return; }
+  const hoy = repDateKey(new Date()), gen = r.modo==='general';
+  const orig = gen ? (parseFloat(r.avance)||0) : (parseFloat(r.cantidad)||0);
+  if(nueva>orig) nueva = orig;
+  cronoRechazarCerrar();
+  let subReabierta = false, actReabierta = false;
+  if(gen){
+    r.avanceOriginal = orig; r.avance = nueva;
+    if(r.estatus==='completada') r.estatus = 'en_progreso';
+    if(pa && pa.estatus==='En revisión' && orig>=100 && nueva<100) actReabierta = true;
+  } else {
+    r.cantidadOriginal = orig; r.cantidad = nueva;
+    const st = (item.subtareas||[]).find(s=>s.id===r.subtareaId);
+    if(st){
+      st.avanceAcum = Math.max(0, (parseFloat(st.avanceAcum)||0) - (orig-nueva));
+      const cant = parseFloat(st.cantidad)||0;
+      if(st.estatus==='completada' && (r.estatus==='completada' || (cant>0 && st.avanceAcum < cant-1e-9))){
+        st.estatus = st.avanceAcum>0 ? 'en_progreso' : 'pendiente'; subReabierta = true;
+      }
+      try{ cronoRecalcularReportesSubtarea(item, st); }catch(e){}
+    }
+    if(r.estatus==='completada') r.estatus = 'en_progreso';
+    if(pa && pa.estatus==='En revisión' && cronoAvance(item.subtareas||[])<100) actReabierta = true;
+  }
+  r.rechazo = { fecha:hoy, por:_miNombre||'Coordinación', motivo, original:orig, corregida:nueva, ts:new Date().toISOString() };
+  try{ cronoSave([item]); }catch(e){ console.warn('rechazo cronoSave', e); }
+  if(pa){
+    if(actReabierta){
+      window._bitRechazoAct = pa.id;                 // para que la bitácora no lo cuente como «devolución»
+      pa.estatus = 'En progreso'; pa.fechaEntregaProy = null; pa.updatedAt = new Date().toISOString();
+      paSave(pa);
+    }
+    const fd = d=>d?String(d).slice(8,10)+'/'+String(d).slice(5,7):'', u = gen?'%':(r.unidad||'');
+    try{
+      bitLog(pa, 'rechazo', 'Reporte rechazado'+(r.subtareaNombre?': '+r.subtareaNombre:'')+' ('+fd(r.fecha)+')',
+        'Reportó '+orig+u+' → se contó '+nueva+u+'\nMotivo: '+motivo+(subReabierta?'\nLa subtarea vuelve a pendiente.':'')+(actReabierta?'\nLa actividad regresa a «En progreso»; la fecha de entrega queda sin efecto.':''),
+        { autor:_miNombre||'Coordinación' });
+    }catch(e){}
+  }
+  try{ if(r.quien) cronoNotifProy(r.quien, '⛔', 'Reporte rechazado', ((pa&&(pa.folio||pa.actividad))||'Actividad')+(r.subtareaNombre?' · '+r.subtareaNombre:'')+': tu reporte del '+String(r.fecha||'').slice(8,10)+'/'+String(r.fecha||'').slice(5,7)+' se contó como '+nueva+(gen?'%':(' '+(r.unidad||'')))+' (reportaste '+orig+'). Motivo: '+motivo.slice(0,120)); }catch(e){}
+  try{ renderReporteoView(); }catch(e){}
+  try{ renderCronoCalendario(); }catch(e){}
+  try{ if(curView==='panel') renderPanel(); }catch(e){}
 }
 // Cumplimiento acumulado a la fecha: por subtarea y de la actividad (ponderado por jornadas esperadas, sin que lo adelantado tape lo atrasado)
 function cronoCumplimiento(a, crono, hasta){
@@ -11392,6 +11707,7 @@ function calProyVerDia(fecha){
         <div style="font-size:11px;font-weight:500;color:var(--accent);margin-bottom:2px">${r.subtareaNombre||'—'} · ${r.folio||r.proyecto||''}</div>
         ${r.nota?`<div style="font-size:12px;color:var(--text)">${r.nota}</div>`:''}
         ${r.cantidad?`<div style="font-size:11px;color:var(--dim);margin-top:2px">+${r.cantidad} ${r.unidad||''}</div>`:''}
+        ${cronoRechazoBadge(r)}
       </div>`;
     }).join('')}
   </div>`;
@@ -11466,6 +11782,7 @@ function renderCalProyPanelHoy(fecha, repsExistentes){
           <div style="flex:1">
             ${contexto?`<div style="font-size:10px;color:var(--muted);margin-bottom:1px">${contexto}</div>`:''}
             <span style="color:var(--accent)">${r.subtareaNombre||'—'}</span> · +${r.cantidad||0} ${r.unidad||''} · ${r.nota||''}
+            ${cronoRechazoBadge(r)}
             ${r.bajoRendimiento?`<div style="margin-top:2px"><span title="Se esperaban ${r.rendimientoEsperado} ${r.unidad}/día" style="font-size:10px;padding:1px 7px;border-radius:10px;background:rgba(245,166,35,.15);color:var(--amber);font-weight:600">⚠ Bajo rendimiento (esperado ${r.rendimientoEsperado} ${r.unidad}/día)</span></div>`:''}
           </div>
           <button onclick="calProyEliminarReporte('${r.id||''}',this)" title="Eliminar reporte"
@@ -11616,6 +11933,7 @@ function renderCalProyPanelHoyGeneral(fecha, repsExistentes, esHoy){
           <div style="flex:1">
             <div style="font-size:10px;color:var(--muted);margin-bottom:1px">${r.folio||r.proyecto||''}</div>
             <span style="color:var(--accent)">${r.subtareaNombre||'—'}</span> · +${r.cantidad||0} ${r.unidad||''} · ${r.nota||''}
+            ${cronoRechazoBadge(r)}
           </div>
           <button onclick="calProyEliminarReporte('${r.id||''}',this)" title="Eliminar reporte"
             style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:13px;padding:2px 6px;border-radius:4px;flex-shrink:0"
@@ -12051,12 +12369,14 @@ function calProyGuardarReporte(subtareas, fecha){
 
 function calProyEliminarReporte(repId, btnEl){
   if(!repId){ alert('No se puede identificar este reporte'); return; }
+  { const _rr = (CRONO_ITEMS||[]).map(it=>(it.reportes||[]).find(r=>r.id===repId)).find(Boolean); if(_rr && _rr.rechazo && _userRole==='proyectista'){ alert('Este reporte fue rechazado por tu coordinación, no se puede eliminar. Reporta lo que falta en un reporte nuevo.'); return; } }
   if(!confirm('¿Eliminar este reporte?')) return;
   cronoLoad();
   CRONO_ITEMS.forEach(item=>{
     if(!item.reportes) return;
     const rep = item.reportes.find(r=>r.id===repId);
     if(!rep) return;
+    if(rep.rechazo && _userRole==='proyectista'){ alert('Este reporte fue rechazado por tu coordinación, no se puede eliminar. Reporta lo que falta en un reporte nuevo.'); return; }
     // Revertir avance acumulado en la subtarea
     const st = (item.subtareas||[]).find(s=>s.id===rep.subtareaId);
     if(st && rep.cantidad) st.avanceAcum = Math.max(0,(st.avanceAcum||0) - rep.cantidad);
@@ -12401,6 +12721,7 @@ function renderCronoCalendario(){
       if(!r.fecha) return;
       if(!reportesPorDia[r.fecha]) reportesPorDia[r.fecha]=[];
       reportesPorDia[r.fecha].push({
+        id: r.id||'', rechazo: r.rechazo||null,
         quien: r.quien||'—',
         subtareaNombre: r.subtareaNombre||'',
         subtareaId: r.subtareaId||'',
@@ -12542,7 +12863,9 @@ function renderCronoCalendario(){
                 ${r.folio?`<span style="font-size:10px;color:var(--dim)">${r.folio}</span>`:''}
               </div>
               ${r.descripcion?`<div style="font-size:12px;color:var(--text)">${r.descripcion}</div>`:''}
+              ${cronoRechazoBadge(r)}
             </div>
+            <div style="align-self:center;flex-shrink:0">${cronoRechazoBoton(r.actividadId, r.id)}</div>
           </div>`;
         }
         return `
@@ -12558,8 +12881,9 @@ function renderCronoCalendario(){
             </div>
             ${r.nota?`<div style="font-size:12px;color:var(--text);margin-bottom:3px">${r.nota}</div>`:''}
             ${r.cantidad?`<div style="font-size:11px;color:var(--accent);font-weight:500">+${r.cantidad} ${r.unidad}</div>`:''}
+            ${cronoRechazoBadge(r)}
           </div>
-          <div style="align-self:center;color:var(--dim);font-size:14px;flex-shrink:0">›</div>
+          <div style="align-self:center;flex-shrink:0;display:flex;gap:6px;align-items:center">${cronoRechazoBoton(r.actividadId, r.id)}<span style="color:var(--dim);font-size:14px">›</span></div>
         </div>`;
       }).join('');
     } else {
@@ -15668,7 +15992,7 @@ let BIT_CSNAP = {};            // foto de las subtareas por actividad
 let BIT_SEL = null;            // actividad seleccionada en la vista
 let BIT_F = { q:'', resp:'', est:'activas' };
 const BIT_ETIQUETAS = ['Indicación','Corrección','Aviso','Interno'];
-const BIT_ICONOS = { asignada:'📌', inicio:'▶️', avance:'📝', subtarea:'🧩', fechas:'📅', pausa:'⏸', reanudacion:'⏯', revision:'📤', terminado:'✅', correccion:'↩️', reapertura:'🔄', reasignada:'👤', datos:'✎', nota:'💬', eliminada:'🗑', estatus:'•', base:'🗂' };
+const BIT_ICONOS = { rechazo:'⛔', asignada:'📌', inicio:'▶️', avance:'📝', subtarea:'🧩', fechas:'📅', pausa:'⏸', reanudacion:'⏯', revision:'📤', terminado:'✅', correccion:'↩️', reapertura:'🔄', reasignada:'👤', datos:'✎', nota:'💬', eliminada:'🗑', estatus:'•', base:'🗂' };
 
 function bitPuedeVer(){ return (typeof _userRole!=='undefined') && (_userRole==='admin' || _userRole==='jefe'); }
 function bitEsc(t){ return String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -15794,7 +16118,7 @@ function bitOnActividad(a){
       bitLog(a,'pausa','Puesta en pausa', (a.pausaMotivo?'Motivo: '+a.pausaMotivo:'Sin motivo capturado')+pr);
     } else if(de==='En pausa'){
       const h = (a.pausasHistorial||[]).slice(-1)[0];
-      bitLog(a,'reanudacion','Reanudada'+(a2!=='En progreso'?' → '+a2:''), h ? ('Estuvo '+h.dias+' día'+(h.dias===1?'':'s')+' en pausa'+(h.motivo?' · Motivo: '+h.motivo:'')) : '');
+      bitLog(a,'reanudacion','Reanudada'+(a2!=='En progreso'?' → '+a2:''), h ? ('Estuvo '+h.dias+' día'+(h.dias===1?'':'s')+' en pausa'+(h.motivo?' · Motivo: '+h.motivo:'')+((h.fin && h.fin>repDateKey(new Date()))?' · Retoma el trabajo el '+bitFd(h.fin):'')) : '');
     } else if(!bitFinal(de) && bitFinal(a2)){
       if(a2==='En revisión'){
         let cmp = '';
@@ -15812,7 +16136,8 @@ function bitOnActividad(a){
       if(de==='Terminado (máximo avance)'){
         bitLog(a,'reapertura','Reabierta para completar lo pendiente', (a.reapertura&&a.reapertura.nota)?('Nota: '+a.reapertura.nota):'');
       } else {
-        bitLog(a,'correccion','Regresada a progreso por corrección', 'Devolución #'+(a.devoluciones||cur.dev||1)+(a2!=='En progreso'?' · Nuevo estatus: '+a2:''));
+        if(window._bitRechazoAct===a.id){ window._bitRechazoAct = null; bitLog(a,'correccion','Regresada a progreso por reporte rechazado','La fecha de entrega queda sin efecto; la válida será la del día en que realmente termine.'); }
+        else bitLog(a,'correccion','Regresada a progreso por corrección', 'Devolución #'+(a.devoluciones||cur.dev||1)+(a2!=='En progreso'?' · Nuevo estatus: '+a2:''));
       }
     } else if(bitFinal(de) && bitFinal(a2)){
       if(a2==='Terminado') bitLog(a,'terminado','Terminada (subida oficial)', a.fechaReal?'Fecha final real: '+bitFd(a.fechaReal):'');
@@ -20055,6 +20380,20 @@ function paDaysColor(est, real){
 // ── Conteo de días en pausa (hábiles) ──
 // a.pausaInicio: fecha (YYYY-MM-DD) en que entró a "En pausa" la vez actual (null si no está pausada)
 // a.diasEnPausaAcum: total de días hábiles acumulados de pausas anteriores ya cerradas
+// ── ¿Desde qué día cuenta de nuevo el trabajo al reanudar una pausa? ──
+// Si se reanuda ya pasada la jornada (viernes después de las 3:00 pm; lunes a jueves después de las 7:00 pm) o en día no
+// laborable, ese día ya no se puede trabajar: la reanudación cuenta desde el siguiente día hábil (ej. viernes 3:30 pm → lunes).
+// Si la actividad se pausó y se reanudó el mismo día, no se recorre nada.
+const PA_HORA_FIN_JORNADA = { normal:19, viernes:15 };
+function paDiaEfectivoReanudar(inicio){
+  const ahora = new Date(), hoy = repDateKey(ahora);
+  if(inicio && inicio>=hoy) return hoy;
+  const d = new Date(hoy+'T00:00:00');
+  const laborable = !isWeekend(d) && !FESTIVOS.includes(hoy);
+  const finH = d.getDay()===5 ? PA_HORA_FIN_JORNADA.viernes : PA_HORA_FIN_JORNADA.normal;
+  const pasada = (ahora.getHours() + ahora.getMinutes()/60) >= finH;
+  return (!laborable || pasada) ? cronoAddWorkdays(hoy, 1) : hoy;
+}
 function paPausaElapsed(desde, hasta){
   if(!desde) return 0;
   const d = paWorkdays(desde, hasta);
@@ -20281,7 +20620,7 @@ function paEnPausaEnFecha(a, ds){
 // no tiene fin conocido; el pronóstico solo cuenta los días ya transcurridos, así que hacia adelante se proyecta
 // como si se retomara hoy. Con prioridad ligada sí se salta la ventana completa (y se reajusta sola si cambia).
 function paEnPausaProyectada(a, ds){
-  if(a && a.estatus==='En pausa' && a.pausaInicio && paPausaPrioridadRestante(a)<=0 && ds>=repDateKey(new Date())) return false;
+  if(a && a.estatus==='En pausa' && a.pausaInicio && paPausaPrioridadRestante(a)<=0 && ds>=paDiaEfectivoReanudar(a.pausaInicio)) return false;
   return paEnPausaEnFecha(a, ds);
 }
 // ¿Este cambio de estatus es "entrar a pausa"?
@@ -20416,11 +20755,14 @@ function paAplicarEstatus(a, newEstatus){
   if(typeof paEnsurePausaInicio==='function') paEnsurePausaInicio(a);
   const hoy = repDateKey(new Date());
   if(a.estatus === 'En pausa' && a.pausaInicio){
-    const diasEstePausa = paPausaElapsed(a.pausaInicio, hoy);
+    // Reanudar a trabajo fuera de horario (ej. viernes después de las 3 pm): el trabajo cuenta desde el siguiente día hábil
+    const finPausa = ['En progreso','Sin iniciar'].includes(newEstatus) ? paDiaEfectivoReanudar(a.pausaInicio) : hoy;
+    const diasEstePausa = paPausaElapsed(a.pausaInicio, finPausa);
     a.diasEnPausaAcum = (a.diasEnPausaAcum||0) + diasEstePausa;
+    if(finPausa>hoy){ const _f=finPausa; setTimeout(()=>{ try{ hoShowToast('▶ Reanudada fuera de horario: el trabajo cuenta desde el '+_f.slice(8,10)+'/'+_f.slice(5,7)); }catch(e){} }, 400); }
     if(!Array.isArray(a.pausasHistorial)) a.pausasHistorial = [];
     const _pri = a.pausaPrioridad ? {modo:a.pausaPrioridad.modo, items:(a.pausaPrioridad.ids||[]).map(id=>{ const b=PA_ITEMS.find(x=>x.id===id); return {id, folio:b?(b.folio||''):'', actividad:b?(b.actividad||''):''}; })} : null;
-    a.pausasHistorial.push({ inicio: a.pausaInicio, fin: hoy, dias: diasEstePausa, motivo: a.pausaMotivo||'', prioridad: _pri });
+    a.pausasHistorial.push({ inicio: a.pausaInicio, fin: finPausa, dias: diasEstePausa, motivo: a.pausaMotivo||'', prioridad: _pri });
     a.pausaInicio = null;
     a.pausaMotivo = null;
     a.pausaPrioridad = null;
@@ -26869,9 +27211,10 @@ function segIndEnPeriodo(r, hoy){
 }
 function segIndStats(nombre, hoy){
   const rows = PA_ITEMS.filter(a=>a.responsable===nombre).map(a=>segIndClasifica(a,hoy)).filter(r=>segIndEnPeriodo(r,hoy));
-  const st = {nombre, rows, total:rows.length, entregadas:0, aTiempo:0, retraso:0, sinDato:0, pendientes:0, vencidas:0, devoluciones:0, proxima:null};
+  const st = {nombre, rows, total:rows.length, entregadas:0, aTiempo:0, retraso:0, sinDato:0, pendientes:0, vencidas:0, devoluciones:0, rechazos:0, proxima:null};
   rows.forEach(r=>{
     st.devoluciones += (r.a.devoluciones||0);
+    try{ const it = (typeof CRONO_ITEMS!=='undefined' ? CRONO_ITEMS : []).find(x=>x.actividadId===r.a.id); if(it) st.rechazos += (it.reportes||[]).filter(x=>x && x.rechazo).length; }catch(e){}
     if(r.entregada){
       st.entregadas++;
       if(r.estado==='a_tiempo') st.aTiempo++; else if(r.estado==='retraso') st.retraso++; else st.sinDato++;
@@ -26932,6 +27275,7 @@ function segIndCard(st, sel){
       <span>${st.pendientes} pendiente${st.pendientes===1?'':'s'}</span>
       ${st.vencidas?`<span style="color:var(--red)">${st.vencidas} vencida${st.vencidas===1?'':'s'}</span>`:''}
       ${st.devoluciones?`<span title="Veces que una entrega se regresó a proceso">↩ ${st.devoluciones} devuelta${st.devoluciones===1?'':'s'}</span>`:''}
+      ${st.rechazos?`<span style="color:var(--red)" title="Reportes que la coordinación rechazó o corrigió por no ser ciertos">⛔ ${st.rechazos} reporte${st.rechazos===1?'':'s'} rechazado${st.rechazos===1?'':'s'}</span>`:''}
       ${st.sinDato?`<span>${st.sinDato} sin fecha</span>`:''}
     </div>
     <div style="border-top:0.5px solid var(--border);padding-top:9px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--dim);margin-bottom:3px">Próxima entrega</div>${prox}</div>
