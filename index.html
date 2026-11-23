@@ -21721,6 +21721,46 @@ function paSelectTipo(tipo){
 // ── Calendario de la semana en el modal de la persona: qué días está ocupada (solo gráfico, para acomodar asignaciones) ──
 let PDM_SEM_OFF = 0;
 function pdmSemMover(d, name){ PDM_SEM_OFF = d===0 ? 0 : PDM_SEM_OFF + d; pdmRenderSemana(name); }
+// Actividad «En progreso» ya vencida: su plan original terminó, pero la persona sigue trabajando en ella. Se re-planea lo que FALTA
+// desde hoy (jornadas restantes según el avance de sus subtareas) para que ocupe la semana en lugar de desaparecer.
+function pdmColaVencida(a, cr, name){
+  const hoy = repDateKey(new Date());
+  const term = String(a.fechaTermino||'').slice(0,10);
+  if(a.estatus!=='En progreso' || !term || term>=hoy) return null;
+  let resto = null;
+  const subs = cr ? (cr.subtareas||[]).filter(st=>!st.pendienteValidacion && st.confirmada!==false) : [];
+  if(subs.length){
+    resto = 0;
+    const grupos = {};
+    subs.forEach(st=>{
+      if(st.estatus==='completada') return;
+      const v = cronoStPlanVals(st), dur = cronoStDurPlan(v);
+      const frac = v.cantidad>0 ? Math.min(1, (parseFloat(st.avanceAcum)||0)/v.cantidad) : 0;
+      const falta = dur*(1-frac);
+      if(st.paqueteId) grupos[st.paqueteId] = Math.max(grupos[st.paqueteId]||0, falta);
+      else resto += falta;
+    });
+    Object.keys(grupos).forEach(k=>{ resto += grupos[k]; });
+  }
+  const jor = {};
+  let sinDesglose = false;
+  if(resto===null){ resto = 1; sinDesglose = true; }       // sin cronograma: se asume que ocupa hoy
+  const pendienteCierre = resto<=1e-9;                      // todo reportado pero sin marcar entrega
+  let cur = new Date(hoy+'T00:00:00'), guard = 0;
+  while(resto>1e-9 && guard++<400){
+    const ds = repDateKey(cur);
+    let c = 0;
+    if(!FESTIVOS.includes(ds) && !cronoEsVacacionPersona(name, ds)){
+      c = cronoCapacidadDia(new Date(cur), name);
+      const perm = cronoPermisoDia(name, ds);
+      if(perm && perm.fr>=1) c = 0;
+      if(c>0 && paEnPausaEnFecha(a, ds)) c = 0;
+    }
+    if(c>1e-9){ const take = Math.min(c, resto); jor[ds] = take; resto -= take; }
+    cur.setDate(cur.getDate()+1);
+  }
+  return {jor, sinDesglose, pendienteCierre, desde:hoy};
+}
 function pdmOcupacionDia(name, ds, cache){
   const d = new Date(ds+'T00:00:00');
   if(FESTIVOS.includes(ds)) return {tipo:'festivo'};
@@ -21739,6 +21779,16 @@ function pdmOcupacionDia(name, ds, cache){
     if(!c){
       const cr = (CRONO_ITEMS||[]).find(x=>x.actividadId===a.id);
       c = cache[a.id] = {plan: cr ? cronoPlanDiario(a, cr) : null};
+    }
+    if(c.cola===undefined){
+      const cr0 = (CRONO_ITEMS||[]).find(x=>x.actividadId===a.id);
+      c.cola = pdmColaVencida(a, cr0, name);
+    }
+    if(c.cola && ds>=c.cola.desde && !entr){
+      const j = c.cola.jor[ds] || 0;
+      if(j>1e-9){ items.push({a, jor:j, sinPlan:c.cola.sinDesglose, vencida:true}); sumPlan += j; }
+      else if(c.cola.pendienteCierre && ds===c.cola.desde && !paEnPausaEnFecha(a, ds)) entregas.push({a, fin:true, vencida:true});
+      return;
     }
     if(c.plan){
       const j = (c.plan.jor && c.plan.jor[ds]) || 0;
@@ -21790,7 +21840,7 @@ function pdmRenderSemana(name){
     const chips = o.items.slice(0,4).map(it=>{
       const a = it.a;
       const lbl = a.folio || a.actividad || a.proyecto || '—';
-      const tip = [a.proyecto, a.folio, a.actividad, it.sinPlan?'sin desglose de subtareas':'~'+(Math.round(it.jor*100)/100)+' jornada'].filter(Boolean).join(' · ');
+      const tip = [a.proyecto, a.folio, a.actividad, it.vencida?'VENCIDA · lo que falta, replaneado desde hoy':'', it.sinPlan?'sin desglose de subtareas':'~'+(Math.round(it.jor*100)/100)+' jornada'].filter(Boolean).join(' · ');
       return `<div title="${esc(tip)}" style="display:flex;align-items:center;gap:4px;margin-top:3px;font-size:9.5px;color:var(--text);overflow:hidden"><span style="width:7px;height:7px;border-radius:2px;background:${colorProy(a.proyecto)};flex-shrink:0"></span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(lbl)}</span></div>`;
     }).join('');
     const chipsEnt = (o.entregas||[]).slice(0, Math.max(0,4-o.items.length)).map(it=>{
