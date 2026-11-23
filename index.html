@@ -10677,18 +10677,8 @@ function planBuildHTML() {
           if (!a.fechaAsig) return false;
           return planActEnDia(a, dayStr); // dentro de su plazo, o vencida en progreso (lo que falta, replaneado desde hoy); en pausa no se pinta
         }));
-        // Verificar vacaciones usando VACACIONES[nombre].has(fecha)
-        var isVac = false;
-        if(typeof VACACIONES !== 'undefined' && VACACIONES) {
-          var vacSet = VACACIONES[member];
-          if(!vacSet) {
-            // Buscar por nombre parcial
-            Object.keys(VACACIONES).forEach(function(k){
-              if(member.indexOf(k.split(' ')[0])>=0 || k.indexOf(member.split(' ')[0])>=0) vacSet = VACACIONES[k];
-            });
-          }
-          if(vacSet && vacSet.has) isVac = vacSet.has(dayStr);
-        }
+        // Vacaciones (coincidencia exacta o por nombre parcial, revisando todas las claves parecidas)
+        var isVac = cronoEsVacacionPersona(member, dayStr);
         // Permiso especial de día completo: se trata como día sin carga, con su propia etiqueta
         var _perm = cronoPermisoDia(member, dayStr);
         var _isPerm = !!(_perm && _perm.fr>=1 && !isVac);
@@ -10823,10 +10813,14 @@ function planCellClick(member, dateStr) {
 // Misma lógica de cadena del pronóstico (subtareas en orden, las de un paquete en paralelo, viernes de 6/9 de jornada),
 // pero: (1) solo lo que FALTA (usa avanceAcum) y desde hoy como muy pronto; (2) se saltan los días de vacaciones de la persona.
 function cronoEsVacacionPersona(nombre, key){
-  if(typeof VACACIONES==='undefined' || !VACACIONES) return false;
-  let vs = VACACIONES[nombre];
-  if(!vs){ Object.keys(VACACIONES).forEach(function(k){ if(nombre && (nombre.indexOf(k.split(' ')[0])>=0 || k.indexOf(nombre.split(' ')[0])>=0)) vs = VACACIONES[k]; }); }
-  return !!(vs && vs.has && vs.has(key));
+  if(typeof VACACIONES==='undefined' || !VACACIONES || !nombre) return false;
+  // Coincidencia exacta o por nombre parcial; se revisan TODAS las claves parecidas (una clave exacta vacía no debe tapar a otra con el día)
+  const pn = nombre.split(' ')[0];
+  return Object.keys(VACACIONES).some(function(k){
+    const vs = VACACIONES[k];
+    if(!vs || !vs.has || !vs.has(key)) return false;
+    return k===nombre || nombre.indexOf(k.split(' ')[0])>=0 || k.indexOf(pn)>=0;
+  });
 }
 function cronoAsignarPorDia(cursor, usado, dias, capFn){
   const EPS = 1e-9;
@@ -11044,6 +11038,7 @@ function planCorteSeccion(weeks, C){
   var esc=function(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
   var fd=C.fd, fq=C.fq;
   var corteReal=cronoFechaCorteReal();
+  var desgCorte={};   // pronóstico día por día de lo que falta, por actividad (para mostrar lo que se arrastra a días sin plan)
   var dn=['L','M','M','J','V'];
   var noEval={}, h='';
   var chipDe=function(e){
@@ -11165,7 +11160,15 @@ function planCorteSeccion(weeks, C){
           h+='<td>'+fq(cant)+' '+esc(st.unidad||'')+(f.inicio?' &middot; <span style="color:#6b7280">'+fd(f.inicio)+'&rarr;'+fd(f.fin)+'</span>':'')+'</td><td></td>';
           dias.forEach(function(ds){
             var e=plan.dias[ds]?(plan.dias[ds][st.id]||0):0, r=f.real[ds]||0;
-            if(e<=1e-9 && r<=1e-9){ h+='<td class="dc" style="color:#d1d5db">&mdash;</td>'; return; }
+            if(e<=1e-9 && r<=1e-9){
+              // Sin plan ese día, pero la subtarea sigue sin terminarse: el pronóstico actual la deja caer aquí (se arrastra, p. ej. por pausa o por lo no logrado antes)
+              if(!entr && ds>=hoyKey && f.estado!=='completada' && !(typeof paEnPausaEnFecha==='function' && paEnPausaEnFecha(a,ds))){
+                if(!desgCorte[a.id]){ try{ desgCorte[a.id]=cronoDesgloseDiario(a); }catch(err){ desgCorte[a.id]={piezas:[]}; } }
+                var arr=0; (desgCorte[a.id].piezas||[]).forEach(function(pz){ if(pz.id===st.id && pz.fecha===ds) arr+=pz.cant; });
+                if(arr>1e-9){ h+='<td class="dc" style="color:#3730a3;font-style:italic" title="Sin plan original ese día, pero sigue pendiente: el pronóstico actual la deja aquí">&asymp;'+fq(arr)+'<br><span style="font-size:7px;font-weight:400">arrastre</span></td>'; return; }
+              }
+              h+='<td class="dc" style="color:#d1d5db">&mdash;</td>'; return;
+            }
             if(prov || ds>(f.hasta||cump.hasta)){
               if(!prov && r>1e-9 && ds<=hoyKey) h+='<td class="dc" style="color:#1a4fa0;font-weight:700" title="Día en curso: ya reportó avance">'+fq(r)+'/'+fq(e)+'<br><span style="font-size:7px;font-weight:400">en curso</span></td>';
               else h+='<td class="dc" style="color:#9ca3af">'+(r>0?fq(r)+'/':'')+fq(e)+'</td>';
@@ -11222,7 +11225,7 @@ function planCorteSeccion(weeks, C){
   }
   h+='<div class="cmeta"><b>C&oacute;mo leer el corte.</b> Solo se listan subtareas cuyo plan toca la semana (si su plan termin&oacute; antes del lunes no aparece, est&eacute; cerrada o no). Una actividad ya entregada o terminada se ubica por su fecha real de entrega: si la entreg&oacute; antes del lunes no aparece. El d&iacute;a en curso (hoy) se eval&uacute;a al cerrar el d&iacute;a: lo que ya report&oacute; se ve en azul como &ldquo;en curso&rdquo; y no cuenta como atraso. Si una actividad est&aacute; en pausa toda la semana solo se indica el motivo y sus fechas programadas de inicio y fin, sin desglosar subtareas. Cada semana se corta en su viernes: de una actividad que sigue despu&eacute;s solo salen las subtareas que se alcanzan a tocar hasta ese d&iacute;a, y la que cruza el viernes indica cu&aacute;nto del plan le toca. '
     +'En cada d&iacute;a se muestra <b>reportado / esperado</b> (en la unidad de la subtarea): lo esperado sale del plan que el proyectista confirm&oacute; y de la fracci&oacute;n de jornada que le toca ese d&iacute;a (viernes = 6/9; vacaciones, festivos y pausas no se esperan). '
-    +'<b>Meta al viernes</b> es lo acumulado que deber&iacute;a llevar al cierre de la semana; <b>Real</b> y <b>%</b> se miden contra lo esperado a la fecha de evaluaci&oacute;n. Cumple &ge;95% &middot; parcial 80-94% &middot; atrasada &lt;80%. El % de la actividad se pondera por jornadas esperadas, sin que lo adelantado tape lo atrasado. Los reportes por porcentaje general no se miden. '
+    +'<b>Meta al viernes</b> es lo acumulado que deber&iacute;a llevar al cierre de la semana; <b>Real</b> y <b>%</b> se miden contra lo esperado a la fecha de evaluaci&oacute;n. Cumple &ge;95% &middot; parcial 80-94% &middot; atrasada &lt;80%. Un valor <i>&asymp;n arrastre</i> en un d&iacute;a sin plan es trabajo que sigue pendiente y que el pron&oacute;stico actual coloca ah&iacute;; es informativo y no entra al cumplimiento. El % de la actividad se pondera por jornadas esperadas, sin que lo adelantado tape lo atrasado. Los reportes por porcentaje general no se miden. '
     +'<b>Estado de las atrasadas:</b> si una actividad o subtarea va por debajo del ritmo, se muestra su <b>meta final</b>: <b>Recuperable</b> (con la capacidad que le queda todav&iacute;a llega a su fecha fin y le sobra &frac12; d&iacute;a o m&aacute;s), <b>En riesgo</b> (le sobra menos de &frac12; d&iacute;a; si su fecha fin cae dentro de la semana, a lo m&aacute;s es En riesgo) o <b>No llega</b> (lo pendiente ya no cabe antes de su fecha fin). La holgura cuenta lo ya reportado en el d&iacute;a en curso como avance, pero ese d&iacute;a ya no se cuenta como capacidad disponible. El % es el ritmo, medido contra el plan hasta el &uacute;ltimo d&iacute;a cerrado. '
     +'<b>Fechas:</b> la <b>entrega interna</b> es la fecha de t&eacute;rmino asignada al proyectista (con ella se mide todo); la <b>subida oficial</b> es esa fecha m&aacute;s '+FECHA_OFICIAL_DIAS+' d&iacute;a h&aacute;bil para validar y subir la informaci&oacute;n.</div>';
   return h;
@@ -11363,9 +11366,7 @@ function planExportPDF(detallado) {
       week.forEach(function(day){
         var ds=day.toISOString().slice(0,10);
         var acts=planOrdenarActs(PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return planActEnDia(a,ds);}));
-        var vs=typeof VACACIONES!=='undefined'&&VACACIONES?VACACIONES[member]:null;
-        if(!vs&&typeof VACACIONES!=='undefined'&&VACACIONES){Object.keys(VACACIONES).forEach(function(k){if(member.indexOf(k.split(' ')[0])>=0)vs=VACACIONES[k];});}
-        var isVac=vs&&vs.has&&vs.has(ds);
+        var isVac=cronoEsVacacionPersona(member,ds);
         var _pm2=cronoPermisoDia(member,ds); var _isPerm2=!!(_pm2&&_pm2.fr>=1&&!isVac);
         if(_isPerm2) isVac=true;
         var isFest=(typeof FESTIVOS!=='undefined'&&FESTIVOS.indexOf(ds)>=0);
