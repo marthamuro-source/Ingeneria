@@ -10561,6 +10561,20 @@ function planOpen() {
   document.body.appendChild(bg);
 }
 
+// ¿La actividad se pinta en el calendario del plan ese día? Dentro de su plazo (si no está en pausa) o, si ya venció y sigue
+// «En progreso», en los días que le faltan de trabajo desde hoy (misma lógica que el plan semanal del modal de la persona).
+function planActEnDia(a, ds){
+  if(!a || !a.fechaAsig) return false;
+  var fin = String(a.fechaTermino || a.fechaAsig).slice(0,10);
+  if(ds>=a.fechaAsig && ds<=fin) return !paEnPausaEnFecha(a, ds);
+  if(ds>fin && a.estatus==='En progreso'){
+    var cr = (typeof CRONO_ITEMS!=='undefined') ? CRONO_ITEMS.find(function(x){return x.actividadId===a.id;}) : null;
+    var cola = pdmColaVencida(a, cr, a.responsable);
+    if(cola && ds>=cola.desde) return (cola.jor[ds]||0)>1e-9 || (cola.pendienteCierre && ds===cola.desde && !paEnPausaEnFecha(a, ds));
+  }
+  return false;
+}
+
 function planBuildHTML() {
   var today = new Date();
   today.setHours(0,0,0,0);
@@ -10661,10 +10675,7 @@ function planBuildHTML() {
         var dayActs = planOrdenarActs(PA_ITEMS.filter(function(a) {
           if (a.responsable !== member) return false;
           if (!a.fechaAsig) return false;
-          var start = a.fechaAsig;
-          var end = a.fechaTermino || a.fechaAsig;
-          if(dayStr < start || dayStr > end) return false;
-          return !paEnPausaEnFecha(a, dayStr); // en pausa ese día: no se va a trabajar, no se pinta en el calendario
+          return planActEnDia(a, dayStr); // dentro de su plazo, o vencida en progreso (lo que falta, replaneado desde hoy); en pausa no se pinta
         }));
         // Verificar vacaciones usando VACACIONES[nombre].has(fecha)
         var isVac = false;
@@ -11351,7 +11362,7 @@ function planExportPDF(detallado) {
       h+='<tr><td class="ncel"><span class="av" style="background:'+col+'">'+ini+'</span><span style="display:inline-block;vertical-align:middle;line-height:1.25">'+member.split(' ').slice(0,2).join('<br>')+'</span></td>';
       week.forEach(function(day){
         var ds=day.toISOString().slice(0,10);
-        var acts=planOrdenarActs(PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return ds>=a.fechaAsig&&ds<=(a.fechaTermino||a.fechaAsig)&&!paEnPausaEnFecha(a,ds);}));
+        var acts=planOrdenarActs(PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return planActEnDia(a,ds);}));
         var vs=typeof VACACIONES!=='undefined'&&VACACIONES?VACACIONES[member]:null;
         if(!vs&&typeof VACACIONES!=='undefined'&&VACACIONES){Object.keys(VACACIONES).forEach(function(k){if(member.indexOf(k.split(' ')[0])>=0)vs=VACACIONES[k];});}
         var isVac=vs&&vs.has&&vs.has(ds);
