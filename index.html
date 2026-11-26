@@ -6108,7 +6108,14 @@ function cronoFechaEfectiva(a, fechaBase){
 // y es una fecha fija que solo se mueve si cambian las fechas/cantidades/rendimientos del catálogo,
 // o si la actividad estuvo en pausa (ver cronoFechaEfectiva). El avance real reportado se compara
 // aparte (fuera de esta función) contra esta fecha para decidir si hay retraso.
-function cronoCalcPronostico(subtareas, fechaInicio, persona, usarRestante){
+// Fecha de inicio explícita de un bloque de subtareas (la más tardía entre sus miembros). null = continúa a continuación de lo anterior.
+function cronoInicioFechaGrupo(sts){
+  let m = null;
+  (sts||[]).forEach(function(x){ const f = x && x.inicioFecha; if(f && (!m || f>m)) m = f; });
+  return m;
+}
+// Estado de la cadena de subtareas: {cursor, usado} (día en que termina y fracción de ese día ya ocupada)
+function cronoCadenaEstado(subtareas, fechaInicio, persona, usarRestante){
   const _dFn = usarRestante ? cronoDiasRestantesSubtarea : cronoDiasParaSubtarea; // ciclo de reapertura: solo lo que falta
   if(!subtareas||!subtareas.length||!fechaInicio) return null;
   let cursor = fechaInicio;
@@ -6124,16 +6131,22 @@ function cronoCalcPronostico(subtareas, fechaInicio, persona, usarRestante){
       const delGrupo = validas.filter(s=>s.paqueteId===st.paqueteId);
       const diasMax = Math.max(...delGrupo.map(s=>_dFn(s)));
       delGrupo.forEach(s=>procesados.add(s.id));
+      const ini0 = cronoInicioFechaGrupo(delGrupo); if(ini0 && cursor<ini0){ cursor = ini0; usado = 0; }
       const r = cronoAvanzarCursorDia(cursor, usado, diasMax, persona);
       cursor = r.cursor; usado = r.usado;
     } else {
       const dias = _dFn(st);
+      const ini0 = cronoInicioFechaGrupo([st]); if(ini0 && cursor<ini0){ cursor = ini0; usado = 0; }
       const r = cronoAvanzarCursorDia(cursor, usado, dias, persona);
       cursor = r.cursor; usado = r.usado;
       procesados.add(st.id);
     }
   });
-  return cursor;
+  return {cursor, usado};
+}
+function cronoCalcPronostico(subtareas, fechaInicio, persona, usarRestante){
+  const r = cronoCadenaEstado(subtareas, fechaInicio, persona, usarRestante);
+  return r ? r.cursor : null;
 }
 
 // ── Pronóstico de una actividad considerando las vacaciones de su responsable ──
@@ -6566,6 +6579,7 @@ function renderReporteoView(){
             if(!_paqCache[st.paqueteId]){
               const delGrupo = subtareas.filter(s=>s.paqueteId===st.paqueteId);
               const diasMax = Math.max(...delGrupo.map(s=>_reabTab ? cronoDiasRestantesSubtarea(s) : cronoDiasParaSubtarea(s)));
+              const _ini0 = cronoInicioFechaGrupo(delGrupo); if(_ini0 && cursor<_ini0){ cursor = _ini0; usado = 0; }
               const inicioGrupo = cursor;
               const r = cronoAvanzarCursorDia(cursor, usado, diasMax, a.responsable);
               const finGrupo = r.fin;
@@ -6575,6 +6589,7 @@ function renderReporteoView(){
             stInicio = _paqCache[st.paqueteId].inicio;
             stFin = _paqCache[st.paqueteId].fin;
           } else {
+            const _ini0 = cronoInicioFechaGrupo([st]); if(_ini0 && cursor<_ini0){ cursor = _ini0; usado = 0; }
             const r = cronoAvanzarCursorDia(cursor, usado, _dCur, a.responsable);
             stInicio = r.inicio;
             stFin = r.fin;
@@ -7047,6 +7062,13 @@ function cronoAddSubtareaModal(actId){
 
     <div id="cronoDiasEstimados" style="font-size:12px;color:var(--accent);margin-bottom:14px;min-height:18px"></div>
     </div>
+    <div id="cronoInicioWrap" style="margin:4px 0 14px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface2)">
+      <div style="font-size:11.5px;font-weight:600;color:var(--text);margin-bottom:6px">📅 ¿Cuándo empieza?</div>
+      <label style="display:flex;align-items:flex-start;gap:7px;font-size:11.5px;color:var(--text);margin-bottom:5px;cursor:pointer"><input type="radio" name="cronoIniModo" value="cont" onchange="cronoIniCambio()" style="margin-top:2px"><span>A continuación de las subtareas anteriores<br><span id="cronoIniContTxt" style="font-size:10.5px;color:var(--dim)"></span></span></label>
+      <label style="display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--text);margin-bottom:5px;cursor:pointer;flex-wrap:wrap"><input type="radio" name="cronoIniModo" value="fecha" onchange="cronoIniCambio()"><span>Desde una fecha</span><input type="date" id="cronoIniFecha" onchange="document.querySelector('input[name=cronoIniModo][value=fecha]').checked=true;cronoIniCambio()" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 8px;color:var(--text);font-family:var(--font);font-size:11.5px"></label>
+      <label style="display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--text);cursor:pointer;flex-wrap:wrap"><input type="radio" name="cronoIniModo" value="act" onchange="cronoIniCambio()"><span>Al terminar otra actividad</span><select id="cronoIniAct" onchange="document.querySelector('input[name=cronoIniModo][value=act]').checked=true;cronoIniCambio()" style="max-width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 8px;color:var(--text);font-family:var(--font);font-size:11.5px"></select></label>
+      <div id="cronoIniResumen" style="font-size:11px;color:var(--accent);margin-top:7px;min-height:14px"></div>
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="pa-btn pa-btn-ghost" onclick="cronoCloseSubModal()">Cancelar</button>
       <button class="pa-btn pa-btn-primary" id="crono-guardar-btn" onclick="cronoGuardarSubtarea()">Agregar</button>
@@ -7062,6 +7084,7 @@ function cronoAddSubtareaModal(actId){
 
   cronoRenderCatTabs();
   cronoSetCatTab('paq');
+  cronoIniInit(actId);
 }
 
 function cronoRenderCatTabs(){
@@ -7234,6 +7257,8 @@ async function cronoMultiAccion(){
   if(!filas.length) return;
   if(!cronoModalActId){ alert('Error: no se identificó la actividad. Cierra y vuelve a abrir.'); return; }
   const actId = cronoModalActId;
+  const _ini = cronoIniLeer();
+  if(_ini.error){ alert(_ini.error); return; }
   cronoCloseSubModal();
   await cronoRecargarDeSupabase();
 
@@ -7259,12 +7284,93 @@ async function cronoMultiAccion(){
       avanceAcum:0
     });
   });
+  cronoIniAplicar([item.subtareas[item.subtareas.length-filas.length]], _ini);   // la primera lleva el inicio; las demás continúan tras ella
   cronoSaveItem(actId);
   cronoNotificarPorConfirmar(actId);
   cronoMultiSel=[]; cronoMultiVals={}; cronoMultiStep=1;
   cronoSubTab = 'cronograma';
   cronoExpandedId = actId;
   renderReporteoView();
+}
+
+
+// ── ¿Cuándo empieza la subtarea? (a continuación / desde una fecha / al terminar otra actividad) ──
+function cronoSigDiaHabil(f){
+  const d = new Date(f+'T00:00:00'); let g = 0;
+  while((isWeekend(d) || FESTIVOS.includes(repDateKey(d))) && g++<30) d.setDate(d.getDate()+1);
+  return repDateKey(d);
+}
+function cronoIniFmt(f){ return f ? String(f).slice(8,10)+'/'+String(f).slice(5,7) : '—'; }
+// Día en que empezaría una subtarea nueva si va a continuación de las que ya tiene la actividad
+function cronoIniNatural(actId){
+  const a = PA_ITEMS.find(x=>x.id===actId); if(!a) return null;
+  const item = CRONO_ITEMS.find(x=>x.actividadId===actId);
+  const base = cronoFechaEfectiva(a, a.fechaAsig || (item&&item.fechaInicio) || repDateKey(new Date()));
+  const subs = item ? (item.subtareas||[]).filter(x=>!x.pendienteValidacion) : [];
+  const r = subs.length ? cronoCadenaEstado(subs, base, a.responsable, !!(a.reapertura&&a.reapertura.inicio)) : null;
+  return r ? r.cursor : base;
+}
+// Día de entrega previsto de otra actividad (pronóstico o, si no hay, su fecha de término)
+function cronoIniFinOtra(x){
+  let f = null;
+  try{ const pi = cronoPronosticoInfo(x); f = pi && pi.fecha; }catch(e){}
+  return String(f || x.fechaTermino || x.fechaAsig || '').slice(0,10) || null;
+}
+function cronoIniInit(actId){
+  const wrap = document.getElementById('cronoInicioWrap'); if(!wrap) return;
+  const a = PA_ITEMS.find(x=>x.id===actId); if(!a) return;
+  const hoy = repDateKey(new Date());
+  const nat = cronoIniNatural(actId);
+  const fechaEl = document.getElementById('cronoIniFecha'); if(fechaEl) fechaEl.value = cronoSigDiaHabil(hoy);
+  const selEl = document.getElementById('cronoIniAct');
+  if(selEl){
+    const otras = PA_ITEMS.filter(x=>x.id!==actId && x.responsable===a.responsable && x.estatus!=='Terminado' && x.estatus!=='En revisión' && x.estatus!=='Terminado (máximo avance)');
+    selEl.innerHTML = otras.length
+      ? otras.map(x=>`<option value="${x.id}">${segIndEsc((x.folio||x.actividad||'—').slice(0,48))} · termina ${cronoIniFmt(cronoIniFinOtra(x))}</option>`).join('')
+      : '<option value="">(sin otras actividades abiertas)</option>';
+  }
+  const pasado = nat && nat < hoy;
+  const txt = document.getElementById('cronoIniContTxt');
+  if(txt) txt.innerHTML = nat ? (pasado
+    ? `<span style="color:var(--amber)">⚠ empezaría el ${cronoIniFmt(nat)}, que ya pasó: se contaría como si hubiera empezado antes</span>`
+    : `empezaría el ${cronoIniFmt(nat)}`) : '';
+  const modo = pasado ? 'fecha' : 'cont';
+  const r = document.querySelector(`input[name=cronoIniModo][value=${modo}]`); if(r) r.checked = true;
+  cronoIniCambio();
+}
+// Lee la elección: {fecha, ref, error}. fecha=null → a continuación (sin inicio explícito)
+function cronoIniLeer(){
+  const wrap = document.getElementById('cronoInicioWrap');
+  if(!wrap || wrap.style.display==='none') return {fecha:null, ref:null};
+  const modo = (document.querySelector('input[name=cronoIniModo]:checked')||{}).value || 'cont';
+  if(modo==='fecha'){
+    const f = (document.getElementById('cronoIniFecha')||{}).value;
+    if(!f) return {error:'Elige la fecha en que empieza la subtarea.'};
+    return {fecha: cronoSigDiaHabil(f), ref:null};
+  }
+  if(modo==='act'){
+    const id = (document.getElementById('cronoIniAct')||{}).value;
+    const x = PA_ITEMS.find(y=>y.id===id);
+    if(!x) return {error:'Elige la actividad después de la cual empieza.'};
+    const fin = cronoIniFinOtra(x);
+    if(!fin) return {error:'Esa actividad no tiene fecha de término.'};
+    const sig = new Date(fin+'T00:00:00'); sig.setDate(sig.getDate()+1);
+    return {fecha: cronoSigDiaHabil(repDateKey(sig)), ref: x.folio||x.actividad||''};
+  }
+  return {fecha:null, ref:null};
+}
+function cronoIniCambio(){
+  const el = document.getElementById('cronoIniResumen'); if(!el) return;
+  const r = cronoIniLeer();
+  if(r.error) el.textContent = '';
+  else if(r.fecha) el.textContent = `→ El tiempo se cuenta desde el ${cronoIniFmt(r.fecha)}` + (r.ref?` (al terminar «${r.ref}»)`:'');
+  else el.textContent = '→ El tiempo se cuenta a continuación de las subtareas anteriores';
+}
+function cronoIniMostrar(v){ const w = document.getElementById('cronoInicioWrap'); if(w) w.style.display = v ? 'block' : 'none'; }
+// Marca el inicio explícito en las subtareas creadas (solo el primer bloque necesita llevarlo; las demás continúan)
+function cronoIniAplicar(sts, ini){
+  if(!ini || !ini.fecha) return;
+  (sts||[]).forEach(function(x){ x.inicioFecha = ini.fecha; if(ini.ref) x.inicioRef = ini.ref; });
 }
 
 function cronoSetCatTab(tab){
@@ -7279,6 +7385,7 @@ function cronoSetCatTab(tab){
   document.getElementById('cronoListPaq').style.display = tab==='paq' ? 'block' : 'none';
   document.getElementById('cronoListSuel').style.display = tab==='suel' ? 'block' : 'none';
   document.getElementById('cronoListPers').style.display = tab==='pers' ? 'block' : 'none';
+  cronoIniMostrar(true);
   if(tab==='suel'){
     document.getElementById('cronoStCat').value = '';
     document.getElementById('cronoStPaq').value = '';
@@ -7330,12 +7437,14 @@ function cronoPickPaquete(paqId){
   if(paq.dinamico){
     document.getElementById('cronoPaqPanel').style.display = 'none';
     document.getElementById('cronoCorrPanel').style.display = 'block';
+    cronoIniMostrar(false);   // las correcciones no llevan inicio propio
     if(guardarBtn) guardarBtn.textContent = 'Agregar correcciones seleccionadas';
     cronoRenderCorrLista();
     return;
   }
 
   document.getElementById('cronoCorrPanel').style.display = 'none';
+  cronoIniMostrar(true);
   document.getElementById('cronoPaqPanel').style.display = 'block';
   document.getElementById('cronoPaqRendLabel').textContent = `${paq.rendimiento} ${paq.unidad}/día`;
   document.getElementById('cronoPaqCantLabel').textContent = `Cantidad total para esta actividad (${paq.unidad})`;
@@ -7662,6 +7771,8 @@ async function cronoGuardarSubtarea(){
   if(!cantidad){ alert('Falta la cantidad total'); return; }
   if(!rendimiento){ alert('Falta el rendimiento'); return; }
   if(!cronoModalActId){ alert('Error: no se identificó la actividad. Cierra y vuelve a abrir.'); return; }
+  const _ini = cronoIniLeer();
+  if(_ini.error){ alert(_ini.error); return; }
   // Cerrar modal inmediatamente para dar feedback visual
   cronoCloseSubModal();
 
@@ -7691,6 +7802,7 @@ async function cronoGuardarSubtarea(){
     confirmada: cronoConfInicial(),
     avanceAcum:0
   });
+  cronoIniAplicar([item.subtareas[item.subtareas.length-1]], _ini);
   cronoSaveItem(cronoModalActId);
   cronoNotificarPorConfirmar(cronoModalActId);
 
@@ -7775,6 +7887,8 @@ async function cronoGuardarPaquete(paqId){
   const cantidad = parseFloat(document.getElementById('cronoPaqCantidad')?.value)||0;
   if(!cantidad){ alert('Falta la cantidad total.'); return; }
   if(!cronoModalActId){ alert('Error: no se identificó la actividad. Cierra y vuelve a abrir.'); return; }
+  const _ini = cronoIniLeer();
+  if(_ini.error){ alert(_ini.error); return; }
   cronoCloseSubModal();
 
   await cronoRecargarDeSupabase();
@@ -7801,6 +7915,7 @@ async function cronoGuardarPaquete(paqId){
       avanceAcum:0
     });
   });
+  cronoIniAplicar(item.subtareas.slice(-paq.entregables.length), _ini);
   cronoSaveItem(cronoModalActId);
   cronoNotificarPorConfirmar(cronoModalActId);
 
@@ -8024,6 +8139,7 @@ function cronoPlanDiario(a, crono){
   });
   bloques.forEach(g=>{
     const vals = g.map(st=>({st, v:cronoStPlanVals(st)}));
+    const _ini0 = cronoInicioFechaGrupo(g); if(_ini0 && cursor<_ini0){ cursor = _ini0; usado = 0; }   // inicio explícito (no a continuación)
     const D = Math.max(...vals.map(x=>cronoStDurPlan(x.v)));
     const ini = {}, fin = {};
     if(D>1e-9){
@@ -8331,11 +8447,13 @@ function cronoPlanFechas(a, crono){
       if(!cache[st.paqueteId]){
         const g = subs.filter(x=>x.paqueteId===st.paqueteId);
         const dm = Math.max(...g.map(x=>cronoDiasParaSubtarea(x)));
+        const _ini0 = cronoInicioFechaGrupo(g); if(_ini0 && cursor<_ini0){ cursor = _ini0; usado = 0; }
         const ig = cursor; const r = cronoAvanzarCursorDia(cursor, usado, dm, a.responsable);
         cache[st.paqueteId] = {inicio:ig, fin:r.fin}; cursor = r.cursor; usado = r.usado;
       }
       ini = cache[st.paqueteId].inicio; fin = cache[st.paqueteId].fin;
     } else {
+      const _ini0 = cronoInicioFechaGrupo([st]); if(_ini0 && cursor<_ini0){ cursor = _ini0; usado = 0; }
       const r = cronoAvanzarCursorDia(cursor, usado, cronoDiasParaSubtarea(st), a.responsable);
       ini = r.inicio; fin = r.fin; cursor = r.cursor; usado = r.usado;
     }
@@ -8605,6 +8723,15 @@ function cronoEditSubtareaModal(actId, stId){
       </div>
     </div>
 
+    <div style="margin-bottom:16px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface2)">
+      <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:4px">📅 Inicio del cálculo de tiempo</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input id="cronoStEditInicio" type="date" value="${st.inicioFecha||''}" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-family:var(--font);font-size:12px">
+        <button type="button" class="pa-btn pa-btn-ghost" style="font-size:11px;padding:4px 10px" onclick="document.getElementById('cronoStEditInicio').value=''">A continuación de la anterior</button>
+      </div>
+      <div style="font-size:10.5px;color:var(--dim);margin-top:5px">${st.inicioFecha?'Empieza el '+cronoIniFmt(st.inicioFecha)+(st.inicioRef?' (al terminar «'+segIndEsc(st.inicioRef)+'»)':'')+'.':'Vacío = empieza a continuación de las subtareas anteriores.'}</div>
+    </div>
+
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="pa-btn pa-btn-ghost" onclick="document.getElementById('cronoStEditModalBg').remove()">Cancelar</button>
       <button class="pa-btn pa-btn-primary" onclick="cronoGuardarEdicionSubtarea('${actId}','${stId}')">Guardar cambios</button>
@@ -8645,6 +8772,7 @@ async function cronoGuardarEdicionSubtarea(actId, stId){
   const tipo = document.getElementById('cronoStEditTipo')?.value||'unidades_por_dia';
   const avance = parseFloat(document.getElementById('cronoStEditAvance')?.value)||0;
   const estatus = document.getElementById('cronoStEditEstatus')?.value||'pendiente';
+  const inicioEd = (document.getElementById('cronoStEditInicio')?.value||'').trim();
   if(!nombre){ alert('Falta el nombre de la subtarea'); return; }
   if(!unidad){ alert('Falta la unidad'); return; }
   if(!cantidad){ alert('Falta la cantidad total'); return; }
@@ -8679,6 +8807,8 @@ async function cronoGuardarEdicionSubtarea(actId, stId){
   freshSt.tipo = tipo;
   freshSt.avanceAcum = avance;
   freshSt.estatus = estatus;
+  if(inicioEd){ const nuevoIni = cronoSigDiaHabil(inicioEd); if(nuevoIni!==freshSt.inicioFecha){ freshSt.inicioFecha = nuevoIni; delete freshSt.inicioRef; } }
+  else { delete freshSt.inicioFecha; delete freshSt.inicioRef; }
   freshSt.editadoPor = _miNombre||'Admin';
   freshSt.editadoAt = repDateKey(new Date());
   if(_cambioPlan){
@@ -10567,10 +10697,23 @@ function planActEnDia(a, ds){
   if(!a || !a.fechaAsig) return false;
   var fin = String(a.fechaTermino || a.fechaAsig).slice(0,10);
   if(ds>=a.fechaAsig && ds<=fin) return !paEnPausaEnFecha(a, ds);
-  if(ds>fin && a.estatus==='En progreso'){
-    var cr = (typeof CRONO_ITEMS!=='undefined') ? CRONO_ITEMS.find(function(x){return x.actividadId===a.id;}) : null;
-    var cola = pdmColaVencida(a, cr, a.responsable);
-    if(cola && ds>=cola.desde) return (cola.jor[ds]||0)>1e-9 || (cola.pendienteCierre && ds===cola.desde && !paEnPausaEnFecha(a, ds));
+  if(ds>fin){
+    var hoy = repDateKey(new Date());
+    var habil = function(){
+      return (typeof FESTIVOS==='undefined' || FESTIVOS.indexOf(ds)<0)
+        && cronoCapacidadDia(new Date(ds+'T00:00:00'), a.responsable)>0 && !paEnPausaEnFecha(a, ds);
+    };
+    // Ya entregada/cerrada después de su fecha de término: se pinta en los días hábiles en que siguió abierta, hasta el día de su entrega real
+    if(a.estatus==='En revisión' || a.estatus==='Terminado (máximo avance)' || a.estatus==='Terminado'){
+      var entr = String(a.fechaEntregaProy || a.fechaReal || '').slice(0,10);
+      return !!(entr && entr>fin && ds<=entr && habil());
+    }
+    if(a.estatus==='En progreso'){
+      if(ds<hoy) return habil();     // vencida: ya lleva abierta esos días
+      var cr = (typeof CRONO_ITEMS!=='undefined') ? CRONO_ITEMS.find(function(x){return x.actividadId===a.id;}) : null;
+      var cola = pdmColaVencida(a, cr, a.responsable);
+      if(cola && ds>=cola.desde) return (cola.jor[ds]||0)>1e-9 || (cola.pendienteCierre && ds===cola.desde && !paEnPausaEnFecha(a, ds));
+    }
   }
   return false;
 }
@@ -10871,6 +11014,7 @@ function cronoDesgloseDiario(a){
     if(procesados.has(st.id)) return;
     const grupo = st.paqueteId ? subs.filter(s=>s.paqueteId===st.paqueteId) : [st];
     grupo.forEach(s=>procesados.add(s.id));
+    { const _ini0 = cronoInicioFechaGrupo(grupo); if(_ini0 && cursor<_ini0 && grupo.some(s=>cronoDiasRestantesSubtarea(s)>0)){ cursor = _ini0; usado = 0; } }
     let mejor = null;
     grupo.forEach(s=>{
       const dias = cronoDiasRestantesSubtarea(s);
@@ -21805,7 +21949,7 @@ function pdmOcupacionDia(name, ds, cache){
     if(c.plan){
       const j = (c.plan.jor && c.plan.jor[ds]) || 0;
       if(j>1e-9){ items.push({a, jor:j, sinPlan:false}); sumPlan += j; }
-      else if(!entr && a.fechaTermino && a.fechaAsig<=ds && ds<=String(a.fechaTermino).slice(0,10) && !paEnPausaEnFecha(a, ds)){
+      else if(a.fechaTermino && a.fechaAsig<=ds && (entr ? (ds>String(a.fechaTermino).slice(0,10) && ds<=entr) : ds<=String(a.fechaTermino).slice(0,10)) && !paEnPausaEnFecha(a, ds)){
         // Dentro de su plazo pero sin carga planeada ese día (p. ej. día de entrega interna): no ocupa capacidad, pero se muestra
         entregas.push({a, fin: ds===String(a.fechaTermino).slice(0,10)});
       }
