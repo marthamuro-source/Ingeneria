@@ -3351,7 +3351,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
             <option>En pausa</option>
             <option>En revisión</option><option>Terminado (máximo avance)</option>
             <option>Terminado</option>
+            <option>Cancelada</option>
           </select>
+        </div>
+        <!-- Jornadas extra -->
+        <div class="pa-field">
+          <label>⏱ Jornadas extra (días fuera del horario normal)</label>
+          <div style="display:flex;flex-direction:column;gap:7px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface2)">
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);cursor:pointer"><input type="checkbox" id="paFExViernes"> Viernes completo <span style="font-size:10.5px;color:var(--dim)">(9h en lugar de 6h)</span></label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text)"><span style="width:150px">Sábados</span><select id="paFExSab" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:12px"><option value="0">No trabaja</option><option value="1">Jornada completa</option><option value="0.5">Media jornada</option></select></label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text)"><span style="width:150px">Domingos</span><select id="paFExDom" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:12px"><option value="0">No trabaja</option><option value="1">Jornada completa</option><option value="0.5">Media jornada</option></select></label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text)"><span style="width:150px">Festivos / días no laborales</span><select id="paFExFest" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:12px"><option value="0">No trabaja</option><option value="1">Jornada completa</option><option value="0.5">Media jornada</option></select></label>
+            <div style="font-size:10.5px;color:var(--dim)">Estos días cuentan como capacidad de esta actividad: acortan su entrega y su meta diaria los incluye. Se puede reportar avance en ellos.</div>
+          </div>
         </div>
         <!-- Observaciones -->
         <div class="pa-field">
@@ -5952,15 +5964,44 @@ function cronoDiasRestantesSubtarea(st){
 // viernes solo alcanza para 6/9 de ese ritmo — por eso el pronóstico debe avanzar el calendario
 // más lento cuando el trabajo cae en viernes.
 const CRONO_CAPACIDAD_VIERNES = 6/9;
-function cronoCapacidadDia(fechaOrDate, persona){
+// Jornadas extra de una actividad (a.jornadasExtra = {viernes:true, sabado:0|0.5|1, domingo:0|0.5|1, festivo:0|0.5|1}):
+// fracción de jornada que se trabaja en un día NO laborable (fin de semana / festivo) para esa actividad. 0 si no aplica.
+function cronoExtraFrac(act, d){
+  const je = act && act.jornadasExtra; if(!je) return 0;
+  const k = repDateKey(d), dow = d.getDay();
+  if(FESTIVOS.includes(k) && parseFloat(je.festivo)>0) return parseFloat(je.festivo);
+  if(dow===6 && parseFloat(je.sabado)>0) return parseFloat(je.sabado);
+  if(dow===0 && parseFloat(je.domingo)>0) return parseFloat(je.domingo);
+  return 0;
+}
+function cronoTieneExtra(act){
+  const je = act && act.jornadasExtra; if(!je) return false;
+  return !!je.viernes || parseFloat(je.sabado)>0 || parseFloat(je.domingo)>0 || parseFloat(je.festivo)>0;
+}
+function cronoExtraTxt(act){
+  const je = act && act.jornadasExtra; if(!je) return '';
+  const f = v=> parseFloat(v)>=1 ? '' : ' ½';
+  const l = [];
+  if(je.viernes) l.push('viernes completo');
+  if(parseFloat(je.sabado)>0) l.push('sáb'+f(je.sabado));
+  if(parseFloat(je.domingo)>0) l.push('dom'+f(je.domingo));
+  if(parseFloat(je.festivo)>0) l.push('festivos'+f(je.festivo));
+  return l.join(' · ');
+}
+function cronoCapacidadDia(fechaOrDate, persona, act){
   const d = (fechaOrDate instanceof Date) ? fechaOrDate : new Date(fechaOrDate+'T00:00:00');
-  if(isWeekend(d)) return 0;
-  if(FESTIVOS.includes(repDateKey(d))) return 0;
+  const k = repDateKey(d);
+  let base;
+  if(isWeekend(d) || FESTIVOS.includes(k)){
+    base = cronoExtraFrac(act, d);          // día no laborable: solo cuenta si la actividad tiene jornada extra ese día
+    if(!(base>0)) return 0;
+  } else {
+    base = d.getDay()===5 ? ((act && act.jornadasExtra && act.jornadasExtra.viernes) ? 1 : CRONO_CAPACIDAD_VIERNES) : 1;
+  }
   // Si se indica la persona, sus días de vacaciones no son laborables para ella: el trabajo se recorre.
-  if(persona && cronoEsVacacionPersona(persona, repDateKey(d))) return 0;
-  const base = d.getDay()===5 ? CRONO_CAPACIDAD_VIERNES : 1;
+  if(persona && cronoEsVacacionPersona(persona, k)) return 0;
   // Permiso especial de la persona: día completo = sin capacidad; medio día = la mitad
-  if(persona){ const pm = cronoPermisoDia(persona, repDateKey(d)); if(pm) return pm.fr>=1 ? 0 : base*(1-pm.fr); }
+  if(persona){ const pm = cronoPermisoDia(persona, k); if(pm) return pm.fr>=1 ? 0 : base*(1-pm.fr); }
   return base;
 }
 
@@ -5971,10 +6012,10 @@ function cronoCapacidadDia(fechaOrDate, persona){
 // diasNecesarios: cuánto (en jornadas estándar, puede ser fracción) necesita la subtarea actual.
 // Devuelve {inicio, fin, cursor, usado} — inicio/fin son las fechas a mostrar para ESTA subtarea,
 // y cursor/usado ya quedan listos para la siguiente llamada (encadenado).
-function cronoAvanzarCursorDia(cursor, usado, diasNecesarios, persona){
+function cronoAvanzarCursorDia(cursor, usado, diasNecesarios, persona, act){
   const EPS = 1e-9;
   let restante = Math.max(0, diasNecesarios||0);
-  const capacidadHoy = cronoCapacidadDia(cursor, persona);
+  const capacidadHoy = cronoCapacidadDia(cursor, persona, act);
   const disponibleHoy = Math.max(0, capacidadHoy - (usado||0));
   if(restante <= disponibleHoy + EPS){
     // Se resuelve el mismo día "cursor", sin mover el calendario (así varias subtareas chicas
@@ -5990,9 +6031,9 @@ function cronoAvanzarCursorDia(cursor, usado, diasNecesarios, persona){
   while(restante > EPS){
     d.setDate(d.getDate()+1);
     const key = repDateKey(d);
-    if(isWeekend(d) || FESTIVOS.includes(key)) continue; // día no laborable, no cuenta
+    if((isWeekend(d) || FESTIVOS.includes(key)) && !cronoExtraFrac(act, d)) continue; // día no laborable (salvo jornada extra de la actividad), no cuenta
     fin = key;
-    const cap = cronoCapacidadDia(d, persona);
+    const cap = cronoCapacidadDia(d, persona, act);
     if(ini===null && cap>0) ini = key;
     if(restante <= cap + EPS){
       return { inicio: ini||cursor, fin, cursor: fin, usado: restante };
@@ -6023,14 +6064,19 @@ function cronoRendimientoDiarioEsperado(st){
 // 6h (6/9) y un permiso de medio día resta la mitad, así que la meta de ESE día se ajusta con la misma capacidad
 // que usa el pronóstico: si cumplen lo pronosticado para el viernes, NO es bajo rendimiento.
 // fecha/persona son opcionales; sin fecha se evalúa contra el día completo (comportamiento anterior).
-function cronoFactorMetaDia(fecha, persona){
+function cronoFactorMetaDia(fecha, persona, act){
   if(!fecha) return 1;
-  try{ const c = cronoCapacidadDia(fecha, persona||null); return c>0 ? c : 1; }catch(e){ return 1; }   // día no laborable: no se baja la meta
+  try{ const c = cronoCapacidadDia(fecha, persona||null, act); return c>0 ? c : 1; }catch(e){ return 1; }   // día no laborable sin jornada extra: no se baja la meta
 }
 function cronoEvaluarRendimientoReporte(st, cantidadHoy, fecha, persona){
   const esPct = st.unidad==='%' || st.esOperativo;
   let esperado = esPct ? null : cronoRendimientoDiarioEsperado(st);
-  if(esperado!=null){ const f = cronoFactorMetaDia(fecha, persona); if(f!==1) esperado = Math.round(esperado*f*100)/100; }
+  if(esperado!=null){
+    // La actividad dueña de la subtarea (para saber si ese día es una jornada extra, completa o media)
+    let _act = null;
+    try{ const _it = (CRONO_ITEMS||[]).find(x=>(x.subtareas||[]).some(z=>z.id===st.id)); if(_it) _act = PA_ITEMS.find(x=>x.id===_it.actividadId)||null; }catch(e){}
+    const f = cronoFactorMetaDia(fecha, persona, _act); if(f!==1) esperado = Math.round(esperado*f*100)/100;
+  }
   const cant = parseFloat(cantidadHoy)||0;
   const acumPrevio = parseFloat(st.avanceAcum)||0;
   const total = parseFloat(st.cantidad)||0;
@@ -6115,7 +6161,7 @@ function cronoInicioFechaGrupo(sts){
   return m;
 }
 // Estado de la cadena de subtareas: {cursor, usado} (día en que termina y fracción de ese día ya ocupada)
-function cronoCadenaEstado(subtareas, fechaInicio, persona, usarRestante){
+function cronoCadenaEstado(subtareas, fechaInicio, persona, usarRestante, act){
   const _dFn = usarRestante ? cronoDiasRestantesSubtarea : cronoDiasParaSubtarea; // ciclo de reapertura: solo lo que falta
   if(!subtareas||!subtareas.length||!fechaInicio) return null;
   let cursor = fechaInicio;
@@ -6132,20 +6178,20 @@ function cronoCadenaEstado(subtareas, fechaInicio, persona, usarRestante){
       const diasMax = Math.max(...delGrupo.map(s=>_dFn(s)));
       delGrupo.forEach(s=>procesados.add(s.id));
       const ini0 = cronoInicioFechaGrupo(delGrupo); if(ini0 && cursor<ini0){ cursor = ini0; usado = 0; }
-      const r = cronoAvanzarCursorDia(cursor, usado, diasMax, persona);
+      const r = cronoAvanzarCursorDia(cursor, usado, diasMax, persona, act);
       cursor = r.cursor; usado = r.usado;
     } else {
       const dias = _dFn(st);
       const ini0 = cronoInicioFechaGrupo([st]); if(ini0 && cursor<ini0){ cursor = ini0; usado = 0; }
-      const r = cronoAvanzarCursorDia(cursor, usado, dias, persona);
+      const r = cronoAvanzarCursorDia(cursor, usado, dias, persona, act);
       cursor = r.cursor; usado = r.usado;
       procesados.add(st.id);
     }
   });
   return {cursor, usado};
 }
-function cronoCalcPronostico(subtareas, fechaInicio, persona, usarRestante){
-  const r = cronoCadenaEstado(subtareas, fechaInicio, persona, usarRestante);
+function cronoCalcPronostico(subtareas, fechaInicio, persona, usarRestante, act){
+  const r = cronoCadenaEstado(subtareas, fechaInicio, persona, usarRestante, act);
   return r ? r.cursor : null;
 }
 
@@ -6162,9 +6208,9 @@ function cronoPronosticoInfo(a, crono){
   if(reab){ subs = subs.filter(x=>cronoDiasRestantesSubtarea(x)>0); if(!subs.length) return null; }
   const baseSin = reab ? a.reapertura.inicio : (a.fechaAsig || crono.fechaInicio);
   const base = cronoFechaEfectiva(a, baseSin);
-  const fecha = cronoCalcPronostico(subs, base, a.responsable, reab);
-  const sinVac = cronoCalcPronostico(subs, base, undefined, reab);
-  const sinPausa = cronoCalcPronostico(subs, baseSin, a.responsable, reab);
+  const fecha = cronoCalcPronostico(subs, base, a.responsable, reab, a);
+  const sinVac = cronoCalcPronostico(subs, base, undefined, reab, a);
+  const sinPausa = cronoCalcPronostico(subs, baseSin, a.responsable, reab, a);
   let diasVac = 0;
   if(fecha && sinVac && fecha > sinVac) diasVac = Math.max(1, (paWorkdays(sinVac, fecha)||1) - 1);
   return {fecha, sinVac, diasVac, sinPausa};
@@ -6285,7 +6331,7 @@ function renderReporteoView(){
 
   // Filtrar actividades relevantes (todos los tipos asignables)
   const tiposValidos = ['Proyecto','Trabajo Operativo','Impresiones','Planos de Conectividad'];
-  let actItems = PA_ITEMS.filter(a=>tiposValidos.includes(a.tipo) && a.estatus !== 'Terminado');
+  let actItems = PA_ITEMS.filter(a=>tiposValidos.includes(a.tipo) && a.estatus !== 'Terminado' && a.estatus!=='Cancelada');
   if(_userRole==='proyectista' && _miNombre){
     actItems = actItems.filter(a=>a.responsable===_miNombre);
   }
@@ -6466,7 +6512,7 @@ function renderReporteoView(){
     const _esDueno = cronoEsDuenoItem(crono);
     const _reab = !!(a.reapertura && a.reapertura.inicio);
     const _reabEspera = _reab && paReabEsperaSubtareas(a);
-    const listaParaRevision = avancePct===100 && a.estatus!=='Terminado' && a.estatus!=='Terminado (máximo avance)' && !_reabEspera;
+    const listaParaRevision = avancePct===100 && a.estatus!=='Terminado' && a.estatus!=='Cancelada' && a.estatus!=='Terminado (máximo avance)' && !_reabEspera;
     const revisionLabel = listaParaRevision
       ? (_userRole==='proyectista'
           ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(74,143,212,.12);color:var(--accent);font-weight:600">⏳ En proceso de revisión</span>`
@@ -6479,7 +6525,7 @@ function renderReporteoView(){
     // "En proceso" = ya llegó su fecha de inicio y se puede reportar; "Programada" = todavía no inicia.
     const inicioAct = a.fechaAsig || crono?.fechaInicio || '';
     const programada = !!inicioAct && inicioAct > hoy;
-    const enProceso = !programada && !['En pausa','En revisión','Terminado (máximo avance)','Terminado'].includes(a.estatus) && !listaParaRevision;
+    const enProceso = !programada && !['En pausa','En revisión','Terminado (máximo avance)','Terminado','Cancelada'].includes(a.estatus) && !listaParaRevision;
     const estadoChip = enProceso
       ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(74,143,212,.15);color:var(--accent);font-weight:700;white-space:nowrap" title="Ya inició: se puede reportar avance">● En proceso</span>`
       : programada
@@ -6581,7 +6627,7 @@ function renderReporteoView(){
               const diasMax = Math.max(...delGrupo.map(s=>_reabTab ? cronoDiasRestantesSubtarea(s) : cronoDiasParaSubtarea(s)));
               const _ini0 = cronoInicioFechaGrupo(delGrupo); if(_ini0 && cursor<_ini0){ cursor = _ini0; usado = 0; }
               const inicioGrupo = cursor;
-              const r = cronoAvanzarCursorDia(cursor, usado, diasMax, a.responsable);
+              const r = cronoAvanzarCursorDia(cursor, usado, diasMax, a.responsable, a);
               const finGrupo = r.fin;
               _paqCache[st.paqueteId] = {inicio:inicioGrupo, fin:finGrupo};
               cursor = r.cursor; usado = r.usado; // el cursor global avanza UNA sola vez por todo el grupo (paralelo)
@@ -6590,7 +6636,7 @@ function renderReporteoView(){
             stFin = _paqCache[st.paqueteId].fin;
           } else {
             const _ini0 = cronoInicioFechaGrupo([st]); if(_ini0 && cursor<_ini0){ cursor = _ini0; usado = 0; }
-            const r = cronoAvanzarCursorDia(cursor, usado, _dCur, a.responsable);
+            const r = cronoAvanzarCursorDia(cursor, usado, _dCur, a.responsable, a);
             stInicio = r.inicio;
             stFin = r.fin;
             cursor = r.cursor; usado = r.usado;
@@ -6668,7 +6714,7 @@ function renderReporteoView(){
           if(a.pausaPrioridad && Array.isArray(a.pausaPrioridad.ids) && a.pausaPrioridad.ids.length){
             const _r = paPrioridadDias(a.pausaPrioridad.ids, a.pausaPrioridad.modo);
             const _todas = a.pausaPrioridad.ids.map(id=>PA_ITEMS.find(x=>x.id===id)).filter(Boolean);
-            const _abiertas = _todas.filter(b=>!['En revisión','Terminado (máximo avance)','Terminado'].includes(b.estatus));
+            const _abiertas = _todas.filter(b=>!['En revisión','Terminado (máximo avance)','Terminado','Cancelada'].includes(b.estatus));
             _prio = `<div style="margin-top:6px;font-size:11px;color:var(--text)">🔀 <b>Cambio de prioridad:</b> atiende ${segIndEsc(paPrioridadEtiquetas(a.pausaPrioridad).join(', '))} (${a.pausaPrioridad.modo==='paralelo'?'en paralelo':'en secuencia'}) · estimado pendiente: <b>${_r.dias} día${_r.dias===1?'':'s'} háb.</b> <span style="color:var(--dim)">(se ajusta solo; al reanudar cuentan los días reales)</span></div>`;
             if(_r.sinPron.length){
               _prio += `<div style="margin-top:6px;font-size:11px;color:var(--amber)">⚠ Falta el pronóstico de ${_r.sinPron.map(b=>`<b>${segIndEsc(b.folio||b.actividad||'—')}</b> <button type="button" class="et-act-btn" style="font-size:10px;background:rgba(74,143,212,.15);color:var(--accent)" onclick="event.stopPropagation();paIrAsignarSubtareas('${b.id}')">Asignar subtareas →</button>`).join(' ')} para calcular cuánto se recorre esta actividad.</div>`;
@@ -7307,7 +7353,7 @@ function cronoIniNatural(actId){
   const item = CRONO_ITEMS.find(x=>x.actividadId===actId);
   const base = cronoFechaEfectiva(a, a.fechaAsig || (item&&item.fechaInicio) || repDateKey(new Date()));
   const subs = item ? (item.subtareas||[]).filter(x=>!x.pendienteValidacion) : [];
-  const r = subs.length ? cronoCadenaEstado(subs, base, a.responsable, !!(a.reapertura&&a.reapertura.inicio)) : null;
+  const r = subs.length ? cronoCadenaEstado(subs, base, a.responsable, !!(a.reapertura&&a.reapertura.inicio), a) : null;
   return r ? r.cursor : base;
 }
 // Día de entrega previsto de otra actividad (pronóstico o, si no hay, su fecha de término)
@@ -7324,7 +7370,7 @@ function cronoIniInit(actId){
   const fechaEl = document.getElementById('cronoIniFecha'); if(fechaEl) fechaEl.value = cronoSigDiaHabil(hoy);
   const selEl = document.getElementById('cronoIniAct');
   if(selEl){
-    const otras = PA_ITEMS.filter(x=>x.id!==actId && x.responsable===a.responsable && x.estatus!=='Terminado' && x.estatus!=='En revisión' && x.estatus!=='Terminado (máximo avance)');
+    const otras = PA_ITEMS.filter(x=>x.id!==actId && x.responsable===a.responsable && x.estatus!=='Terminado' && x.estatus!=='Cancelada' && x.estatus!=='En revisión' && x.estatus!=='Terminado (máximo avance)');
     selEl.innerHTML = otras.length
       ? otras.map(x=>`<option value="${x.id}">${segIndEsc((x.folio||x.actividad||'—').slice(0,48))} · termina ${cronoIniFmt(cronoIniFinOtra(x))}</option>`).join('')
       : '<option value="">(sin otras actividades abiertas)</option>';
@@ -8124,7 +8170,7 @@ function cronoPlanDiario(a, crono){
   if(!lista.length || !base) return null;
   const persona = a.responsable;
   const cap = ds=>{
-    let c = cronoCapacidadDia(new Date(ds+'T00:00:00'), persona);
+    let c = cronoCapacidadDia(new Date(ds+'T00:00:00'), persona, a);
     if(c>0 && typeof paEnPausaEnFecha==='function' && paEnPausaEnFecha(a, ds)) c = 0;
     return c;
   };
@@ -8448,13 +8494,13 @@ function cronoPlanFechas(a, crono){
         const g = subs.filter(x=>x.paqueteId===st.paqueteId);
         const dm = Math.max(...g.map(x=>cronoDiasParaSubtarea(x)));
         const _ini0 = cronoInicioFechaGrupo(g); if(_ini0 && cursor<_ini0){ cursor = _ini0; usado = 0; }
-        const ig = cursor; const r = cronoAvanzarCursorDia(cursor, usado, dm, a.responsable);
+        const ig = cursor; const r = cronoAvanzarCursorDia(cursor, usado, dm, a.responsable, a);
         cache[st.paqueteId] = {inicio:ig, fin:r.fin}; cursor = r.cursor; usado = r.usado;
       }
       ini = cache[st.paqueteId].inicio; fin = cache[st.paqueteId].fin;
     } else {
       const _ini0 = cronoInicioFechaGrupo([st]); if(_ini0 && cursor<_ini0){ cursor = _ini0; usado = 0; }
-      const r = cronoAvanzarCursorDia(cursor, usado, cronoDiasParaSubtarea(st), a.responsable);
+      const r = cronoAvanzarCursorDia(cursor, usado, cronoDiasParaSubtarea(st), a.responsable, a);
       ini = r.inicio; fin = r.fin; cursor = r.cursor; usado = r.usado;
     }
     filas.push({st, inicio:ini, fin});
@@ -9011,7 +9057,7 @@ function cronoGuardarReporte(){
   const pa = PA_ITEMS.find(x=>x.id===cronoReportActId);
   if(pa){
     const avanceTotal = cronoAvance(item.subtareas||[]);
-    if(avanceTotal===100 && pa.estatus!=='En revisión' && pa.estatus!=='Terminado (máximo avance)' && pa.estatus!=='Terminado'){
+    if(avanceTotal===100 && pa.estatus!=='En revisión' && pa.estatus!=='Terminado (máximo avance)' && pa.estatus!=='Terminado' && pa.estatus!=='Cancelada'){
       if(typeof paAplicarEstatus==='function') paAplicarEstatus(pa,'En revisión'); else pa.estatus = 'En revisión';
       if(typeof paSave==='function') paSave(pa);
       if(_userRole==='proyectista' && typeof notifAdd==='function'){
@@ -10693,8 +10739,26 @@ function planOpen() {
 
 // ¿La actividad se pinta en el calendario del plan ese día? Dentro de su plazo (si no está en pausa) o, si ya venció y sigue
 // «En progreso», en los días que le faltan de trabajo desde hoy (misma lógica que el plan semanal del modal de la persona).
+// Marca de jornadas extra para la celda del viernes de un proyectista: "Vie completo" y/o trabajo de sábado/domingo siguientes
+function planExtraMarcas(member, viernes){
+  const fr = new Date(viernes); fr.setHours(0,0,0,0);
+  const sab = new Date(fr); sab.setDate(fr.getDate()+1);
+  const dom = new Date(fr); dom.setDate(fr.getDate()+2);
+  const short = [], det = [];
+  PA_ITEMS.forEach(function(a){
+    if(a.responsable!==member || !cronoTieneExtra(a) || a.estatus==='Cancelada') return;
+    const nom = a.folio || a.actividad || '—';
+    if(a.jornadasExtra.viernes && planActEnDia(a, repDateKey(fr))){ if(short.indexOf('Vie')<0) short.push('Vie'); det.push('Viernes completo · '+nom); }
+    [[sab,'Sáb'],[dom,'Dom']].forEach(function(p){
+      const f = cronoExtraFrac(a, p[0]);
+      if(f>0 && planActEnDia(a, repDateKey(p[0]))){ const t = p[1]+(f<1?' ½':''); if(short.indexOf(t)<0) short.push(t); det.push(p[1]+(f<1?' media jornada':' jornada completa')+' · '+nom); }
+    });
+  });
+  return short.length ? {short:short.join(' · '), title:'Jornada extra: '+det.join('; ')} : null;
+}
 function planActEnDia(a, ds){
   if(!a || !a.fechaAsig) return false;
+  if(a.estatus==='Cancelada'){ const _cf = paFechaFinCancelada(a); if(!_cf || ds>_cf) return false; }   // cancelada: solo se pintan los días previos a la cancelación
   var fin = String(a.fechaTermino || a.fechaAsig).slice(0,10);
   if(ds>=a.fechaAsig && ds<=fin) return !paEnPausaEnFecha(a, ds);
   if(ds>fin){
@@ -10865,6 +10929,10 @@ function planBuildHTML() {
           h += '</div>';
         });
 
+        if(day.getDay()===5 && !isVac){
+          var _mx = planExtraMarcas(member, day);
+          if(_mx) h += '<div title="'+_mx.title.replace(/"/g,'&quot;')+'" style="position:absolute;top:2px;right:3px;font-size:8px;font-weight:700;color:#b45309;background:rgba(245,166,35,.28);border-radius:3px;padding:0 4px;z-index:2">⏱ '+_mx.short+'</div>';
+        }
         h += '<div style="position:absolute;bottom:3px;right:3px;width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--dim)">+</div>';
         h += '</div>';
       });
@@ -11005,7 +11073,7 @@ function cronoDesgloseDiario(a){
   // Los días de pausa se saltan en el calendario (no se suman a la fecha base: así no se cuentan dos veces)
   let base = (a.reapertura && a.reapertura.inicio) || a.fechaAsig || item.fechaInicio || hoy;
   if(base < hoy) base = hoy;
-  const capFn = d => { const k = repDateKey(d); return (cronoEsVacacionPersona(a.responsable, k) || paEnPausaProyectada(a, k)) ? 0 : cronoCapacidadDia(d); };
+  const capFn = d => { const k = repDateKey(d); return (cronoEsVacacionPersona(a.responsable, k) || paEnPausaProyectada(a, k)) ? 0 : cronoCapacidadDia(d, undefined, a); };
   let d0 = new Date(base+'T00:00:00'), g = 0;
   while(capFn(d0)===0 && g++ < 800) d0.setDate(d0.getDate()+1);
   let cursor = repDateKey(d0), usado = 0;
@@ -11134,7 +11202,7 @@ function cronoCapRestante(a, desde, fin){
   const f = new Date(fin+'T00:00:00');
   while(d<=f){
     const k = repDateKey(d);
-    if(!(typeof paEnPausaEnFecha==='function' && paEnPausaEnFecha(a,k))) c += cronoCapacidadDia(d, a.responsable);
+    if(!(typeof paEnPausaEnFecha==='function' && paEnPausaEnFecha(a,k))) c += cronoCapacidadDia(d, a.responsable, a);
     d.setDate(d.getDate()+1);
   }
   return c;
@@ -11207,7 +11275,7 @@ function planCorteSeccion(weeks, C){
     dias.forEach(function(ds,i){h+='<th class="dc">'+dn[i]+' '+fd(ds)+'</th>';});
     h+='<th class="dc">Meta al viernes</th><th class="dc">Real</th><th class="dc">%</th><th>Estado</th></tr></thead>';
     planMiembros().forEach(function(member){
-      planOrdenarActs(PA_ITEMS.filter(function(x){return x.responsable===member&&x.fechaAsig;})).forEach(function(a){
+      planOrdenarActs(PA_ITEMS.filter(function(x){return x.responsable===member&&x.fechaAsig&&x.estatus!=='Cancelada';})).forEach(function(a){
         if(a.responsable!==member||!a.fechaAsig) return;
         var crItem=CRONO_ITEMS.find(function(x){return x.actividadId===a.id;});
         var cump=crItem?cronoCumplimiento(a,crItem,wE):null;
@@ -11538,6 +11606,7 @@ function planExportPDF(detallado) {
           h+='</div>';
           h+='</div>';
         });
+        if(day.getDay()===5 && !isVac){ var _mxp=planExtraMarcas(member, day); if(_mxp) h+='<div class="cvac" style="background:#fef3c7;color:#92400e" title="'+_mxp.title.replace(/"/g,'&quot;')+'">&#9201; Extra: '+_mxp.short+'</div>'; }
         h+='</div>';
         h+='</td>';
       });
@@ -11554,7 +11623,7 @@ function planExportPDF(detallado) {
     h+='<div class="whdr">Semana '+(wi+1)+' - '+fWk(week)+'</div>';
     h+='<table class="lst"><thead><tr><th>Proyectista</th><th>'+(detallado?'Actividad / Subtareas':'Actividad')+'</th><th>'+(detallado?'Proyecto / Tipo &middot; Avance':'Proyecto / Tipo')+'</th><th>Folio</th><th>Inicio</th><th>Termino interno &middot; oficial</th><th>Estatus</th></tr></thead>';
     planMiembros().forEach(function(member){
-      var acts=planOrdenarActs(PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return a.fechaAsig<=wE&&(a.fechaTermino||a.fechaAsig)>=wS;}));
+      var acts=planOrdenarActs(PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return a.estatus!=='Cancelada'&&a.fechaAsig<=wE&&(a.fechaTermino||a.fechaAsig)>=wS;}));
       acts.forEach(function(a){
         var col=gc(member),ini=gi(member);
         var isProg=a.estatus==='En progreso';
@@ -12286,7 +12355,7 @@ async function calProyGuardarReporteHoyG(){
   pendientes.forEach(entry=>{
     const pa = PA_ITEMS.find(x=>x.id===entry.actData.id);
     if(!pa) return;
-    if((entry.avance>=100 || entry.estatus==='completada') && pa.estatus!=='En revisión' && pa.estatus!=='Terminado (máximo avance)' && pa.estatus!=='Terminado'){
+    if((entry.avance>=100 || entry.estatus==='completada') && pa.estatus!=='En revisión' && pa.estatus!=='Terminado (máximo avance)' && pa.estatus!=='Terminado' && pa.estatus!=='Cancelada'){
       if(typeof paAplicarEstatus==='function') paAplicarEstatus(pa,'En revisión'); else pa.estatus = 'En revisión';
       if(typeof paSave==='function') paSave(pa);
       if(typeof notifAdd==='function'){
@@ -12491,7 +12560,7 @@ async function calProyGuardarReporteHoy(){
     const pa = PA_ITEMS.find(x=>x.id===actId);
     if(!item || !pa) return;
     const avanceTotal = cronoAvance(item.subtareas||[]);
-    if(avanceTotal===100 && pa.estatus!=='En revisión' && pa.estatus!=='Terminado (máximo avance)' && pa.estatus!=='Terminado'){
+    if(avanceTotal===100 && pa.estatus!=='En revisión' && pa.estatus!=='Terminado (máximo avance)' && pa.estatus!=='Terminado' && pa.estatus!=='Cancelada'){
       if(typeof paAplicarEstatus==='function') paAplicarEstatus(pa,'En revisión'); else pa.estatus = 'En revisión';
       if(typeof paSave==='function') paSave(pa);
       if(typeof notifAdd==='function'){
@@ -16133,6 +16202,7 @@ const PA_STATUS_CFG = {
   'En revisión':  {cls:'ba',  dot:'var(--amber)'},
   'Terminado (máximo avance)': {cls:'bg', dot:'var(--green)'},
   'Terminado':    {cls:'bg',  dot:'var(--green)'},
+  'Cancelada':    {cls:'br',  dot:'var(--red)'},
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -16148,7 +16218,7 @@ let BIT_CSNAP = {};            // foto de las subtareas por actividad
 let BIT_SEL = null;            // actividad seleccionada en la vista
 let BIT_F = { q:'', resp:'', est:'activas' };
 const BIT_ETIQUETAS = ['Indicación','Corrección','Aviso','Interno'];
-const BIT_ICONOS = { rechazo:'⛔', asignada:'📌', inicio:'▶️', avance:'📝', subtarea:'🧩', fechas:'📅', pausa:'⏸', reanudacion:'⏯', revision:'📤', terminado:'✅', correccion:'↩️', reapertura:'🔄', reasignada:'👤', datos:'✎', nota:'💬', eliminada:'🗑', estatus:'•', base:'🗂' };
+const BIT_ICONOS = { rechazo:'⛔', asignada:'📌', inicio:'▶️', avance:'📝', subtarea:'🧩', fechas:'📅', pausa:'⏸', reanudacion:'⏯', revision:'📤', terminado:'✅', correccion:'↩️', reapertura:'🔄', cancelacion:'🚫', reactivacion:'♻️', extra:'⏱', reasignada:'👤', datos:'✎', nota:'💬', eliminada:'🗑', estatus:'•', base:'🗂' };
 
 function bitPuedeVer(){ return (typeof _userRole!=='undefined') && (_userRole==='admin' || _userRole==='jefe'); }
 function bitEsc(t){ return String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -16238,7 +16308,7 @@ function bitLog(a, tipo, titulo, detalle, extra){
 // ── Detección de cambios en actividades ──
 function bitSnapA(a){
   return { est:a.estatus||'', ini:a.fechaAsig||'', fin:a.fechaTermino||'', resp:a.responsable||'', folio:a.folio||'', proyecto:a.proyecto||'',
-           act:a.actividad||'', tipo:a.tipo||'', dev:a.devoluciones||0, notas:a.notas||'' };
+           act:a.actividad||'', tipo:a.tipo||'', dev:a.devoluciones||0, notas:a.notas||'', ext:(typeof cronoExtraTxt==='function'?cronoExtraTxt(a):'') };
 }
 function bitSnapAll(){
   try{ (PA_ITEMS||[]).forEach(a=>{ BIT_SNAP[a.id] = bitSnapA(a); }); BIT_LISTO = true; }catch(e){}
@@ -16269,7 +16339,12 @@ function bitOnActividad(a){
   }
   const de = prev.est, a2 = cur.est;
   if(de !== a2){
-    if(a2==='En pausa'){
+    if(a2==='Cancelada'){
+      const c = a.cancelacion || {};
+      bitLog(a,'cancelacion','Actividad cancelada', 'Motivo: '+(c.motivo||'sin motivo capturado')+(c.por?'\nCancelada por: '+c.por:'')+(c.estatusPrevio?'\nEstaba en: '+c.estatusPrevio:''));
+    } else if(de==='Cancelada'){
+      bitLog(a,'reactivacion','Reactivada (estaba cancelada)', 'Nuevo estatus: '+a2);
+    } else if(a2==='En pausa'){
       const pr = a.pausaPrioridad && a.pausaPrioridad.ids && a.pausaPrioridad.ids.length ? '\nPasan por delante: '+a.pausaPrioridad.ids.map(id=>{ const b=PA_ITEMS.find(x=>x.id===id); return b?(b.folio||b.actividad):id; }).join(', ') : '';
       bitLog(a,'pausa','Puesta en pausa', (a.pausaMotivo?'Motivo: '+a.pausaMotivo:'Sin motivo capturado')+pr);
     } else if(de==='En pausa'){
@@ -16319,6 +16394,7 @@ function bitOnActividad(a){
   if(prev.tipo!==cur.tipo) dl.push('Tipo: '+(prev.tipo||'—')+' → '+(cur.tipo||'—'));
   if(dl.length) bitLog(a,'datos','Datos de la actividad modificados', dl.join('\n'));
   if(prev.notas!==cur.notas && cur.notas) bitLog(a,'nota','Nota de la actividad', cur.notas, {etiqueta:'Aviso'});
+  if((prev.ext||'')!==(cur.ext||'')) bitLog(a,'extra', cur.ext ? 'Jornadas extra: '+cur.ext : 'Jornadas extra retiradas', cur.ext ? 'Estos días cuentan como capacidad de la actividad.' : '');
 }
 
 // ── Detección de cambios en el cronograma (subtareas y reportes de avance) ──
@@ -18454,7 +18530,7 @@ function paRenderTipo(tipo){
     ? PA_ITEMS.filter(a=>a.responsable===_miNombre)
     : PA_ITEMS;
   const total = _paBase.filter(a=>a.tipo===tipo).length;
-  const activas = _paBase.filter(a=>a.tipo===tipo&&a.estatus!=='Terminado').length;
+  const activas = _paBase.filter(a=>a.tipo===tipo&&a.estatus!=='Terminado' && a.estatus!=='Cancelada').length;
   if(metaEl) metaEl.textContent = `${total} registros · ${activas} activos`;
 
   // Update count badge
@@ -18745,7 +18821,7 @@ function paRenderAlerts(){
   const today = new Date(); today.setHours(0,0,0,0);
 
   // 1. Sin responsable asignado
-  const sinResp = PA_ITEMS.filter(a => !a.responsable && a.estatus!=='Terminado');
+  const sinResp = PA_ITEMS.filter(a => !a.responsable && a.estatus!=='Terminado' && a.estatus!=='Cancelada');
 
   // 2. Vencidas (fecha término pasada, no terminada)
   const vencidas = PA_ITEMS.filter(a => paEsVencida(a));
@@ -18793,7 +18869,7 @@ function paRenderAlerts(){
   if(_userRole!=='proyectista'){ try{ const _dups = paDupGrupos(); if(_dups.length) chips.push({type:'red', icon:'⧉', label:`${_dups.length} posible${_dups.length!==1?'s':''} duplicada${_dups.length!==1?'s':''}`, action:`paDupAbrir()`}); }catch(e){ console.warn('paDupGrupos', e); } }
 
   // 7. Impresiones pendientes
-  const impPendientes = PA_ITEMS.filter(a => a.tipo==='Impresiones' && a.estatus!=='Terminado');
+  const impPendientes = PA_ITEMS.filter(a => a.tipo==='Impresiones' && a.estatus!=='Terminado' && a.estatus!=='Cancelada');
   if(impPendientes.length) chips.push({type:'red', icon:'🖨️', label:`${impPendientes.length} impresión${impPendientes.length!==1?'es':''} pendiente${impPendientes.length!==1?'s':''}`, action:`paAlertFilter('impresiones')`});
 
   // 8. Notas pendientes sin tachar
@@ -18830,7 +18906,7 @@ function paAlertFilter(kind){
   let items = [], title = '';
 
   if(kind==='sinResp'){
-    items = PA_ITEMS.filter(a => !a.responsable && a.estatus!=='Terminado');
+    items = PA_ITEMS.filter(a => !a.responsable && a.estatus!=='Terminado' && a.estatus!=='Cancelada');
     title = 'Actividades sin responsable asignado';
   } else if(kind==='vencidas'){
     items = PA_ITEMS.filter(a => paEsVencida(a));
@@ -18861,7 +18937,7 @@ function paAlertFilter(kind){
     }
     return;
   } else if(kind==='impresiones'){
-    items = PA_ITEMS.filter(a => a.tipo==='Impresiones' && a.estatus!=='Terminado');
+    items = PA_ITEMS.filter(a => a.tipo==='Impresiones' && a.estatus!=='Terminado' && a.estatus!=='Cancelada');
     title = 'Impresiones pendientes';
   } else if(kind==='enRevision'){
     items = PA_ITEMS.filter(a => a.estatus==='En revisión');
@@ -20094,7 +20170,7 @@ function renderDashProductividad(){
 
   // ── 2. Carga de trabajo actual (activas por persona, todo PA_ITEMS sin filtrar por período) ──
   const cargaPorPersona = {};
-  PA_ITEMS.filter(a=>a.estatus!=='Terminado' && a.responsable).forEach(a=>{
+  PA_ITEMS.filter(a=>a.estatus!=='Terminado' && a.estatus!=='Cancelada' && a.responsable).forEach(a=>{
     cargaPorPersona[a.responsable] = (cargaPorPersona[a.responsable]||0)+1;
   });
   const cargaLabels = Object.keys(cargaPorPersona).map(nameShort);
@@ -20570,7 +20646,7 @@ function paPedirMotivoPausa(a){
     const nombre = (a && (a.folio || a.actividad)) || 'esta actividad';
     const sug = ['Esperando información del cliente','Cambio de prioridad','Falta de insumos / datos','Pendiente de revisión externa'];
     const hoy = repDateKey(new Date());
-    const ABIERTA = e=>!['En revisión','Terminado (máximo avance)','Terminado','En pausa'].includes(e);
+    const ABIERTA = e=>!['En revisión','Terminado (máximo avance)','Terminado','En pausa','Cancelada'].includes(e);
     const cands = PA_ITEMS.filter(x=>a && x.id!==a.id && x.responsable===a.responsable && ABIERTA(x.estatus)).map(x=>{
       const info = cronoPronosticoInfo(x);
       return {x, fecha: info&&info.fecha ? info.fecha : null};
@@ -20621,7 +20697,7 @@ function paPedirMotivoPausa(a){
         if(info && info.fecha){
           const cr = CRONO_ITEMS.find(y=>y.actividadId===a.id);
           const subs = ((cr&&cr.subtareas)||[]).filter(y=>!y.pendienteValidacion);
-          const nueva = cronoCalcPronostico(subs, cronoAddWorkdays(a.fechaAsig||cr.fechaInicio, paDiasEnPausa(a)+r.dias), a.responsable);
+          const nueva = cronoCalcPronostico(subs, cronoAddWorkdays(a.fechaAsig||cr.fechaInicio, paDiasEnPausa(a)+r.dias), a.responsable, undefined, a);
           h += ` · entrega de esta actividad: ${segIndFmt(info.fecha)} → <b>${segIndFmt(nueva)}</b>`;
         }
       } else h += '<span style="color:var(--dim)">Todavía no hay días que estimar.</span>';
@@ -20662,7 +20738,7 @@ function paPrioridadDias(ids, modo){
   const arr = [], sinPron = [];
   (ids||[]).forEach(id=>{
     const b = PA_ITEMS.find(x=>x.id===id); if(!b) return;
-    if(['En revisión','Terminado (máximo avance)','Terminado'].includes(b.estatus)) return; // ya entregada: no ocupa tiempo
+    if(['En revisión','Terminado (máximo avance)','Terminado','Cancelada'].includes(b.estatus)) return; // ya entregada o cancelada: no ocupa tiempo
     const info = cronoPronosticoInfo(b);
     if(!info || !info.fecha){ sinPron.push(b); return; }
     const cr = CRONO_ITEMS.find(y=>y.actividadId===b.id);
@@ -20731,7 +20807,7 @@ async function paIrAsignarSubtareas(actId, soloVer){
 // "Terminado" no se marca vencida (el retraso se cuenta como "entregado tarde" en las estadísticas).
 function paEsVencida(a, hoyStr){
   if(!a || !a.fechaTermino) return false;
-  if(a.estatus==='Terminado') return false;
+  if(a.estatus==='Terminado' || a.estatus==='Cancelada') return false;
   if(a.estatus==='En revisión' || a.estatus==='Terminado (máximo avance)'){
     const e = String(a.fechaEntregaProy||a.fechaReal||'').slice(0,10);
     return !!e && e > a.fechaTermino;
@@ -20938,7 +21014,7 @@ function paAplicarEstatus(a, newEstatus){
   const _seraEntregada = (newEstatus==='En revisión' || newEstatus==='Terminado (máximo avance)' || newEstatus==='Terminado');
   if(!_eraEntregada && _seraEntregada){
     a.fechaEntregaProy = hoy;
-  } else if(_eraEntregada && !_seraEntregada){
+  } else if(_eraEntregada && !_seraEntregada && newEstatus!=='Cancelada'){
     if(a.estatus === 'Terminado (máximo avance)'){
       // Reapertura: la actividad se había cerrado "al máximo avance" y se retoma para completar lo pendiente.
       // NO es una devolución (no hay penalización). Se guarda un corte del ciclo cerrado para no perder
@@ -20960,14 +21036,67 @@ function paAplicarEstatus(a, newEstatus){
   }
   window._paNotaReabTmp = null;
   const _cambioPausa = (a.estatus==='En pausa') !== (newEstatus==='En pausa');
+  // Cancelación: queda el motivo, la fecha y quién la hizo (no es entrega ni devolución). Al reactivarla se limpia.
+  const _eraCancelada = a.estatus==='Cancelada';
+  if(newEstatus==='Cancelada'){
+    a.cancelacion = {fecha:hoy, por:(typeof _miNombre!=='undefined' && _miNombre) || 'Administrador', motivo:(window._paCancelTmp||'').trim()||null, estatusPrevio:a.estatus};
+  } else if(_eraCancelada){
+    a.cancelacion = null;
+  }
+  window._paCancelTmp = null;
   a.estatus = newEstatus;
+  if(newEstatus==='Cancelada' && a.responsable && typeof supaSyncNotifProy==='function'){
+    const _c = a.cancelacion||{}, _a = a;
+    setTimeout(()=>{ try{ supaSyncNotifProy(_a.responsable, {id:'np_canc_'+Date.now(), icon:'🚫', title:'Actividad cancelada', msg:'"'+(_a.folio||_a.actividad||'')+'" fue cancelada'+(_c.motivo?': '+_c.motivo:''), time:new Date().toISOString(), tipo:'avance'}); }catch(e){} }, 300);
+  }
   if(_cambioPausa){ const _id = a.id; setTimeout(()=>{ try{ paProponerReacomodo(_id); }catch(e){ console.warn('paProponerReacomodo', e); } }, 450); }
+}
+
+// ── Cancelación de actividades (solo administrador, con motivo obligatorio) ──
+function paEsCancelacion(a, nuevo){ return !!a && nuevo==='Cancelada' && a.estatus!=='Cancelada'; }
+// Último día en que la actividad cuenta como trabajada: el anterior a la cancelación (null si no está cancelada)
+function paFechaFinCancelada(a){
+  if(!a || a.estatus!=='Cancelada') return null;
+  const f = a.cancelacion && a.cancelacion.fecha;
+  if(!f) return null;
+  const d = new Date(String(f).slice(0,10)+'T00:00:00'); d.setDate(d.getDate()-1);
+  return repDateKey(d);
+}
+function paPedirMotivoCancelacion(a){
+  return new Promise(resolve=>{
+    if(typeof _userRole!=='undefined' && _userRole!=='admin'){ alert('Solo el administrador puede cancelar una actividad.'); resolve(null); return; }
+    const old = document.getElementById('paCancelBg'); if(old) old.remove();
+    const bg = document.createElement('div');
+    bg.id = 'paCancelBg'; bg.className = 'pa-modal-bg open'; bg.style.zIndex = '100000';
+    const nombre = (a && (a.folio || a.actividad)) || 'esta actividad';
+    const sug = ['Cancelada por el cliente','Ya no se requiere','Se reemplazó por otra actividad','Duplicada'];
+    bg.innerHTML = `<div class="pa-modal" style="max-width:500px;padding:20px 22px;max-height:92vh;overflow:auto" onclick="event.stopPropagation()">
+      <div class="pa-modal-title" style="margin-bottom:10px">🚫 Cancelar actividad</div>
+      <div style="font-size:12px;color:var(--text);margin-bottom:4px"><b>${segIndEsc(nombre)}</b>${a&&a.proyecto?' · '+segIndEsc(a.proyecto):''}</div>
+      <div style="font-size:11px;color:var(--dim);margin-bottom:12px">La actividad se queda en el historial con tu motivo. Deja de contar como atraso, sale del calendario y de los pendientes desde hoy, y lo que ya se reportó se conserva. Se le avisa al proyectista. Si fue un error, puedes reactivarla cambiando su estatus.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">${sug.map(t=>`<button type="button" class="et-act-btn" data-sug="${segIndEsc(t)}" style="font-size:10.5px">${segIndEsc(t)}</button>`).join('')}</div>
+      <textarea id="paCancelTxt" rows="3" placeholder="Motivo de la cancelación (obligatorio)…" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font);font-size:12px;padding:8px;resize:vertical"></textarea>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+        <button type="button" class="et-act-btn" id="paCancelNo">Volver</button>
+        <button type="button" class="et-act-btn" id="paCancelOk" disabled style="background:rgba(255,92,92,.16);color:var(--red);opacity:.5">🚫 Cancelar actividad</button>
+      </div></div>`;
+    document.body.appendChild(bg);
+    const txt = bg.querySelector('#paCancelTxt'), ok = bg.querySelector('#paCancelOk');
+    const upd = ()=>{ const v = txt.value.trim().length>=3; ok.disabled=!v; ok.style.opacity = v?'1':'.5'; };
+    txt.addEventListener('input', upd);
+    bg.querySelectorAll('[data-sug]').forEach(b=>b.addEventListener('click',()=>{ txt.value = b.getAttribute('data-sug'); upd(); txt.focus(); }));
+    const fin = v=>{ bg.remove(); resolve(v); };
+    bg.querySelector('#paCancelNo').addEventListener('click',()=>fin(null));
+    bg.addEventListener('click',()=>fin(null));
+    ok.addEventListener('click',()=>{ const v=txt.value.trim(); if(v.length>=3) fin(v); });
+    setTimeout(()=>txt.focus(),30);
+  });
 }
 
 // ── Reapertura desde "Terminado (máximo avance)" ──
 // ¿Este cambio regresa la actividad a trabajo desde "Terminado (máximo avance)"?
 function paEsReapertura(a, nuevo){
-  return !!a && a.estatus==='Terminado (máximo avance)' && !['En revisión','Terminado (máximo avance)','Terminado'].includes(nuevo);
+  return !!a && a.estatus==='Terminado (máximo avance)' && !['En revisión','Terminado (máximo avance)','Terminado','Cancelada'].includes(nuevo);
 }
 // Pide una nota obligatoria (qué falta / por qué se reabre). Promesa: texto, o null si se cancela.
 function paPedirNotaReapertura(a){
@@ -21077,7 +21206,7 @@ function paInlineStatus(id, currentVal, td){
   if(!td||td.querySelector('select')) return;
   const sel = document.createElement('select');
   sel.style.cssText='background:var(--surface2);border:1px solid rgba(74,143,212,.4);border-radius:4px;color:var(--text);font-family:var(--font);font-size:11px;padding:2px 5px;';
-  ['Sin iniciar','En progreso','En pausa','En revisión','Terminado (máximo avance)','Terminado'].forEach(s=>{
+  ['Sin iniciar','En progreso','En pausa','En revisión','Terminado (máximo avance)','Terminado','Cancelada'].forEach(s=>{
     const o=document.createElement('option'); o.value=o.textContent=s; if(s===currentVal) o.selected=true; sel.appendChild(o);
   });
   td.innerHTML=''; td.appendChild(sel); sel.focus();
@@ -21086,6 +21215,11 @@ function paInlineStatus(id, currentVal, td){
     if(a && paEsEntradaPausa(a,v)){
       sel.removeEventListener('change', save);
       paPedirMotivoPausa(a).then(m=>{ if(m!==null){ window._paMotivoTmp=m; paAplicarEstatus(a,v); paSave(a); } renderPanel(); });
+      return;
+    }
+    if(a && paEsCancelacion(a,v)){
+      sel.removeEventListener('change', save);
+      paPedirMotivoCancelacion(a).then(m=>{ if(m!==null){ window._paCancelTmp=m; paAplicarEstatus(a,v); paSave(a); } renderPanel(); });
       return;
     }
     if(a && paEsReapertura(a,v)){
@@ -21246,6 +21380,7 @@ function paOpenModal(id, preselectedTipo){
     document.getElementById('paFTermino').value = a.fechaTermino||'';
     document.getElementById('paFFechaReal').value = a.fechaReal||'';
     document.getElementById('paFEstatus').value = a.estatus||'Sin iniciar';
+    paExtraSet(a.jornadasExtra);
     document.getElementById('paFJuegos').value = a.juegos||'';
     if(document.getElementById('paFPlanosJuego')) document.getElementById('paFPlanosJuego').value = a.planosJuego||'';
     document.getElementById('paFObs').value = a.observaciones||'';
@@ -21270,6 +21405,7 @@ function paOpenModal(id, preselectedTipo){
     document.getElementById('paFTermino').value = '';
     document.getElementById('paFFechaReal').value = '';
     document.getElementById('paFEstatus').value = 'Sin iniciar';
+    paExtraSet(null);
     document.getElementById('paFJuegos').value = '';
     if(document.getElementById('paFPlanosJuego')) document.getElementById('paFPlanosJuego').value = '';
     document.getElementById('paFObs').value = '';
@@ -21288,6 +21424,21 @@ function paModalClickBg(e){
   if(e.target===document.getElementById('paModalBg')) paCloseModal();
 }
 
+// ── Jornadas extra por actividad (formulario) ──
+function paExtraSet(je){
+  je = je || {};
+  const v = id=>document.getElementById(id);
+  if(v('paFExViernes')) v('paFExViernes').checked = !!je.viernes;
+  if(v('paFExSab')) v('paFExSab').value = String(parseFloat(je.sabado)||0);
+  if(v('paFExDom')) v('paFExDom').value = String(parseFloat(je.domingo)||0);
+  if(v('paFExFest')) v('paFExFest').value = String(parseFloat(je.festivo)||0);
+}
+function paExtraLeer(){
+  const v = id=>document.getElementById(id);
+  if(!v('paFExViernes')) return null;
+  const je = { viernes: !!v('paFExViernes').checked, sabado: parseFloat(v('paFExSab').value)||0, domingo: parseFloat(v('paFExDom').value)||0, festivo: parseFloat(v('paFExFest').value)||0 };
+  return (je.viernes || je.sabado || je.domingo || je.festivo) ? je : null;
+}
 function paGuardar(){
   const actividad = document.getElementById('paFActividad').value.trim();
   if(!actividad){ alert('La actividad no puede estar vacía.'); return; }
@@ -21297,6 +21448,14 @@ function paGuardar(){
     const _nuevo = document.getElementById('paFEstatus').value;
     if(paEsEntradaPausa(_prev,_nuevo)){
       paPedirMotivoPausa(_prev).then(m=>{ if(m===null) return; window._paMotivoTmp=m; paGuardar(); });
+      return;
+    }
+  }
+  if(paModalEditId && !window._paCancelTmp){
+    const _prevC = PA_ITEMS.find(x=>x.id===paModalEditId);
+    const _nuevoC = document.getElementById('paFEstatus').value;
+    if(paEsCancelacion(_prevC,_nuevoC)){
+      paPedirMotivoCancelacion(_prevC).then(m=>{ if(m===null) return; window._paCancelTmp=m; paGuardar(); });
       return;
     }
   }
@@ -21323,6 +21482,7 @@ function paGuardar(){
     fechaTermino: document.getElementById('paFTermino').value,
     fechaReal: document.getElementById('paFFechaReal').value,
     estatus: document.getElementById('paFEstatus').value,
+    jornadasExtra: paExtraLeer(),
     juegos: document.getElementById('paFJuegos').value.trim(),
     planosJuego: document.getElementById('paFPlanosJuego')?.value?.trim()||'',
     observaciones: document.getElementById('paFObs').value.trim(),
@@ -21344,6 +21504,7 @@ function paGuardar(){
       data.fechaEntregaProy = prev.fechaEntregaProy || null;
       data.devoluciones = prev.devoluciones || 0;
       data.reapertura = prev.reapertura ? JSON.parse(JSON.stringify(prev.reapertura)) : null;
+      data.cancelacion = prev.cancelacion ? JSON.parse(JSON.stringify(prev.cancelacion)) : null;
       // Si el admin cambia a mano la fecha de término, se deja de ajustar sola
       if(data.reapertura && data.fechaTermino !== prev.fechaTermino) data.reapertura.ajustar = false;
       const nuevoEstatus = data.estatus;
@@ -21907,7 +22068,7 @@ function pdmColaVencida(a, cr, name){
     const ds = repDateKey(cur);
     let c = 0;
     if(!FESTIVOS.includes(ds) && !cronoEsVacacionPersona(name, ds)){
-      c = cronoCapacidadDia(new Date(cur), name);
+      c = cronoCapacidadDia(new Date(cur), name, a);
       const perm = cronoPermisoDia(name, ds);
       if(perm && perm.fr>=1) c = 0;
       if(c>0 && paEnPausaEnFecha(a, ds)) c = 0;
@@ -21919,17 +22080,18 @@ function pdmColaVencida(a, cr, name){
 }
 function pdmOcupacionDia(name, ds, cache){
   const d = new Date(ds+'T00:00:00');
-  if(FESTIVOS.includes(ds)) return {tipo:'festivo'};
+  if(FESTIVOS.includes(ds) && !PA_ITEMS.some(a=>a.responsable===name && cronoExtraFrac(a,d)>0)) return {tipo:'festivo'};
   if(cronoEsVacacionPersona(name, ds)) return {tipo:'vacaciones'};
   const perm = cronoPermisoDia(name, ds);
   if(perm && perm.fr>=1) return {tipo:'permiso', motivo:perm.motivo};
-  const cap = cronoCapacidadDia(d, name);
-  const entregada = a=>(a.estatus==='En revisión'||a.estatus==='Terminado (máximo avance)'||a.estatus==='Terminado');
+  let cap = cronoCapacidadDia(d, name);
+  PA_ITEMS.forEach(a=>{ if(a.responsable===name && cronoTieneExtra(a) && a.estatus!=='Cancelada') cap = Math.max(cap, cronoCapacidadDia(d, name, a)); });   // jornada extra de alguna actividad
+  const entregada = a=>(a.estatus==='En revisión'||a.estatus==='Terminado (máximo avance)'||a.estatus==='Terminado'||a.estatus==='Cancelada');
   const items = [], entregas = [];
   let sumPlan = 0, hayLibre = false;
   PA_ITEMS.forEach(a=>{
     if(a.responsable!==name || !a.fechaAsig) return;
-    const entr = entregada(a) ? String(a.fechaEntregaProy||a.fechaReal||a.fechaTermino||'').slice(0,10)||null : null;
+    const entr = entregada(a) ? (a.estatus==='Cancelada' ? (paFechaFinCancelada(a)||'') : String(a.fechaEntregaProy||a.fechaReal||a.fechaTermino||'').slice(0,10))||null : null;
     if(entr && ds>entr) return;
     let c = cache[a.id];
     if(!c){
@@ -22040,13 +22202,14 @@ function pdmOpen(name){
 
   // All activities for this person
   const all = PA_ITEMS.filter(a => a.responsable === name);
-  const activas    = all.filter(a => a.estatus !== 'Terminado');
+  const activas    = all.filter(a => a.estatus !== 'Terminado' && a.estatus!=='Cancelada');
   const enProceso  = all.filter(a => a.estatus === 'En progreso');
   const enRevision = all.filter(a => a.estatus === 'En revisión');
   const enMaxAvance = all.filter(a => a.estatus === 'Terminado (máximo avance)');
   const sinIniciar = all.filter(a => a.estatus === 'Sin iniciar');
   const enPausa    = all.filter(a => a.estatus === 'En pausa');
   const terminadas = all.filter(a => a.estatus === 'Terminado');
+  const canceladas = all.filter(a => a.estatus === 'Cancelada');
 
   // Avatar
   avatar.style.background = bg;
@@ -22082,10 +22245,11 @@ function pdmOpen(name){
     { label: 'Sin iniciar',  items: sinIniciar,         color: 'var(--muted)'  },
     { label: 'En pausa',     items: enPausa,            color: 'var(--dim)'    },
     { label: 'Terminadas',   items: terminadasOrdenadas, color: 'var(--green)' },
+    { label: 'Canceladas',   items: canceladas,         color: 'var(--red)'   },
   ];
 
   const statusCls = {
-    'En progreso':'bb','En revisión':'ba','Terminado (máximo avance)':'bg','Sin iniciar':'bgr','En pausa':'ba','Terminado':'bg'
+    'Cancelada':'br','En progreso':'bb','En revisión':'ba','Terminado (máximo avance)':'bg','Sin iniciar':'bgr','En pausa':'ba','Terminado':'bg'
   };
 
   function actCard(a){
@@ -22101,7 +22265,7 @@ function pdmOpen(name){
 
     return `<div class="pdm-act-card" id="pdm-card-${a.id}" style="${overdue?'border-color:rgba(255,92,92,.3);background:rgba(255,92,92,.04)':''}">
       <div style="flex:1">
-        <div class="pdm-act-title">${a.actividad||'—'}${overdue?' <span style="color:var(--red);font-size:10px">● Vencida</span>':''}</div>
+        <div class="pdm-act-title">${a.actividad||'—'}${overdue?' <span style="color:var(--red);font-size:10px">● Vencida</span>':''}${cronoTieneExtra(a)?' <span title="Jornadas extra: '+cronoExtraTxt(a)+'" style="color:#b45309;font-size:10px">⏱ '+cronoExtraTxt(a)+'</span>':''}${a.estatus==='Cancelada'?' <span style="color:var(--red);font-size:10px">🚫 Cancelada'+(a.cancelacion&&a.cancelacion.motivo?' · '+String(a.cancelacion.motivo).replace(/[<>&]/g,'')+(a.cancelacion.fecha?' ('+a.cancelacion.fecha.slice(8,10)+'/'+a.cancelacion.fecha.slice(5,7)+')':''):'')+'</span>':''}</div>
         <div class="pdm-act-meta">
           <span style="display:inline-flex;align-items:center;gap:4px;font-weight:600;color:${tipoInfo.color}"><span style="width:6px;height:6px;border-radius:50%;background:${tipoInfo.color};display:inline-block"></span>${tipoInfo.lbl}</span>
           ${isConect&&a.numBobina?`<span style="font-weight:600;color:var(--text)">Bna #${a.numBobina}</span>`:''}
@@ -22113,7 +22277,7 @@ function pdmOpen(name){
         ${a.notas?`<div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">📝 ${a.notas}</div>`:''}
         <div class="pdm-act-actions">
           <select class="pdm-status-sel" onchange="pdmUpdateStatus('${a.id}',this.value,this)">
-            ${['Sin iniciar','En progreso','En pausa','En revisión','Terminado (máximo avance)','Terminado'].map(s=>`<option${s===a.estatus?' selected':''}>${s}</option>`).join('')}
+            ${['Sin iniciar','En progreso','En pausa','En revisión','Terminado (máximo avance)','Terminado','Cancelada'].map(s=>`<option${s===a.estatus?' selected':''}>${s}</option>`).join('')}
           </select>
           <button class="pdm-edit-btn" onclick="pdmGoEdit('${a.id}','${a.tipo||'Proyecto'}')">✎ Editar completo</button>
           ${(()=>{ const dp = paDiasEnPausa(a); if(a.estatus==='En pausa'){ return `<span style="font-size:10px;color:var(--amber);font-weight:600;white-space:nowrap" title="Días hábiles que lleva en pausa">⏸ ${dp}d en pausa</span>`; } if(dp>0){ return `<span style="font-size:10px;color:var(--dim);white-space:nowrap" title="Total de días hábiles que estuvo en pausa (histórico)">⏸ ${dp}d pausados (hist.)</span>`; } return ''; })()}
@@ -22161,6 +22325,13 @@ function pdmUpdateStatus(id, newEstatus, selEl){
     paPedirMotivoPausa(a).then(m=>{
       if(m===null){ if(selEl) selEl.value = a.estatus; return; }
       window._paMotivoTmp = m; pdmUpdateStatus(id,newEstatus,selEl);
+    });
+    return;
+  }
+  if(paEsCancelacion(a,newEstatus) && !window._paCancelTmp){
+    paPedirMotivoCancelacion(a).then(m=>{
+      if(m===null){ if(selEl) selEl.value = a.estatus; return; }
+      window._paCancelTmp = m; pdmUpdateStatus(id,newEstatus,selEl);
     });
     return;
   }
@@ -22262,7 +22433,7 @@ function pdmGeneratePDF(period){
 
   const terminadas = all.filter(a=>a.estatus==='Terminado').length;
   const enProceso  = all.filter(a=>a.estatus==='En progreso').length;
-  const retrasadas = all.filter(a=>a.estatus!=='Terminado'&&a.fechaTermino&&new Date(a.fechaTermino+'T00:00:00')<now).length;
+  const retrasadas = all.filter(a=>a.estatus!=='Terminado' && a.estatus!=='Cancelada'&&a.fechaTermino&&new Date(a.fechaTermino+'T00:00:00')<now).length;
   const pct = n => all.length ? Math.round(n/all.length*100) : 0;
 
   // #2 Ocupación por proyecto — se agrupa únicamente por el nombre real del proyecto
@@ -23906,7 +24077,7 @@ function paExportPDF(){
   // Red flags: Proyecto & Impresiones that are NOT Terminado, regardless of date
   const redFlags = PA_ITEMS.filter(a=>
     (a.tipo==='Proyecto'||a.tipo==='Impresiones') &&
-    a.estatus!=='Terminado' &&
+    a.estatus!=='Terminado' && a.estatus!=='Cancelada' &&
     a.fechaAsig && new Date(a.fechaAsig+'T00:00:00') < twoWeeksAgo
   ).sort((a,b)=>(a.fechaAsig||'').localeCompare(b.fechaAsig||''));
 
@@ -23959,7 +24130,7 @@ function paExportPDF(){
     const statusDot = p.type==='libre' ? '🟢' : p.type==='atencion' ? '🟡' : '🔴';
 
     const pendientes = PA_ITEMS
-      .filter(a => a.responsable===p.name && a.estatus!=='Terminado' && a.estatus!=='En pausa')
+      .filter(a => a.responsable===p.name && a.estatus!=='Terminado' && a.estatus!=='Cancelada' && a.estatus!=='En pausa')
       .sort((a,b)=>(a.fechaTermino||'9999').localeCompare(b.fechaTermino||'9999'))
       .slice(0,3);
 
@@ -25533,6 +25704,13 @@ function avanceSetField(id, field, value){
     const _a = PA_ITEMS.find(x=>x.id===id);
     if(paEsEntradaPausa(_a,value)){
       paPedirMotivoPausa(_a).then(m=>{ if(m===null) return; window._paMotivoTmp=m; avanceSetField(id,field,value); });
+      return;
+    }
+  }
+  if(field==='estatus' && !window._paCancelTmp){
+    const _aC = PA_ITEMS.find(x=>x.id===id);
+    if(paEsCancelacion(_aC,value)){
+      paPedirMotivoCancelacion(_aC).then(m=>{ if(m===null){ renderSegAvance(); return; } window._paCancelTmp=m; avanceSetField(id,field,value); });
       return;
     }
   }
@@ -27416,7 +27594,7 @@ function segIndEnPeriodo(r, hoy){
   return true;
 }
 function segIndStats(nombre, hoy){
-  const rows = PA_ITEMS.filter(a=>a.responsable===nombre).map(a=>segIndClasifica(a,hoy)).filter(r=>segIndEnPeriodo(r,hoy));
+  const rows = PA_ITEMS.filter(a=>a.responsable===nombre && a.estatus!=='Cancelada').map(a=>segIndClasifica(a,hoy)).filter(r=>segIndEnPeriodo(r,hoy));
   const st = {nombre, rows, total:rows.length, entregadas:0, aTiempo:0, retraso:0, sinDato:0, pendientes:0, vencidas:0, devoluciones:0, rechazos:0, proxima:null};
   rows.forEach(r=>{
     st.devoluciones += (r.a.devoluciones||0);
@@ -27601,7 +27779,7 @@ async function paRefreshFromSupabase(){
         fechaAsig:a.fecha_asig||'', fechaTermino:a.fecha_termino||'',
         fechaReal:a.fecha_real||'', numBobina:a.num_bobina||'',
         juegos:a.juegos||'', planosJuego:a.planos_juego||'',
-        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[], pausaMotivo:a.pausa_motivo||null, pausaPrioridad:a.pausa_prioridad||null, reapertura:a.reapertura||null,
+        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[], pausaMotivo:a.pausa_motivo||null, pausaPrioridad:a.pausa_prioridad||null, reapertura:a.reapertura||null, cancelacion:a.cancelacion||null, jornadasExtra:a.jornadas_extra||null,
         fechaEntregaProy:a.fecha_entrega_proy||null, devoluciones:a.devoluciones||0,
         createdAt:a.created_at, updatedAt:a.updated_at,
       }));
@@ -27658,7 +27836,7 @@ function cronoEsEnProceso(a, crono){
   const hoy = repDateKey(new Date());
   const inicio = a.fechaAsig || (crono && crono.fechaInicio) || '';
   if(inicio && inicio > hoy) return false;
-  if(['En pausa','En revisión','Terminado (máximo avance)','Terminado'].includes(a.estatus)) return false;
+  if(['En pausa','En revisión','Terminado (máximo avance)','Terminado','Cancelada'].includes(a.estatus)) return false;
   const reabEspera = !!(a.reapertura && a.reapertura.inicio) && (typeof paReabEsperaSubtareas==='function') && paReabEsperaSubtareas(a);
   const lista = crono && cronoAvance(crono.subtareas||[])===100 && !reabEspera;
   return !lista;
@@ -27751,7 +27929,7 @@ function renderSegPendientes(){
   const hoyStr = repDateKey(new Date());
   // Mismo criterio de "mis actividades" que usa la pestaña Asignación, para que los números coincidan.
   const mias = PA_ITEMS.filter(a=>a.responsable===_miNombre);
-  const pendientes = mias.filter(a=>a.estatus!=='Terminado');
+  const pendientes = mias.filter(a=>a.estatus!=='Terminado' && a.estatus!=='Cancelada');
 
   // Desglose por estatus
   const estados = ['Sin iniciar','En progreso','En pausa','En revisión','Terminado (máximo avance)'];
@@ -28910,7 +29088,7 @@ async function supaLoadAll(){
         fechaAsig:a.fecha_asig||'', fechaTermino:a.fecha_termino||'',
         fechaReal:a.fecha_real||'', numBobina:a.num_bobina||'',
         juegos:a.juegos||'', planosJuego:a.planos_juego||'',
-        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[], pausaMotivo:a.pausa_motivo||null, pausaPrioridad:a.pausa_prioridad||null, reapertura:a.reapertura||null,
+        pausaInicio:a.pausa_inicio||null, diasEnPausaAcum:a.dias_en_pausa_acum||0, pausasHistorial:a.pausas_historial||[], pausaMotivo:a.pausa_motivo||null, pausaPrioridad:a.pausa_prioridad||null, reapertura:a.reapertura||null, cancelacion:a.cancelacion||null, jornadasExtra:a.jornadas_extra||null,
         fechaEntregaProy:a.fecha_entrega_proy||null, devoluciones:a.devoluciones||0,
         createdAt:a.created_at, updatedAt:a.updated_at,
       }));
@@ -29440,6 +29618,8 @@ function supaStartRealtime(){
         if(act){
           if(r.estatus) act.estatus = r.estatus;
           if(r.notas !== undefined) act.notas = r.notas;
+          if(r.cancelacion !== undefined) act.cancelacion = r.cancelacion;
+          if(r.jornadas_extra !== undefined) act.jornadasExtra = r.jornadas_extra;
           if(r.km !== undefined) act.km = r.km;
           try{ BIT_SNAP[act.id] = bitSnapA(act); }catch(e){}
           if(curView==='panel') renderPanel();
@@ -29471,7 +29651,7 @@ async function supaSyncActividad(a){
   // Columnas opcionales (se agregan con los SQL de Seguimiento individual / motivo de pausa). Si alguna
   // todavía no existe en Supabase, se omite solo esa y el guardado sigue funcionando.
   window._supaColsFaltan = window._supaColsFaltan || {};
-  const _opt = {fecha_entrega_proy:a.fechaEntregaProy||null, devoluciones:a.devoluciones||0, pausa_motivo:a.pausaMotivo||null, pausa_prioridad:a.pausaPrioridad||null, reapertura:a.reapertura||null};
+  const _opt = {fecha_entrega_proy:a.fechaEntregaProy||null, devoluciones:a.devoluciones||0, pausa_motivo:a.pausaMotivo||null, pausa_prioridad:a.pausaPrioridad||null, reapertura:a.reapertura||null, cancelacion:a.cancelacion||null, jornadas_extra:a.jornadasExtra||null};
   Object.keys(_opt).forEach(k=>{ if(!window._supaColsFaltan[k]) payload[k] = _opt[k]; });
   try{
     let {error} = await _supa.from('actividades').upsert(payload, {onConflict:'id'});
