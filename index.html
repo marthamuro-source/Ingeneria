@@ -10740,6 +10740,30 @@ function planOpen() {
 // ¿La actividad se pinta en el calendario del plan ese día? Dentro de su plazo (si no está en pausa) o, si ya venció y sigue
 // «En progreso», en los días que le faltan de trabajo desde hoy (misma lógica que el plan semanal del modal de la persona).
 // Marca de jornadas extra para la celda del viernes de un proyectista: "Vie completo" y/o trabajo de sábado/domingo siguientes
+// ── Actividades canceladas: se dejan marcadas en el plan y en el corte de la semana en que se cancelaron ──
+function planCancelFecha(a){ return (a && a.cancelacion && a.cancelacion.fecha) ? String(a.cancelacion.fecha).slice(0,10) : ''; }
+function planCancelDM(ds){ ds=String(ds||''); return ds? ds.slice(8,10)+'/'+ds.slice(5,7) : ''; }
+function planCancelEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// Semana = arreglo de fechas lunes-viernes del plan; cuenta la cancelación hecha de lunes a domingo de esa semana
+function planCancelRango(week){
+  const d = new Date(week[0]); d.setDate(d.getDate()+6);
+  return [week[0].toISOString().slice(0,10), d.toISOString().slice(0,10)];
+}
+function planCanceladasSemana(week){
+  const r = planCancelRango(week), mi = planMiembros();
+  return planOrdenarActs(PA_ITEMS.filter(function(a){
+    if(a.estatus!=='Cancelada' || mi.indexOf(a.responsable)<0) return false;
+    const f = planCancelFecha(a); return !!f && f>=r[0] && f<=r[1];
+  }));
+}
+function planCanceladasDia(member, ds){
+  return PA_ITEMS.filter(function(a){ return a.estatus==='Cancelada' && a.responsable===member && planCancelFecha(a)===ds; });
+}
+// "Cancelada el 12/10 por Martha · Motivo: ..." (texto plano ya escapado)
+function planCancelDetalle(a){
+  const c = a.cancelacion || {};
+  return 'Cancelada el '+planCancelDM(planCancelFecha(a))+(c.por?' por '+planCancelEsc(c.por):'')+(c.estatusPrevio?' (estaba en '+planCancelEsc(c.estatusPrevio)+')':'')+' · Motivo: '+planCancelEsc(c.motivo||'sin motivo capturado');
+}
 function planExtraMarcas(member, viernes){
   const fr = new Date(viernes); fr.setHours(0,0,0,0);
   const sab = new Date(fr); sab.setDate(fr.getDate()+1);
@@ -10895,8 +10919,9 @@ function planBuildHTML() {
 
         var cellBg0 = isToday?'rgba(42,120,214,.06)':'rgba(255,255,255,.02)';
         var cellBord = isToday?'rgba(42,120,214,.3)':'rgba(255,255,255,.05)';
-        var isOnly = dayActs.length === 1;
-        var cellBg = isVac ? 'rgba(155,89,182,.08)' : dayActs.length===0 ? cellBg0 : 'transparent';
+        var _canc = isVac ? [] : planCanceladasDia(member, dayStr);
+        var isOnly = dayActs.length === 1 && !_canc.length;
+        var cellBg = isVac ? 'rgba(155,89,182,.08)' : (dayActs.length===0 && !_canc.length) ? cellBg0 : 'transparent';
         var vacBord = isVac ? 'rgba(155,89,182,.3)' : cellBord;
         h += '<div onclick="planCellClick(\'' + member.replace(/\'/g,"\\'") + '\',\'' + dayStr + '\')" style="min-height:54px;border-radius:6px;background:'+cellBg+';border:0.5px solid '+vacBord+';cursor:pointer;overflow:hidden;position:relative">';
         if(isVac && dayActs.length===0){
@@ -10911,6 +10936,13 @@ function planBuildHTML() {
           h += '<div style="font-size:8px;color:#b45309;font-weight:600;padding:2px 4px" title="'+permEsc(_perm.motivo||'Permiso de medio día')+'">📋 Permiso ½ día'+(_perm.motivo?': '+permEsc(_perm.motivo):'')+'</div>';
         }
 
+        _canc.forEach(function(a){
+          h += '<div title="'+planCancelEsc(planCancelDetalle(a))+'" style="padding:3px 5px;background:rgba(226,75,74,.22);border-left:3px solid #e24b4a;margin-bottom:2px">'
+            + '<div style="font-size:8px;font-weight:800;color:#ff6b6b">🚫 CANCELADA</div>'
+            + '<div style="font-size:8px;color:#ff8a8a;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+planCancelEsc(a.folio||a.actividad||'')+'</div>'
+            + (a.actividad&&a.folio?'<div style="font-size:8px;color:#ff8a8a;opacity:.8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+planCancelEsc(a.actividad)+'</div>':'')
+            + '</div>';
+        });
         dayActs.forEach(function(a) {
           var isProg = a.estatus === 'En progreso';
           var isVenc = paEsVencida(a, todayStr);
@@ -10939,6 +10971,15 @@ function planBuildHTML() {
       h += '</div>';
     });
 
+    var _cw = planCanceladasSemana(week);
+    if(_cw.length){
+      h += '<div style="margin:6px 0 4px;padding:8px 10px;border-radius:8px;background:rgba(226,75,74,.1);border:0.5px solid rgba(226,75,74,.4)">';
+      h += '<div style="font-size:10px;font-weight:700;color:#ff6b6b;margin-bottom:4px">🚫 Canceladas esta semana ('+_cw.length+')</div>';
+      _cw.forEach(function(a){
+        h += '<div style="font-size:10px;color:var(--text);line-height:1.55"><b style="font-family:monospace">'+planCancelEsc(a.folio||'—')+'</b> · '+planCancelEsc(a.actividad||'')+(a.proyecto?' · '+planCancelEsc(a.proyecto):'')+' · <b>'+planCancelEsc((a.responsable||'').split(' ').slice(0,2).join(' '))+'</b> — <span style="color:var(--dim)">'+planCancelDetalle(a)+'</span></div>';
+      });
+      h += '</div>';
+    }
     h += '<div style="margin-bottom:16px"></div>';
   });
 
@@ -10947,6 +10988,7 @@ function planBuildHTML() {
   h += '<div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--dim)"><div style="width:10px;height:10px;border-radius:2px;background:rgba(42,120,214,.2)"></div>En progreso</div>';
   h += '<div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--dim)"><div style="width:10px;height:10px;border-radius:2px;background:rgba(255,255,255,.06)"></div>Sin iniciar</div>';
   h += '<div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--dim)"><div style="width:10px;height:10px;border-radius:2px;background:rgba(226,75,74,.15)"></div>Vencida</div>';
+  h += '<div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--dim)"><div style="width:10px;height:10px;border-radius:2px;background:rgba(226,75,74,.5);border-left:3px solid #e24b4a"></div>Cancelada (se marca el día de la cancelación)</div>';
   h += '<div style="font-size:10px;color:var(--dim);margin-left:auto">Clic en cualquier celda para agregar actividad</div>';
   h += '</div>';
 
@@ -11410,6 +11452,18 @@ function planCorteSeccion(weeks, C){
         h+='</tbody>';
       });
     });
+    var _cc=planCanceladasSemana(week);
+    _cc.forEach(function(a){
+      var crC=CRONO_ITEMS.find(function(x){return x.actividadId===a.id;});
+      var avC=null; try{ if(crC && crC.subtareas && crC.subtareas.length) avC=cronoAvance(crC.subtareas); }catch(e){}
+      var isConC=(a.tipo==='Conectividad (Bobinas)'||a.tipo==='Planos de Conectividad');
+      h+='<tbody><tr style="background:#fef2f2"><td style="white-space:nowrap"><span class="av" style="background:'+C.gc(a.responsable)+'">'+C.gi(a.responsable)+'</span>'+esc((a.responsable||'').split(' ').slice(0,2).join(' '))+'</td>';
+      h+='<td><b>'+esc(a.actividad||'--')+'</b></td>';
+      h+='<td><b>'+esc(a.proyecto||'--')+'</b><br><b style="font-size:9px;color:#374151">'+esc(a.tipo||'--')+'</b>'+(isConC&&a.numBobina?' &nbsp;Bna #'+esc(a.numBobina):'')+'</td>';
+      h+='<td style="font-family:monospace;font-size:8px;color:#1a4fa0">'+esc(a.folio||'--')+'</td>';
+      h+='<td colspan="5" style="font-size:8.5px;color:#7f1d1d">'+planCancelDetalle(a)+(avC!=null?' &middot; Avance al cancelar: <b>'+fq(avC)+'%</b>':'')+' &middot; <i>no se califica ni cuenta como atraso</i></td>';
+      h+='<td></td><td></td><td class="dc">&mdash;</td><td><span class="stchip st-late">Cancelada</span></td></tr></tbody>';
+    });
     h+='</table>';
   });
   // Actividades que no se pueden medir contra un rendimiento diario
@@ -11439,6 +11493,7 @@ function planCorteSeccion(weeks, C){
     +'En cada d&iacute;a se muestra <b>reportado / esperado</b> (en la unidad de la subtarea): lo esperado sale del plan que el proyectista confirm&oacute; y de la fracci&oacute;n de jornada que le toca ese d&iacute;a (viernes = 6/9; vacaciones, festivos y pausas no se esperan). '
     +'<b>Meta al viernes</b> es lo acumulado que deber&iacute;a llevar al cierre de la semana; <b>Real</b> y <b>%</b> se miden contra lo esperado a la fecha de evaluaci&oacute;n. Cumple &ge;95% &middot; parcial 80-94% &middot; atrasada &lt;80%. Un valor <i>&asymp;n arrastre</i> en un d&iacute;a sin plan es trabajo que sigue pendiente y que el pron&oacute;stico actual coloca ah&iacute;; es informativo y no entra al cumplimiento. El % de la actividad se pondera por jornadas esperadas, sin que lo adelantado tape lo atrasado. Los reportes por porcentaje general no se miden. '
     +'<b>Estado de las atrasadas:</b> si una actividad o subtarea va por debajo del ritmo, se muestra su <b>meta final</b>: <b>Recuperable</b> (con la capacidad que le queda todav&iacute;a llega a su fecha fin y le sobra &frac12; d&iacute;a o m&aacute;s), <b>En riesgo</b> (le sobra menos de &frac12; d&iacute;a; si su fecha fin cae dentro de la semana, a lo m&aacute;s es En riesgo) o <b>No llega</b> (lo pendiente ya no cabe antes de su fecha fin). La holgura cuenta lo ya reportado en el d&iacute;a en curso como avance, pero ese d&iacute;a ya no se cuenta como capacidad disponible. El % es el ritmo, medido contra el plan hasta el &uacute;ltimo d&iacute;a cerrado. '
+    +'<b>Canceladas:</b> las actividades que el administrador cancel&oacute; esa semana aparecen al final de su tabla, con fecha, motivo y avance al cancelar; no se califican ni cuentan como atraso. '
     +'<b>Fechas:</b> la <b>entrega interna</b> es la fecha de t&eacute;rmino asignada al proyectista (con ella se mide todo); la <b>subida oficial</b> es esa fecha m&aacute;s '+FECHA_OFICIAL_DIAS+' d&iacute;a h&aacute;bil para validar y subir la informaci&oacute;n.</div>';
   return h;
 }
@@ -11584,13 +11639,17 @@ function planExportPDF(detallado) {
         var isFest=(typeof FESTIVOS!=='undefined'&&FESTIVOS.indexOf(ds)>=0);
         if(isFest){isVac=false;_isPerm2=false;_pm2=null;} // día festivo / descanso oficial: pesa más que vacaciones o permiso
         if(isVac||isFest) acts=[]; // día de vacaciones, permiso o festivo: solo se marca la etiqueta, sin actividades
-        var isOnly=acts.length===1&&!isVac;
+        var _cancP=(isVac||isFest)?[]:planCanceladasDia(member,ds);
+        var isOnly=acts.length===1&&!isVac&&!_cancP.length;
         h+='<td'+(isFest?' class="fe"':isVac?' class="vc"':'')+' style="min-width:80px;padding:4px;vertical-align:top">';
         h+='<div class="day-cell">';
         if(isFest){h+='<div class="cfe" style="flex:1;display:flex;align-items:center;justify-content:center;text-align:center"><div>Descanso oficial'+((typeof FEST_LABELS!=='undefined'&&FEST_LABELS[ds])?'<div style="font-size:7.5px;font-weight:500;color:#92400e;line-height:1.2;margin-top:2px">'+escapeHtml(FEST_LABELS[ds])+'</div>':'')+'</div></div>';}
         else if(isVac&&acts.length===0){h+='<div class="cvac" style="flex:1;display:flex;align-items:center;justify-content:center;text-align:center">'+(_isPerm2?'<div>Permiso'+(_pm2.motivo?'<div style="font-size:7.5px;font-weight:500;color:#4b5563;line-height:1.2;margin-top:2px">'+permEsc(_pm2.motivo)+'</div>':'')+'</div>':'Vacaciones')+'</div>';}
         else if(isVac){h+='<div class="cvac">'+(_isPerm2?'Perm'+(_pm2.motivo?': '+permEsc(_pm2.motivo):''):'Vac')+'</div>';}
         else if(_pm2&&_pm2.fr<1){h+='<div class="cvac" style="background:#fef3c7;color:#92400e" title="'+permEsc(_pm2.motivo||'Permiso de medio día')+'">Permiso ½'+(_pm2.motivo?': '+permEsc(_pm2.motivo):'')+'</div>';}
+        _cancP.forEach(function(a){
+          h+='<div class="chip" style="background:#fee2e2;border-left:3px solid #b91c1c;color:#991b1b"><div class="chip-body"><b>CANCELADA</b>'+(a.folio?'<span class="sec-line" style="font-family:monospace">'+planCancelEsc(a.folio)+'</span>':'')+(a.actividad?'<span class="sec-line">'+planCancelEsc(a.actividad)+'</span>':'')+'</div></div>';
+        });
         acts.forEach(function(a){
           var isProg=a.estatus==='En progreso';
           var isV=paEsVencida(a,todayStr);
@@ -11623,12 +11682,13 @@ function planExportPDF(detallado) {
     h+='<div class="whdr">Semana '+(wi+1)+' - '+fWk(week)+'</div>';
     h+='<table class="lst"><thead><tr><th>Proyectista</th><th>'+(detallado?'Actividad / Subtareas':'Actividad')+'</th><th>'+(detallado?'Proyecto / Tipo &middot; Avance':'Proyecto / Tipo')+'</th><th>Folio</th><th>Inicio</th><th>Termino interno &middot; oficial</th><th>Estatus</th></tr></thead>';
     planMiembros().forEach(function(member){
-      var acts=planOrdenarActs(PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;return a.estatus!=='Cancelada'&&a.fechaAsig<=wE&&(a.fechaTermino||a.fechaAsig)>=wS;}));
+      var acts=planOrdenarActs(PA_ITEMS.filter(function(a){if(a.responsable!==member||!a.fechaAsig) return false;if(a.estatus==='Cancelada'){var _cf=planCancelFecha(a),_rg=planCancelRango(week);return !!_cf&&_cf>=_rg[0]&&_cf<=_rg[1];}return a.fechaAsig<=wE&&(a.fechaTermino||a.fechaAsig)>=wS;}));
       acts.forEach(function(a){
         var col=gc(member),ini=gi(member);
         var isProg=a.estatus==='En progreso';
         var isV=paEsVencida(a,todayStr);
         var ec=isProg?'#1a4fa0':isV?'#b91c1c':'#374151';
+        if(a.estatus==='Cancelada') ec='#b91c1c';
         var crItem=(typeof CRONO_ITEMS!=='undefined')?CRONO_ITEMS.find(function(x){return x.actividadId===a.id;}):null;
         var subs=detallado?((crItem&&crItem.subtareas)||[]):[];
         var actFin=a.estatus==='Terminado';
@@ -11640,7 +11700,7 @@ function planExportPDF(detallado) {
         h+='<td style="font-family:monospace;font-size:8px;color:#1a4fa0">'+(a.folio||'--')+'</td>';
         h+='<td style="white-space:nowrap">'+fd(a.fechaAsig)+'</td>';
         h+='<td style="white-space:nowrap">'+fd(a.fechaTermino)+(a.fechaTermino?'<br><span style="font-size:7.5px;color:#9a3412">oficial '+fd(cronoFechaOficial(a.fechaTermino))+'</span>':'')+'</td>';
-        h+='<td style="color:'+ec+';font-weight:600">'+a.estatus+'</td></tr>';
+        h+='<td style="color:'+ec+';font-weight:600">'+a.estatus+(a.estatus==='Cancelada'?'<br><span style="font-size:7.5px;font-weight:500">'+planCancelDetalle(a)+'</span>':'')+'</td></tr>';
         h+=planNotasFilas(a,crItem,6,fd);
         if(subs.length){
           var dg=getDesg(a);
@@ -11682,6 +11742,7 @@ function planExportPDF(detallado) {
   h+='<div style="display:flex;align-items:center;gap:5px"><div class="sb" style="background:#1a4fa0"></div>En progreso</div>';
   h+='<div style="display:flex;align-items:center;gap:5px"><div class="sb" style="background:#e5e7eb;border:1px solid #ccc"></div>Sin iniciar</div>';
   h+='<div style="display:flex;align-items:center;gap:5px"><div class="sb" style="background:#b91c1c"></div>Vencida</div>';
+  h+='<div style="display:flex;align-items:center;gap:5px"><div class="sb" style="background:#fee2e2;border:1px solid #b91c1c"></div>Cancelada</div>';
   h+='<div style="display:flex;align-items:center;gap:5px"><div class="sb" style="background:#f3e8ff;border:1px solid #c084fc"></div>Vacaciones</div>';
   h+='<div style="display:flex;align-items:center;gap:5px"><div class="sb" style="background:#fff4e0;border:1px solid #f59e0b"></div>Festivo / descanso oficial</div>';
   h+='</div>';
